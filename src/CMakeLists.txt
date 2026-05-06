@@ -1,3 +1,5 @@
+include(TcmdPlugin)
+
 find_package(wil CONFIG REQUIRED)
 
 add_library(mdview_core STATIC
@@ -17,3 +19,17 @@ target_link_libraries(mdview_core PUBLIC
     WIL::WIL)
 
 mdview_set_warnings(mdview_core)
+
+add_library(mdview_wlx SHARED
+    plugin/dll_main.cpp
+    plugin/wlx_exports.cpp
+    plugin/wlx_exports.def)
+
+target_include_directories(mdview_wlx PRIVATE
+    ${CMAKE_SOURCE_DIR}/external/totalcmd-wlx-sdk/src)
+
+target_link_libraries(mdview_wlx PRIVATE
+    mdview_core)
+
+mdview_set_warnings(mdview_wlx)
+mdview_configure_wlx_plugin(mdview_wlx)
