@@ -3,7 +3,8 @@ find_package(Catch2 3 CONFIG REQUIRED)
 add_executable(mdview_tests
     native/test_main.cpp
     native/utf_tests.cpp
-    native/paths_tests.cpp)
+    native/paths_tests.cpp
+    native/version_tests.cpp)
 
 target_link_libraries(mdview_tests PRIVATE
     mdview_core
