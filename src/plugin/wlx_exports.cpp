@@ -1,0 +1,77 @@
+#include "native/detect_string.hpp"
+#include "native/plugin_globals.hpp"
+#include "plugin/fallback_window.hpp"
+#include "plugin/plugin_window.hpp"
+
+#include <listplug.h>   // vendored under external/totalcmd-wlx-sdk/src/
+
+#include <windows.h>
+
+#include <memory>
+#include <unordered_map>
+#include <mutex>
+#include <new>
+
+namespace {
+
+// Tracks PluginWindow instances by their HWND so ListCloseWindow can clean up.
+std::mutex g_windows_mutex;
+std::unordered_map<HWND, std::unique_ptr<mdview::PluginWindow>> g_windows;
+
+}  // namespace
+
+void __stdcall ListSetDefaultParams(ListDefaultParamStruct* dps) {
+    if (dps == nullptr) {
+        return;
+    }
+    try {
+        mdview::globals().set_default_params(
+            static_cast<std::uint32_t>(dps->PluginInterfaceVersionHi),
+            static_cast<std::uint32_t>(dps->PluginInterfaceVersionLow),
+            std::string(dps->DefaultIniName));
+    } catch (...) {
+        // Cheap synchronous capture must not throw under normal conditions;
+        // swallow defensively.
+    }
+}
+
+void __stdcall ListGetDetectString(char* DetectString, int maxlen) {
+    mdview::write_detect_string(DetectString, maxlen);
+}
+
+HWND __stdcall ListLoadW(HWND ParentWin, WCHAR* FileToLoad, int /*ShowFlags*/) {
+    try {
+        std::wstring path = (FileToLoad != nullptr) ? std::wstring(FileToLoad) : std::wstring();
+        auto window = mdview::PluginWindow::create(ParentWin, std::move(path));
+        HWND hwnd = window->handle();
+
+        std::lock_guard<std::mutex> lock(g_windows_mutex);
+        g_windows.emplace(hwnd, std::move(window));
+        return hwnd;
+    } catch (...) {
+        return mdview::create_fallback_window(
+            ParentWin, L"mdview failed to initialize. See debug output for details.");
+    }
+}
+
+void __stdcall ListCloseWindow(HWND ListWin) {
+    try {
+        std::unique_ptr<mdview::PluginWindow> doomed;
+        {
+            std::lock_guard<std::mutex> lock(g_windows_mutex);
+            auto it = g_windows.find(ListWin);
+            if (it != g_windows.end()) {
+                doomed = std::move(it->second);
+                g_windows.erase(it);
+            }
+        }
+        // PluginWindow's destructor calls DestroyWindow on its HWND.
+        // For the fallback window path, ListWin is a plain HWND not in the map;
+        // destroy it here.
+        if (doomed == nullptr && ::IsWindow(ListWin)) {
+            ::DestroyWindow(ListWin);
+        }
+    } catch (...) {
+        // Last-resort: nothing meaningful to do.
+    }
+}
