@@ -1,3 +1,6 @@
 [submodule "external/vcpkg"]
 	path = external/vcpkg
 	url = https://github.com/microsoft/vcpkg.git
+[submodule "external/totalcmd-wlx-sdk"]
+	path = external/totalcmd-wlx-sdk
+	url = https://github.com/ghisler/WLX-SDK.git
