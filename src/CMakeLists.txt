@@ -6,7 +6,8 @@ add_library(mdview_core STATIC
     common/version.cpp
     native/plugin_globals.cpp
     native/detect_string.cpp
-    platform/win32_window.cpp)
+    platform/win32_window.cpp
+    plugin/plugin_window.cpp)
 
 target_include_directories(mdview_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR})
