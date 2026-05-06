@@ -2,7 +2,8 @@ find_package(wil CONFIG REQUIRED)
 
 add_library(mdview_core STATIC
     common/utf.cpp
-    common/paths.cpp)
+    common/paths.cpp
+    common/version.cpp)
 
 target_include_directories(mdview_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR})
