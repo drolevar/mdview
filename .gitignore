@@ -1,0 +1,45 @@
+# Build output
+build/
+out/
+dist/
+
+# CMake
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.cmake.in
+
+# vcpkg
+vcpkg_installed/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.user
+*.suo
+
+# IDE / editor
+.idea/
+*.swp
+*~
+
+# Compiled
+*.obj
+*.o
+*.lib
+*.exp
+*.dll
+*.pdb
+*.ilk
+*.exe
+*.wlx
+*.wlx64
+*.wlxa64
+
+# Node (renderer in M3+)
+node_modules/
+viewer/dist/
+
+# Logs
+*.log
