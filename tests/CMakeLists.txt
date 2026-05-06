@@ -5,7 +5,8 @@ add_executable(mdview_tests
     native/utf_tests.cpp
     native/paths_tests.cpp
     native/version_tests.cpp
-    native/plugin_globals_tests.cpp)
+    native/plugin_globals_tests.cpp
+    native/detect_string_tests.cpp)
 
 target_link_libraries(mdview_tests PRIVATE
     mdview_core
