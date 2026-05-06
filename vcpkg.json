@@ -1,0 +1,13 @@
+{
+  "name": "mdview",
+  "version-string": "0.1.0",
+  "description": "Markdown viewer plugin for Total Commander",
+  "homepage": "https://github.com/drolevar/mdview",
+  "dependencies": [
+    "wil",
+    {
+      "name": "catch2",
+      "default-features": false
+    }
+  ]
+}
