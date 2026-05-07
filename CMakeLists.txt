@@ -18,5 +18,28 @@ include(CompilerWarnings)
 
 enable_testing()
 
+find_program(NODE_EXECUTABLE node REQUIRED
+    DOC "Node.js 20+ required to build viewer/ bundle")
+
+set(VIEWER_DIR    ${CMAKE_CURRENT_SOURCE_DIR}/viewer)
+set(VIEWER_BUNDLE ${VIEWER_DIR}/dist/bundle.js)
+
+add_custom_command(
+    OUTPUT ${VIEWER_BUNDLE}
+    COMMAND ${NODE_EXECUTABLE} ${VIEWER_DIR}/build.mjs
+    WORKING_DIRECTORY ${VIEWER_DIR}
+    DEPENDS
+        ${VIEWER_DIR}/build.mjs
+        ${VIEWER_DIR}/src/app.ts
+        ${VIEWER_DIR}/src/markdown.ts
+        ${VIEWER_DIR}/src/protocol.ts
+        ${VIEWER_DIR}/src/theme.ts
+        ${VIEWER_DIR}/package-lock.json
+    COMMENT "Bundling viewer/ via esbuild"
+    VERBATIM)
+
+add_custom_target(viewer_bundle ALL
+    DEPENDS ${VIEWER_BUNDLE})
+
 add_subdirectory(src)
 add_subdirectory(tests)
