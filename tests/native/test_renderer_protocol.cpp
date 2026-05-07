@@ -85,6 +85,15 @@ TEST_CASE("decode_renderer_message rejects rendered without id",
         LR"({"type":"rendered","version":1,"elapsedMs":42})").has_value());
 }
 
+TEST_CASE("decode_renderer_message rejects rendered with id out of range",
+          "[renderer_protocol]") {
+    // 2^33 — well past INT_MAX
+    constexpr std::wstring_view payload =
+        LR"({"type":"rendered","version":1,"id":8589934592,"elapsedMs":42})";
+    auto result = mdview::decode_renderer_message(payload);
+    REQUIRE_FALSE(result.has_value());
+}
+
 TEST_CASE("encode_load_document includes id field",
           "[renderer_protocol]") {
     mdview::LoadDocumentMessage msg;

@@ -4,6 +4,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <limits>
+
 namespace mdview {
 
 namespace {
@@ -16,6 +18,16 @@ nlohmann::json options_to_json(const ViewerOptions& o) {
         {"enableMermaid",     o.enable_mermaid},
         {"enableMath",        o.enable_math},
     };
+}
+
+std::optional<int> get_int_in_range(const nlohmann::json& j,
+                                    const char* key) {
+    auto v = j[key].get<int64_t>();
+    if (v < std::numeric_limits<int>::min() ||
+        v > std::numeric_limits<int>::max()) {
+        return std::nullopt;
+    }
+    return static_cast<int>(v);
 }
 
 }
@@ -74,9 +86,14 @@ decode_renderer_message(std::wstring_view json) noexcept {
                 || !j["elapsedMs"].is_number_integer()) {
                 return std::nullopt;
             }
+            auto id         = get_int_in_range(j, "id");
+            auto elapsed_ms = get_int_in_range(j, "elapsedMs");
+            if (!id || !elapsed_ms) {
+                return std::nullopt;
+            }
             RenderedMessage m;
-            m.id         = j["id"].get<int>();
-            m.elapsed_ms = j["elapsedMs"].get<int>();
+            m.id         = *id;
+            m.elapsed_ms = *elapsed_ms;
             return RendererMessage{m};
         }
         if (type == "renderError") {
@@ -86,8 +103,12 @@ decode_renderer_message(std::wstring_view json) noexcept {
             if (!j.contains("message") || !j["message"].is_string()) {
                 return std::nullopt;
             }
+            auto id = get_int_in_range(j, "id");
+            if (!id) {
+                return std::nullopt;
+            }
             RenderErrorMessage m;
-            m.id      = j["id"].get<int>();
+            m.id      = *id;
             m.message = utf8_to_utf16(j["message"].get<std::string>());
             if (j.contains("stack") && !j["stack"].is_null()) {
                 if (!j["stack"].is_string()) {
