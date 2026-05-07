@@ -15,8 +15,13 @@ enum class DocumentError {
 };
 
 struct DocumentResult {
+    // Decoded UTF-16 content. Empty if error != None.
     std::wstring          content;
+
+    // Parent directory of the file. Only meaningful when error == None;
+    // on error paths the path may refer to a non-existent directory.
     std::filesystem::path doc_dir;
+
     DocumentError         error = DocumentError::None;
 };
 
