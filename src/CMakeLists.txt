@@ -15,6 +15,7 @@ add_library(mdview_core STATIC
     native/init_error.cpp
     native/renderer_protocol.cpp
     native/viewer_paths.cpp
+    native/webview2_environment.cpp
     platform/win32_window.cpp
     plugin/plugin_window.cpp
     plugin/fallback_window.cpp)
