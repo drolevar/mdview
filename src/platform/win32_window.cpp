@@ -3,6 +3,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <wchar.h>
 
@@ -70,6 +71,47 @@ HFONT create_ui_font_for_window(HWND hwnd) noexcept {
     lf.lfQuality = CLEARTYPE_QUALITY;
     wcscpy_s(lf.lfFaceName, L"Segoe UI");
     return ::CreateFontIndirectW(&lf);
+}
+
+void paint_centered_text(HWND hwnd,
+                         std::wstring_view text,
+                         HFONT font,
+                         COLORREF bg_color,
+                         COLORREF fg_color,
+                         UINT draw_text_format) noexcept {
+    PAINTSTRUCT ps{};
+    HDC hdc = ::BeginPaint(hwnd, &ps);
+    if (hdc == nullptr) {
+        return;
+    }
+
+    RECT rc{};
+    ::GetClientRect(hwnd, &rc);
+
+    HBRUSH bg = ::CreateSolidBrush(bg_color);
+    if (bg != nullptr) {
+        ::FillRect(hdc, &rc, bg);
+        ::DeleteObject(bg);
+    }
+
+    ::SetBkMode(hdc, TRANSPARENT);
+    ::SetTextColor(hdc, fg_color);
+
+    HFONT old_font = (font != nullptr)
+        ? static_cast<HFONT>(::SelectObject(hdc, font))
+        : nullptr;
+
+    ::DrawTextW(hdc,
+                text.data(),
+                static_cast<int>(text.size()),
+                &rc,
+                draw_text_format);
+
+    if (old_font != nullptr) {
+        ::SelectObject(hdc, old_font);
+    }
+
+    ::EndPaint(hwnd, &ps);
 }
 
 }
