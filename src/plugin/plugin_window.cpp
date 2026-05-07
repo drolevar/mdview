@@ -56,16 +56,20 @@ void PluginWindow::set_status_text(std::wstring text) {
     }
 }
 
-LRESULT CALLBACK PluginWindow::static_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+LRESULT CALLBACK PluginWindow::static_window_proc(HWND hwnd, UINT msg,
+                                                  WPARAM wparam,
+                                                  LPARAM lparam) {
     PluginWindow* self = nullptr;
 
     if (msg == WM_NCCREATE) {
-        const CREATESTRUCTW* cs = reinterpret_cast<const CREATESTRUCTW*>(lparam);
+        const auto* cs = reinterpret_cast<const CREATESTRUCTW*>(lparam);
         self = static_cast<PluginWindow*>(cs->lpCreateParams);
-        self->hwnd_ = hwnd;
-        ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+        if (self != nullptr) {
+            self->hwnd_ = hwnd;
+            set_window_self_ptr(hwnd, self);
+        }
     } else {
-        self = reinterpret_cast<PluginWindow*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        self = get_window_self_ptr<PluginWindow>(hwnd);
     }
 
     if (self != nullptr) {
@@ -93,40 +97,37 @@ LRESULT PluginWindow::window_proc(UINT msg, WPARAM wparam, LPARAM lparam) {
         hwnd_ = nullptr;
         return 0;
 
+    case WM_DPICHANGED: {
+        cached_font_.reset();
+        const RECT* suggested = reinterpret_cast<const RECT*>(lparam);
+        if (suggested != nullptr) {
+            ::SetWindowPos(hwnd_, nullptr,
+                suggested->left, suggested->top,
+                suggested->right - suggested->left,
+                suggested->bottom - suggested->top,
+                SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        ::InvalidateRect(hwnd_, nullptr, TRUE);
+        return 0;
+    }
+
     default:
         return ::DefWindowProcW(hwnd_, msg, wparam, lparam);
     }
 }
 
 void PluginWindow::on_paint() {
-    PAINTSTRUCT ps{};
-    HDC hdc = ::BeginPaint(hwnd_, &ps);
-    if (hdc == nullptr) {
-        return;
+    if (!cached_font_) {
+        cached_font_ = create_ui_font_for_window(hwnd_);
     }
 
-    RECT rc{};
-    ::GetClientRect(hwnd_, &rc);
-
-    HBRUSH bg = ::CreateSolidBrush(::GetSysColor(COLOR_WINDOW));
-    ::FillRect(hdc, &rc, bg);
-    ::DeleteObject(bg);
-
-    ::SetBkMode(hdc, TRANSPARENT);
-    ::SetTextColor(hdc, ::GetSysColor(COLOR_WINDOWTEXT));
-
-    wil::unique_hfont font = create_ui_font_for_window(hwnd_);
-    HFONT old_font = static_cast<HFONT>(::SelectObject(hdc, font.get()));
-
-    ::DrawTextW(
-        hdc,
-        status_text_.c_str(),
-        -1,
-        &rc,
+    paint_centered_text(
+        hwnd_,
+        status_text_,
+        cached_font_.get(),
+        ::GetSysColor(COLOR_WINDOW),
+        ::GetSysColor(COLOR_WINDOWTEXT),
         DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-
-    ::SelectObject(hdc, old_font);
-    ::EndPaint(hwnd_, &ps);
 }
 
 }

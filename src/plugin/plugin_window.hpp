@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include <wil/resource.h>
 
 #include <memory>
 #include <string>
@@ -31,6 +32,7 @@ private:
     HWND hwnd_ = nullptr;
     std::wstring file_to_load_;
     std::wstring status_text_;
+    wil::unique_hfont cached_font_;
 };
 
 }
