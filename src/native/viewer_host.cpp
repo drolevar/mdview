@@ -98,9 +98,15 @@ void ViewerHost::on_host_message_(std::wstring_view json) {
         }
         state_ = State::RendererReady;
         debug_log::log(L"viewer-host: renderer ready");
+
+        std::weak_ptr<bool> wp = alive_token_;
         if (on_event_) {
             on_event_(LifecycleEvent{
                 LifecycleEvent::Kind::RendererReady, S_OK, 0});
+        }
+        if (!wp.lock()) {
+            // Event handler destroyed *this. Bail before touching members.
+            return;
         }
         if (pending_load_) {
             DocumentRequest req = std::move(*pending_load_);
