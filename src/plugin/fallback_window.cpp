@@ -3,49 +3,76 @@
 #include "native/plugin_globals.hpp"
 #include "platform/win32_window.hpp"
 
+#include <wil/resource.h>
+
 namespace mdview {
 
 namespace {
 
+struct FallbackState {
+    std::wstring       message;
+    wil::unique_hfont  cached_font;
+
+    explicit FallbackState(std::wstring m) : message(std::move(m)) {}
+};
+
 constexpr const wchar_t* kFallbackClassName = L"mdview_fallback_window";
 
-LRESULT CALLBACK fallback_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+LRESULT CALLBACK fallback_proc(HWND hwnd, UINT msg,
+                               WPARAM wparam, LPARAM lparam) {
     if (msg == WM_NCCREATE) {
-        const CREATESTRUCTW* cs = reinterpret_cast<const CREATESTRUCTW*>(lparam);
-        auto* text = static_cast<std::wstring*>(cs->lpCreateParams);
-        ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(text));
+        const auto* cs = reinterpret_cast<const CREATESTRUCTW*>(lparam);
+        auto* state = static_cast<FallbackState*>(cs->lpCreateParams);
+        if (state != nullptr) {
+            set_window_self_ptr(hwnd, state);
+        }
         return TRUE;
     }
 
-    auto* text = reinterpret_cast<std::wstring*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    auto* state = get_window_self_ptr<FallbackState>(hwnd);
 
     switch (msg) {
     case WM_PAINT: {
-        PAINTSTRUCT ps{};
-        HDC hdc = ::BeginPaint(hwnd, &ps);
-        RECT rc{};
-        ::GetClientRect(hwnd, &rc);
-        HBRUSH bg = ::CreateSolidBrush(::GetSysColor(COLOR_WINDOW));
-        ::FillRect(hdc, &rc, bg);
-        ::DeleteObject(bg);
-        ::SetBkMode(hdc, TRANSPARENT);
-        ::SetTextColor(hdc, ::GetSysColor(COLOR_WINDOWTEXT));
-        wil::unique_hfont font = create_ui_font_for_window(hwnd);
-        HFONT old_font = static_cast<HFONT>(::SelectObject(hdc, font.get()));
-        if (text != nullptr) {
-            ::DrawTextW(hdc, text->c_str(), -1, &rc,
-                DT_CENTER | DT_VCENTER | DT_WORDBREAK | DT_NOPREFIX);
+        if (state == nullptr) {
+            return ::DefWindowProcW(hwnd, msg, wparam, lparam);
         }
-        ::SelectObject(hdc, old_font);
-        ::EndPaint(hwnd, &ps);
+        if (!state->cached_font) {
+            state->cached_font = create_ui_font_for_window(hwnd);
+        }
+        paint_centered_text(
+            hwnd,
+            state->message,
+            state->cached_font.get(),
+            ::GetSysColor(COLOR_WINDOW),
+            ::GetSysColor(COLOR_WINDOWTEXT),
+            DT_CENTER | DT_VCENTER | DT_WORDBREAK | DT_NOPREFIX);
         return 0;
     }
+
     case WM_ERASEBKGND:
         return 1;
-    case WM_NCDESTROY:
-        delete text;
-        ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+
+    case WM_DPICHANGED: {
+        if (state != nullptr) {
+            state->cached_font.reset();
+        }
+        const RECT* suggested = reinterpret_cast<const RECT*>(lparam);
+        if (suggested != nullptr) {
+            ::SetWindowPos(hwnd, nullptr,
+                suggested->left, suggested->top,
+                suggested->right - suggested->left,
+                suggested->bottom - suggested->top,
+                SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        ::InvalidateRect(hwnd, nullptr, TRUE);
         return 0;
+    }
+
+    case WM_NCDESTROY:
+        delete state;
+        set_window_self_ptr<FallbackState>(hwnd, nullptr);
+        return 0;
+
     default:
         return ::DefWindowProcW(hwnd, msg, wparam, lparam);
     }
@@ -59,7 +86,13 @@ HWND create_fallback_window(HWND parent, std::wstring message) noexcept {
         HINSTANCE inst = reinterpret_cast<HINSTANCE>(module);
         ensure_window_class_registered(inst, kFallbackClassName, &fallback_proc);
 
-        auto* heap_text = new std::wstring(std::move(message));
+        // Allocate state; on success, ownership transfers to the wndproc
+        // at WM_NCCREATE and is freed in WM_NCDESTROY. On CreateWindowExW
+        // failure we cannot reliably tell whether WM_NCCREATE ran (and
+        // thus whether the wndproc already freed the state via
+        // WM_NCDESTROY), so we deliberately leak on the rare-failure
+        // path rather than risk a double-free.
+        auto* state = new FallbackState(std::move(message));
 
         HWND hwnd = ::CreateWindowExW(
             0,
@@ -70,13 +103,9 @@ HWND create_fallback_window(HWND parent, std::wstring message) noexcept {
             parent,
             nullptr,
             inst,
-            heap_text);
+            state);
 
-        if (hwnd == nullptr) {
-            delete heap_text;
-            return nullptr;
-        }
-        return hwnd;
+        return hwnd;  // nullptr on failure; rare-failure leak documented above
     } catch (...) {
         return nullptr;
     }
