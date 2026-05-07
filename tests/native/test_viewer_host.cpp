@@ -2,8 +2,13 @@
 #include "native/renderer_protocol.hpp"
 #include "native/viewer_host.hpp"
 
+#include "common/utf.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
+#include <nlohmann/json.hpp>
+
+#include <filesystem>
 #include <vector>
 
 namespace {
@@ -12,6 +17,8 @@ class MockHost : public mdview::IWebView2Host {
 public:
     std::function<void(HRESULT)>          last_create_cb;
     std::vector<std::wstring>             posted;
+    std::filesystem::path                 last_remap_dir;
+    int                                   remap_count  = 0;
     bool                                  closed       = false;
     int                                   resize_count = 0;
     int                                   focus_count  = 0;
@@ -24,6 +31,27 @@ public:
     void close() noexcept override { closed = true; }
     void post_to_renderer(std::wstring_view json) override {
         posted.emplace_back(json);
+    }
+    HRESULT remap_doc_dir(
+            const std::filesystem::path& doc_dir) noexcept override {
+        last_remap_dir = doc_dir;
+        ++remap_count;
+        return S_OK;
+    }
+
+    // Parses the last posted JSON and returns its "id" field, or -1.
+    int last_posted_doc_id() const {
+        if (posted.empty()) return -1;
+        try {
+            std::string utf8 = mdview::utf16_to_utf8(posted.back());
+            auto j = nlohmann::json::parse(utf8, nullptr,
+                                           /*allow_exceptions=*/false);
+            if (j.is_discarded() || !j.is_object()) return -1;
+            if (!j.contains("id") || !j["id"].is_number_integer()) return -1;
+            return j["id"].get<int>();
+        } catch (...) {
+            return -1;
+        }
     }
 };
 
@@ -139,6 +167,59 @@ TEST_CASE("ViewerHost::dispatch_process_failed after close does not "
     vh.dispatch_process_failed(0);  // BROWSER_PROCESS_EXITED
 
     REQUIRE_FALSE(crashed);
+}
+
+TEST_CASE("ViewerHost assigns monotonic doc ids and remaps doc dirs",
+          "[viewer_host]") {
+    auto mock = std::make_unique<MockHost>();
+    auto* mp = mock.get();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    vh.create((HWND)1, [](mdview::LifecycleEvent){});
+    mp->last_create_cb(S_OK);
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
+    mdview::DocumentRequest a;
+    a.file_path    = LR"(C:\dir_a\a.md)";
+    a.display_name = L"a.md";
+    a.doc_dir      = LR"(C:\dir_a)";
+    mdview::DocumentRequest b;
+    b.file_path    = LR"(C:\dir_b\b.md)";
+    b.display_name = L"b.md";
+    b.doc_dir      = LR"(C:\dir_b)";
+
+    vh.load_document(std::move(a));
+    vh.load_document(std::move(b));
+
+    REQUIRE(mp->posted.size() == 2);
+    REQUIRE(mp->last_posted_doc_id() == 2);
+    REQUIRE(mp->remap_count == 2);
+    REQUIRE(mp->last_remap_dir ==
+            std::filesystem::path(LR"(C:\dir_b)"));
+    // Successful remap fills base_uri in the load message.
+    REQUIRE(mp->posted[1].find(L"https://mdview-doc.local/")
+            != std::wstring::npos);
+}
+
+TEST_CASE("ViewerHost skips remap when doc_dir is empty",
+          "[viewer_host]") {
+    auto mock = std::make_unique<MockHost>();
+    auto* mp = mock.get();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    vh.create((HWND)1, [](mdview::LifecycleEvent){});
+    mp->last_create_cb(S_OK);
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
+    mdview::DocumentRequest req;
+    req.file_path    = LR"(C:\x.md)";
+    req.display_name = L"x.md";
+    // doc_dir intentionally left empty
+    vh.load_document(std::move(req));
+
+    REQUIRE(mp->posted.size() == 1);
+    REQUIRE(mp->remap_count == 0);
+    REQUIRE(mp->last_posted_doc_id() == 1);
 }
 
 TEST_CASE("ViewerHost re-entry safe when RendererReady handler "

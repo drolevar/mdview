@@ -132,6 +132,17 @@ void WebView2Host::post_to_renderer(std::wstring_view json) {
     LOG_IF_FAILED(webview_->PostWebMessageAsJson(std::wstring(json).c_str()));
 }
 
+HRESULT WebView2Host::remap_doc_dir(
+        const std::filesystem::path& doc_dir) noexcept {
+    if (!webview_) return E_UNEXPECTED;
+    auto wv3 = webview_.try_query<ICoreWebView2_3>();
+    if (!wv3) return E_NOINTERFACE;
+    return wv3->SetVirtualHostNameToFolderMapping(
+        L"mdview-doc.local",
+        doc_dir.c_str(),
+        COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
+}
+
 void WebView2Host::apply_settings_() {
     LOG_IF_FAILED(settings_->put_IsScriptEnabled(TRUE));
     LOG_IF_FAILED(settings_->put_IsWebMessageEnabled(TRUE));

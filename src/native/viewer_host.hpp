@@ -16,6 +16,14 @@ struct DocumentRequest {
     std::filesystem::path file_path;
     std::wstring          display_name;
     bool                  quick_view_mode = false;
+
+    // M3 Task 11: monotonic id assigned by ViewerHost on dispatch;
+    // doc_dir is the folder behind the mdview-doc.local mapping;
+    // base_uri is set to https://mdview-doc.local/ on a successful
+    // remap, cleared otherwise.
+    int                   doc_id = 0;
+    std::filesystem::path doc_dir;
+    std::wstring          base_uri;
 };
 
 struct LifecycleEvent {
@@ -59,6 +67,7 @@ private:
     LifecycleCallback              on_event_;
     State                          state_ = State::Constructed;
     std::optional<DocumentRequest> pending_load_;
+    int                            doc_id_ = 0;  // monotonic, ++ per load_document
 };
 
 }
