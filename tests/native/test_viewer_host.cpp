@@ -119,6 +119,28 @@ TEST_CASE("ViewerHost drops load_document after close", "[viewer_host]") {
     REQUIRE(mock_ptr->posted.size() == 0);
 }
 
+TEST_CASE("ViewerHost::dispatch_process_failed after close does not "
+          "fire RendererCrashed",
+          "[viewer_host]") {
+    auto mock = std::make_unique<MockHost>();
+    auto* mock_ptr = mock.get();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+
+    bool crashed = false;
+    vh.create((HWND)1, [&](mdview::LifecycleEvent e) {
+        if (e.kind == mdview::LifecycleEvent::Kind::RendererCrashed) {
+            crashed = true;
+        }
+    });
+
+    mock_ptr->last_create_cb(S_OK);
+    vh.close();
+    vh.dispatch_process_failed(0);  // BROWSER_PROCESS_EXITED
+
+    REQUIRE_FALSE(crashed);
+}
+
 TEST_CASE("ViewerHost re-entry safe when RendererReady handler "
           "synchronously calls load_document",
           "[viewer_host]") {

@@ -124,6 +124,7 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
 }
 
 void ViewerHost::dispatch_process_failed(int process_failed_kind) {
+    if (state_ == State::Closed) return;
     state_ = State::Crashed;
     pending_load_.reset();
     debug_log::log(L"viewer-host: renderer crashed, kind={}",
