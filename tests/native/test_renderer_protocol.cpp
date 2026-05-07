@@ -53,3 +53,46 @@ TEST_CASE("decode_renderer_message rejects string version",
     REQUIRE_FALSE(mdview::decode_renderer_message(
         LR"({"type":"ready","version":"1"})").has_value());
 }
+
+TEST_CASE("decode_renderer_message accepts rendered with all fields",
+          "[renderer_protocol]") {
+    auto result = mdview::decode_renderer_message(
+        LR"({"type":"rendered","version":1,"id":7,"elapsedMs":42})");
+    REQUIRE(result.has_value());
+    auto* m = std::get_if<mdview::RenderedMessage>(&*result);
+    REQUIRE(m != nullptr);
+    REQUIRE(m->id == 7);
+    REQUIRE(m->elapsed_ms == 42);
+}
+
+TEST_CASE("decode_renderer_message accepts renderError",
+          "[renderer_protocol]") {
+    auto result = mdview::decode_renderer_message(
+        LR"({"type":"renderError","version":1,"id":3,)"
+        LR"("message":"boom","stack":"at app.ts:42"})");
+    REQUIRE(result.has_value());
+    auto* m = std::get_if<mdview::RenderErrorMessage>(&*result);
+    REQUIRE(m != nullptr);
+    REQUIRE(m->id == 3);
+    REQUIRE(m->message == L"boom");
+    REQUIRE(m->stack.has_value());
+    REQUIRE(*m->stack == L"at app.ts:42");
+}
+
+TEST_CASE("decode_renderer_message rejects rendered without id",
+          "[renderer_protocol]") {
+    REQUIRE_FALSE(mdview::decode_renderer_message(
+        LR"({"type":"rendered","version":1,"elapsedMs":42})").has_value());
+}
+
+TEST_CASE("encode_load_document includes id field",
+          "[renderer_protocol]") {
+    mdview::LoadDocumentMessage msg;
+    msg.id           = 12;
+    msg.display_name = L"a.md";
+    msg.path         = LR"(C:\a.md)";
+    msg.markdown     = L"# hi";
+    msg.base_uri     = L"https://mdview-doc.local/";
+    auto json_text = mdview::encode_load_document(msg);
+    REQUIRE(json_text.find(L"\"id\":12") != std::wstring::npos);
+}
