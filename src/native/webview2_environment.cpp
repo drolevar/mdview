@@ -43,6 +43,12 @@ void WebView2Environment::start_initialization_() {
     state_ = State::Initializing;
 
     auto udf = resolve_webview2_udf();
+    if (udf.empty()) {
+        debug_log::log(L"env init aborted: cannot resolve user data folder");
+        deliver_(HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND), nullptr);
+        return;
+    }
+
     debug_log::log(L"env init starting; udf={}", udf.wstring());
 
     auto handler =
@@ -55,7 +61,7 @@ void WebView2Environment::start_initialization_() {
 
     HRESULT hr = ::CreateCoreWebView2EnvironmentWithOptions(
         /*browserExecutableFolder*/ nullptr,
-        udf.empty() ? nullptr : udf.c_str(),
+        udf.c_str(),
         /*environmentOptions*/ nullptr,
         handler.Get());
 
