@@ -37,6 +37,12 @@ PluginWindow::create(HWND parent, std::wstring file_to_load) {
     }
 
     PluginWindow* pw = window.get();
+    // pw is captured raw in the closures below. Lifetime is safe because
+    // the destruction chain unwinds in order: ~PluginWindow → ~viewer_
+    // (~ViewerHost) → ~host_ (~WebView2Host) → revokers cleared (events
+    // unsubscribed) → callback fields destroyed. So a callback cannot
+    // fire on a dangling pw — by the time pw is gone, the closures are
+    // gone too.
     auto host = std::make_unique<WebView2Host>(
         [pw](std::wstring_view json) noexcept {
             pw->on_renderer_message(json);
@@ -161,7 +167,7 @@ void PluginWindow::on_paint() {
         cached_font_.get(),
         ::GetSysColor(COLOR_WINDOW),
         ::GetSysColor(COLOR_WINDOWTEXT),
-        DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        DT_CENTER | DT_VCENTER | DT_WORDBREAK | DT_NOPREFIX);
 }
 
 void PluginWindow::on_renderer_message(std::wstring_view json) {
