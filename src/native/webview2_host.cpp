@@ -4,6 +4,7 @@
 #include "native/viewer_paths.hpp"
 #include "native/webview2_environment.hpp"
 
+#include <wil/resource.h>
 #include <wil/result_macros.h>
 #include <wrl.h>
 
@@ -158,154 +159,180 @@ void WebView2Host::apply_settings_() {
 
 void WebView2Host::install_handlers_() {
     std::weak_ptr<bool> wp = alive_token_;
-    ICoreWebView2* wv = webview_.get();
+    ICoreWebView2*           wv   = webview_.get();
+    ICoreWebView2Controller* ctrl = controller_.get();
 
-    // WebMessageReceived
-    {
-        EventRegistrationToken token{};
-        auto h = Microsoft::WRL::Callback<
-            ICoreWebView2WebMessageReceivedEventHandler>(
-            [this, wp](ICoreWebView2*,
-                       ICoreWebView2WebMessageReceivedEventArgs* args)
-            noexcept -> HRESULT {
-                auto alive = wp.lock();
-                if (!alive) return S_OK;
-                try {
-                    wil::unique_cotaskmem_string raw;
-                    THROW_IF_FAILED(args->get_WebMessageAsJson(&raw));
-                    if (on_renderer_message_) {
-                        on_renderer_message_(std::wstring_view(raw.get()));
-                    }
-                } catch (...) {
-                    return wil::ResultFromCaughtException();
-                }
-                return S_OK;
-            });
-        THROW_IF_FAILED(webview_->add_WebMessageReceived(h.Get(), &token));
-        revokers_.emplace_back(token,
-            [wv](EventRegistrationToken t) {
-                wv->remove_WebMessageReceived(t);
-            });
-    }
+    // Build all five WRL callbacks up front. None of these touch the
+    // host yet -- they're just heap-allocated objects.
 
-    // ProcessFailed
-    {
-        EventRegistrationToken token{};
-        auto h = Microsoft::WRL::Callback<
-            ICoreWebView2ProcessFailedEventHandler>(
-            [this, wp](ICoreWebView2*,
-                       ICoreWebView2ProcessFailedEventArgs* args)
-            noexcept -> HRESULT {
-                auto alive = wp.lock();
-                if (!alive) return S_OK;
-                COREWEBVIEW2_PROCESS_FAILED_KIND kind{};
-                LOG_IF_FAILED(args->get_ProcessFailedKind(&kind));
-                debug_log::log(L"renderer process failed: kind={}",
-                               static_cast<int>(kind));
-                if (on_process_failed_) {
-                    on_process_failed_(static_cast<int>(kind));
+    auto msg_cb = Microsoft::WRL::Callback<
+        ICoreWebView2WebMessageReceivedEventHandler>(
+        [this, wp](ICoreWebView2*,
+                   ICoreWebView2WebMessageReceivedEventArgs* args)
+        noexcept -> HRESULT {
+            auto alive = wp.lock();
+            if (!alive) return S_OK;
+            try {
+                wil::unique_cotaskmem_string raw;
+                THROW_IF_FAILED(args->get_WebMessageAsJson(&raw));
+                if (on_renderer_message_) {
+                    on_renderer_message_(std::wstring_view(raw.get()));
                 }
-                return S_OK;
-            });
-        THROW_IF_FAILED(webview_->add_ProcessFailed(h.Get(), &token));
-        revokers_.emplace_back(token,
-            [wv](EventRegistrationToken t) {
-                wv->remove_ProcessFailed(t);
-            });
-    }
+            } catch (...) {
+                return wil::ResultFromCaughtException();
+            }
+            return S_OK;
+        });
+
+    auto proc_cb = Microsoft::WRL::Callback<
+        ICoreWebView2ProcessFailedEventHandler>(
+        [this, wp](ICoreWebView2*,
+                   ICoreWebView2ProcessFailedEventArgs* args)
+        noexcept -> HRESULT {
+            auto alive = wp.lock();
+            if (!alive) return S_OK;
+            COREWEBVIEW2_PROCESS_FAILED_KIND kind{};
+            LOG_IF_FAILED(args->get_ProcessFailedKind(&kind));
+            debug_log::log(L"renderer process failed: kind={}",
+                           static_cast<int>(kind));
+            if (on_process_failed_) {
+                on_process_failed_(static_cast<int>(kind));
+            }
+            return S_OK;
+        });
 
     // NavigationStarting (M2: log only; M6 enforces policy)
-    {
-        EventRegistrationToken token{};
-        auto h = Microsoft::WRL::Callback<
-            ICoreWebView2NavigationStartingEventHandler>(
-            [wp](ICoreWebView2*,
-                 ICoreWebView2NavigationStartingEventArgs* args)
-            noexcept -> HRESULT {
-                auto alive = wp.lock();
-                if (!alive) return S_OK;
-                wil::unique_cotaskmem_string uri;
-                LOG_IF_FAILED(args->get_Uri(&uri));
-                if (uri) {
-                    debug_log::log(L"navigation starting: {}", uri.get());
-                }
-                return S_OK;
-            });
-        THROW_IF_FAILED(webview_->add_NavigationStarting(h.Get(), &token));
-        revokers_.emplace_back(token,
-            [wv](EventRegistrationToken t) {
-                wv->remove_NavigationStarting(t);
-            });
-    }
+    auto nav_cb = Microsoft::WRL::Callback<
+        ICoreWebView2NavigationStartingEventHandler>(
+        [wp](ICoreWebView2*,
+             ICoreWebView2NavigationStartingEventArgs* args)
+        noexcept -> HRESULT {
+            auto alive = wp.lock();
+            if (!alive) return S_OK;
+            wil::unique_cotaskmem_string uri;
+            LOG_IF_FAILED(args->get_Uri(&uri));
+            if (uri) {
+                debug_log::log(L"navigation starting: {}", uri.get());
+            }
+            return S_OK;
+        });
 
     // NewWindowRequested (M2: cancel; M6 routes to ShellExecuteEx)
-    {
-        EventRegistrationToken token{};
-        auto h = Microsoft::WRL::Callback<
-            ICoreWebView2NewWindowRequestedEventHandler>(
-            [wp](ICoreWebView2*,
-                 ICoreWebView2NewWindowRequestedEventArgs* args)
-            noexcept -> HRESULT {
-                auto alive = wp.lock();
-                if (!alive) return S_OK;
-                LOG_IF_FAILED(args->put_Handled(TRUE));
-                return S_OK;
-            });
-        THROW_IF_FAILED(webview_->add_NewWindowRequested(h.Get(), &token));
-        revokers_.emplace_back(token,
-            [wv](EventRegistrationToken t) {
-                wv->remove_NewWindowRequested(t);
-            });
-    }
+    auto win_cb = Microsoft::WRL::Callback<
+        ICoreWebView2NewWindowRequestedEventHandler>(
+        [wp](ICoreWebView2*,
+             ICoreWebView2NewWindowRequestedEventArgs* args)
+        noexcept -> HRESULT {
+            auto alive = wp.lock();
+            if (!alive) return S_OK;
+            LOG_IF_FAILED(args->put_Handled(TRUE));
+            return S_OK;
+        });
 
     // AcceleratorKeyPressed: forward Esc / Alt / F-keys to the Lister
     // ancestor so TC's accelerator processing (Esc-to-close, Alt-menu)
     // still works while the WebView has focus. F12 is left alone so
     // the default DevTools shortcut keeps working.
-    {
-        ICoreWebView2Controller* ctrl = controller_.get();
-        EventRegistrationToken token{};
-        auto h = Microsoft::WRL::Callback<
-            ICoreWebView2AcceleratorKeyPressedEventHandler>(
-            [this, wp](ICoreWebView2Controller*,
-                       ICoreWebView2AcceleratorKeyPressedEventArgs* args)
-            noexcept -> HRESULT {
-                auto alive = wp.lock();
-                if (!alive) return S_OK;
+    auto accel_cb = Microsoft::WRL::Callback<
+        ICoreWebView2AcceleratorKeyPressedEventHandler>(
+        [this, wp](ICoreWebView2Controller*,
+                   ICoreWebView2AcceleratorKeyPressedEventArgs* args)
+        noexcept -> HRESULT {
+            auto alive = wp.lock();
+            if (!alive) return S_OK;
 
-                COREWEBVIEW2_KEY_EVENT_KIND kind{};
-                if (FAILED(args->get_KeyEventKind(&kind))) return S_OK;
-                if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN &&
-                    kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN) {
-                    return S_OK;
-                }
-
-                UINT vk = 0;
-                if (FAILED(args->get_VirtualKey(&vk))) return S_OK;
-
-                const bool is_f_key = (vk >= VK_F1 && vk <= VK_F24);
-                const bool forward  = (vk == VK_ESCAPE) ||
-                                      (vk == VK_MENU)   ||  // Alt
-                                      is_f_key;
-                if (!forward) return S_OK;
-
-                // Don't intercept F12 -- leave DevTools default behavior.
-                if (vk == VK_F12) return S_OK;
-
-                LOG_IF_FAILED(args->put_Handled(TRUE));
-
-                HWND lister = ::GetAncestor(parent_hwnd_, GA_PARENT);
-                if (lister) {
-                    ::PostMessageW(lister, WM_KEYDOWN, vk, 0);
-                }
+            COREWEBVIEW2_KEY_EVENT_KIND kind{};
+            if (FAILED(args->get_KeyEventKind(&kind))) return S_OK;
+            if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN &&
+                kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN) {
                 return S_OK;
-            });
-        THROW_IF_FAILED(controller_->add_AcceleratorKeyPressed(h.Get(), &token));
-        revokers_.emplace_back(token,
-            [ctrl](EventRegistrationToken t) {
-                ctrl->remove_AcceleratorKeyPressed(t);
-            });
-    }
+            }
+
+            UINT vk = 0;
+            if (FAILED(args->get_VirtualKey(&vk))) return S_OK;
+
+            const bool is_f_key = (vk >= VK_F1 && vk <= VK_F24);
+            const bool forward  = (vk == VK_ESCAPE) ||
+                                  (vk == VK_MENU)   ||  // Alt
+                                  is_f_key;
+            if (!forward) return S_OK;
+
+            // Don't intercept F12 -- leave DevTools default behavior.
+            if (vk == VK_F12) return S_OK;
+
+            LOG_IF_FAILED(args->put_Handled(TRUE));
+
+            HWND lister = ::GetAncestor(parent_hwnd_, GA_PARENT);
+            if (lister) {
+                ::PostMessageW(lister, WM_KEYDOWN, vk, 0);
+            }
+            return S_OK;
+        });
+
+    // Register all five. Each registration is paired with an in-scope
+    // scope_exit guard so that if any later add_* call throws, the
+    // partial registrations from earlier calls are revoked during
+    // stack unwinding before the exception propagates. After the
+    // final add_* succeeds, the tokens are emplaced into revokers_
+    // and the guards are dismissed via release().
+
+    EventRegistrationToken msg_tok{};
+    THROW_IF_FAILED(webview_->add_WebMessageReceived(msg_cb.Get(), &msg_tok));
+    auto revoke_msg = wil::scope_exit([wv, msg_tok]() noexcept {
+        wv->remove_WebMessageReceived(msg_tok);
+    });
+
+    EventRegistrationToken proc_tok{};
+    THROW_IF_FAILED(webview_->add_ProcessFailed(proc_cb.Get(), &proc_tok));
+    auto revoke_proc = wil::scope_exit([wv, proc_tok]() noexcept {
+        wv->remove_ProcessFailed(proc_tok);
+    });
+
+    EventRegistrationToken nav_tok{};
+    THROW_IF_FAILED(webview_->add_NavigationStarting(nav_cb.Get(), &nav_tok));
+    auto revoke_nav = wil::scope_exit([wv, nav_tok]() noexcept {
+        wv->remove_NavigationStarting(nav_tok);
+    });
+
+    EventRegistrationToken win_tok{};
+    THROW_IF_FAILED(webview_->add_NewWindowRequested(win_cb.Get(), &win_tok));
+    auto revoke_win = wil::scope_exit([wv, win_tok]() noexcept {
+        wv->remove_NewWindowRequested(win_tok);
+    });
+
+    EventRegistrationToken accel_tok{};
+    THROW_IF_FAILED(controller_->add_AcceleratorKeyPressed(
+        accel_cb.Get(), &accel_tok));
+    auto revoke_accel = wil::scope_exit([ctrl, accel_tok]() noexcept {
+        ctrl->remove_AcceleratorKeyPressed(accel_tok);
+    });
+
+    // All five succeeded. Hand ownership to revokers_ and dismiss the
+    // scope guards. emplace_back can throw on allocation failure; if
+    // that happens before all five revokers are emplaced, the guards
+    // for the not-yet-transferred registrations still run during
+    // unwinding and clean up the surplus.
+    revokers_.emplace_back(msg_tok,
+        [wv](EventRegistrationToken t) { wv->remove_WebMessageReceived(t); });
+    revoke_msg.release();
+
+    revokers_.emplace_back(proc_tok,
+        [wv](EventRegistrationToken t) { wv->remove_ProcessFailed(t); });
+    revoke_proc.release();
+
+    revokers_.emplace_back(nav_tok,
+        [wv](EventRegistrationToken t) { wv->remove_NavigationStarting(t); });
+    revoke_nav.release();
+
+    revokers_.emplace_back(win_tok,
+        [wv](EventRegistrationToken t) { wv->remove_NewWindowRequested(t); });
+    revoke_win.release();
+
+    revokers_.emplace_back(accel_tok,
+        [ctrl](EventRegistrationToken t) {
+            ctrl->remove_AcceleratorKeyPressed(t);
+        });
+    revoke_accel.release();
 }
 
 }
