@@ -3,11 +3,14 @@
 #include <windows.h>
 #include <stringapiset.h>
 
+#include <climits>
 #include <cstring>
 
 namespace mdview::encoding {
 
 namespace {
+
+constexpr wchar_t kReplacementChar = 0xFFFD;
 
 bool starts_with(std::span<const std::byte> bytes,
                  std::initializer_list<unsigned char> prefix) {
@@ -22,6 +25,12 @@ bool starts_with(std::span<const std::byte> bytes,
 std::wstring mb_to_wide(UINT codepage, DWORD flags,
                         std::span<const std::byte> bytes) {
     if (bytes.empty()) return {};
+    if (bytes.size() > static_cast<size_t>(INT_MAX)) {
+        // Defensive: MultiByteToWideChar takes int. M3's DocumentLoader
+        // caps at 32 MB so this is effectively unreachable, but it
+        // documents the contract for future callers.
+        return {};
+    }
     const char* p = reinterpret_cast<const char*>(bytes.data());
     int n = static_cast<int>(bytes.size());
 
@@ -44,7 +53,7 @@ std::wstring decode_utf16_le(std::span<const std::byte> body) {
         std::memcpy(out.data(), body.data(), pairs * 2);
     }
     if (body.size() % 2) {
-        out.push_back(static_cast<wchar_t>(0xFFFD));
+        out.push_back(kReplacementChar);
     }
     return out;
 }
@@ -58,7 +67,7 @@ std::wstring decode_utf16_be(std::span<const std::byte> body) {
         out[i] = static_cast<wchar_t>((hi << 8) | lo);
     }
     if (body.size() % 2) {
-        out.push_back(static_cast<wchar_t>(0xFFFD));
+        out.push_back(kReplacementChar);
     }
     return out;
 }
