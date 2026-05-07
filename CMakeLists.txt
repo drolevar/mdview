@@ -26,7 +26,9 @@ set(VIEWER_BUNDLE ${VIEWER_DIR}/dist/bundle.js)
 
 add_custom_command(
     OUTPUT ${VIEWER_BUNDLE}
-    COMMAND ${NODE_EXECUTABLE} ${VIEWER_DIR}/build.mjs
+    COMMAND ${CMAKE_COMMAND} -E env
+        "NODE_ENV=$<IF:$<CONFIG:Release>,production,development>"
+        ${NODE_EXECUTABLE} ${VIEWER_DIR}/build.mjs
     WORKING_DIRECTORY ${VIEWER_DIR}
     DEPENDS
         ${VIEWER_DIR}/build.mjs
