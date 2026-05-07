@@ -38,6 +38,20 @@ if (-not (Test-Path -LiteralPath $PluginDir)) {
 
 Copy-Item -LiteralPath $dll.FullName -Destination $PluginDir -Force
 Write-Host "Installed $($dll.Name) -> $PluginDir"
+
+$viewerSrcRaw = Join-Path $PSScriptRoot ".." "viewer"
+$viewerSrc = (Resolve-Path -LiteralPath $viewerSrcRaw -ErrorAction SilentlyContinue)
+if ($null -eq $viewerSrc -or -not (Test-Path -LiteralPath $viewerSrc.Path)) {
+    Write-Warning "viewer/ tree not found at $viewerSrcRaw -- skipping viewer copy"
+} else {
+    $viewerDest = Join-Path $PluginDir "viewer"
+    if (Test-Path -LiteralPath $viewerDest) {
+        Remove-Item -LiteralPath $viewerDest -Recurse -Force
+    }
+    Copy-Item -LiteralPath $viewerSrc.Path -Destination $PluginDir -Recurse -Force
+    Write-Host "Installed viewer/ -> $viewerDest"
+}
+
 Write-Host ""
 Write-Host "In Total Commander:"
 Write-Host "  Configuration -> Options -> Edit/View/Search -> Lister Plugins -> Configure"
