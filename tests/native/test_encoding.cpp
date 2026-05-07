@@ -87,3 +87,13 @@ TEST_CASE("encoding::decode falls back to CP_ACP for invalid UTF-8 "
     // codepages the result differs; assert non-empty and length 1.
     REQUIRE(s.size() == 1);
 }
+
+TEST_CASE("encoding::decode handles BOM-only inputs as empty",
+          "[encoding]") {
+    auto utf8_bom_only      = bytes_from({0xEF, 0xBB, 0xBF});
+    auto utf16_le_bom_only  = bytes_from({0xFF, 0xFE});
+    auto utf16_be_bom_only  = bytes_from({0xFE, 0xFF});
+    REQUIRE(encoding::decode(utf8_bom_only).empty());
+    REQUIRE(encoding::decode(utf16_le_bom_only).empty());
+    REQUIRE(encoding::decode(utf16_be_bom_only).empty());
+}
