@@ -5,6 +5,7 @@
   "homepage": "https://github.com/drolevar/mdview",
   "dependencies": [
     "wil",
+    "webview2",
     "nlohmann-json",
     {
       "name": "catch2",
