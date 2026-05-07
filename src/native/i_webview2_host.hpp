@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <filesystem>
 #include <functional>
 #include <string_view>
 
@@ -27,6 +28,14 @@ public:
     // controller readiness; implementations may treat a pre-create
     // call as a no-op rather than crash.
     virtual void post_to_renderer(std::wstring_view json) = 0;
+
+    // Remaps the "mdview-doc.local" virtual host to point at the
+    // directory containing the document being loaded. Called once per
+    // load_document. On older WebView2 runtimes that don't expose
+    // ICoreWebView2_3, returns E_NOINTERFACE and the caller falls
+    // back to an empty base URI.
+    virtual HRESULT remap_doc_dir(
+        const std::filesystem::path& doc_dir) noexcept = 0;
 };
 
 }

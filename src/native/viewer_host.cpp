@@ -42,18 +42,38 @@ void ViewerHost::focus() {
 }
 
 void ViewerHost::load_document(DocumentRequest request) {
-    if (state_ == State::RendererReady || state_ == State::Loaded) {
-        LoadDocumentMessage msg;
-        msg.path         = request.file_path;
-        msg.display_name = request.display_name;
-        msg.options      = options_;
-        host_->post_to_renderer(encode_load_document(msg));
-        state_ = State::Loaded;
-        return;
-    }
     if (state_ == State::Failed
      || state_ == State::Crashed
      || state_ == State::Closed) {
+        return;
+    }
+
+    // Assign the monotonic id and remap the doc-dir virtual host
+    // before either dispatching now or queuing for replay on ready.
+    // The remap result is reflected in base_uri so the renderer sees
+    // the same baseline whether it ran now or later.
+    request.doc_id = ++doc_id_;
+    if (!request.doc_dir.empty() && host_) {
+        const HRESULT hr = host_->remap_doc_dir(request.doc_dir);
+        if (FAILED(hr)) {
+            debug_log::log(
+                L"viewer-host: remap failed hr=0x{:08X}",
+                static_cast<uint32_t>(hr));
+            request.base_uri.clear();
+        } else {
+            request.base_uri = L"https://mdview-doc.local/";
+        }
+    }
+
+    if (state_ == State::RendererReady || state_ == State::Loaded) {
+        LoadDocumentMessage msg;
+        msg.id           = request.doc_id;
+        msg.path         = request.file_path;
+        msg.display_name = request.display_name;
+        msg.base_uri     = request.base_uri;
+        msg.options      = options_;
+        host_->post_to_renderer(encode_load_document(msg));
+        state_ = State::Loaded;
         return;
     }
     pending_load_ = std::move(request);   // latest-wins
