@@ -1,6 +1,7 @@
 #include "native/webview2_host.hpp"
 
 #include "native/debug_log.hpp"
+#include "native/host_names.hpp"
 #include "native/viewer_paths.hpp"
 #include "native/webview2_environment.hpp"
 
@@ -14,7 +15,6 @@ namespace mdview {
 
 namespace {
 
-constexpr const wchar_t* kAppHostName   = L"mdview-app.local";
 constexpr const wchar_t* kAppNavigateTo = L"https://mdview-app.local/index.html";
 
 }
@@ -138,7 +138,7 @@ HRESULT WebView2Host::remap_doc_dir(
     auto wv3 = webview_.try_query<ICoreWebView2_3>();
     if (!wv3) return E_NOINTERFACE;
     return wv3->SetVirtualHostNameToFolderMapping(
-        L"mdview-doc.local",
+        kDocHostName,
         doc_dir.c_str(),
         COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
 }

@@ -19,6 +19,7 @@ public:
     std::vector<std::wstring>             posted;
     std::filesystem::path                 last_remap_dir;
     int                                   remap_count  = 0;
+    HRESULT                               remap_result = S_OK;  // override to inject failure
     bool                                  closed       = false;
     int                                   resize_count = 0;
     int                                   focus_count  = 0;
@@ -36,7 +37,7 @@ public:
             const std::filesystem::path& doc_dir) noexcept override {
         last_remap_dir = doc_dir;
         ++remap_count;
-        return S_OK;
+        return remap_result;
     }
 
     // Parses the last posted JSON and returns its "id" field, or -1.
@@ -220,6 +221,39 @@ TEST_CASE("ViewerHost skips remap when doc_dir is empty",
     REQUIRE(mp->posted.size() == 1);
     REQUIRE(mp->remap_count == 0);
     REQUIRE(mp->last_posted_doc_id() == 1);
+}
+
+TEST_CASE("ViewerHost clears base_uri when remap_doc_dir fails",
+          "[viewer_host]") {
+    auto mock = std::make_unique<MockHost>();
+    auto* mp  = mock.get();
+    mp->remap_result = E_FAIL;
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    vh.create((HWND)1, [](mdview::LifecycleEvent){});
+    mp->last_create_cb(S_OK);
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
+    mdview::DocumentRequest req;
+    req.file_path    = L"a.md";
+    req.display_name = L"a.md";
+    req.doc_dir      = LR"(C:\nope)";
+    vh.load_document(std::move(req));
+
+    REQUIRE(mp->posted.size() == 1);
+    REQUIRE(mp->remap_count == 1);
+
+    // The encoder nests the load-document fields under "document"; the
+    // base URI key is "baseUri" (camelCase). On remap failure the
+    // ViewerHost clears base_uri, which must surface as an empty string.
+    auto json_payload = mdview::utf16_to_utf8(mp->posted[0]);
+    auto j = nlohmann::json::parse(json_payload, nullptr,
+                                   /*allow_exceptions=*/false);
+    REQUIRE_FALSE(j.is_discarded());
+    REQUIRE(j.contains("document"));
+    REQUIRE(j["document"].contains("baseUri"));
+    REQUIRE(j["document"]["baseUri"].is_string());
+    REQUIRE(j["document"]["baseUri"].get<std::string>().empty());
 }
 
 TEST_CASE("ViewerHost re-entry safe when RendererReady handler "
