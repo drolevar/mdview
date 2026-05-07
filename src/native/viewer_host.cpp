@@ -1,8 +1,10 @@
 #include "native/viewer_host.hpp"
 
 #include "native/debug_log.hpp"
+#include "native/host_names.hpp"
 #include "native/renderer_protocol.hpp"
 
+#include <cassert>
 #include <utility>
 
 namespace mdview {
@@ -12,6 +14,7 @@ ViewerHost::ViewerHost(ViewerOptions options,
     : options_(options)
     , host_(std::move(host))
     , alive_token_(std::make_shared<bool>(true)) {
+    assert(host_);
 }
 
 ViewerHost::~ViewerHost() {
@@ -53,7 +56,7 @@ void ViewerHost::load_document(DocumentRequest request) {
     // The remap result is reflected in base_uri so the renderer sees
     // the same baseline whether it ran now or later.
     request.doc_id = ++doc_id_;
-    if (!request.doc_dir.empty() && host_) {
+    if (!request.doc_dir.empty()) {
         const HRESULT hr = host_->remap_doc_dir(request.doc_dir);
         if (FAILED(hr)) {
             debug_log::log(
@@ -61,7 +64,7 @@ void ViewerHost::load_document(DocumentRequest request) {
                 static_cast<uint32_t>(hr));
             request.base_uri.clear();
         } else {
-            request.base_uri = L"https://mdview-doc.local/";
+            request.base_uri = kDocBaseUri;
         }
     }
 
