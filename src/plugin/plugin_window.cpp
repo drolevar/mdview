@@ -1,8 +1,10 @@
 #include "plugin/plugin_window.hpp"
 
+#include "native/init_error.hpp"
 #include "native/plugin_globals.hpp"
 #include "platform/win32_window.hpp"
 
+#include <filesystem>
 #include <stdexcept>
 
 namespace mdview {
@@ -11,28 +13,51 @@ namespace {
 constexpr const wchar_t* kClassName = L"mdview_plugin_window";
 }
 
-std::unique_ptr<PluginWindow> PluginWindow::create(HWND parent, std::wstring file_to_load) {
+std::unique_ptr<PluginWindow>
+PluginWindow::create(HWND parent, std::wstring file_to_load) {
     HMODULE module = globals().module_handle();
     HINSTANCE inst = reinterpret_cast<HINSTANCE>(module);
 
-    ensure_window_class_registered(inst, kClassName, &PluginWindow::static_window_proc);
+    ensure_window_class_registered(inst, kClassName,
+                                   &PluginWindow::static_window_proc);
 
-    auto window = std::make_unique<PluginWindow>(nullptr, std::move(file_to_load));
+    auto window = std::make_unique<PluginWindow>(nullptr,
+                                                 std::move(file_to_load));
 
     HWND hwnd = ::CreateWindowExW(
-        0,
-        kClassName,
-        L"",
+        0, kClassName, L"",
         WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN,
         0, 0, 0, 0,
-        parent,
-        nullptr,
-        inst,
+        parent, nullptr, inst,
         window.get());
 
     if (hwnd == nullptr) {
-        throw std::runtime_error("PluginWindow::create: CreateWindowExW failed");
+        throw std::runtime_error(
+            "PluginWindow::create: CreateWindowExW failed");
     }
+
+    PluginWindow* pw = window.get();
+    auto host = std::make_unique<WebView2Host>(
+        [pw](std::wstring_view json) noexcept {
+            pw->on_renderer_message(json);
+        },
+        [pw](int kind) noexcept {
+            pw->on_renderer_crash(kind);
+        });
+
+    window->viewer_ = std::make_unique<ViewerHost>(
+        ViewerOptions{}, std::move(host));
+
+    window->viewer_->create(hwnd,
+        [pw](LifecycleEvent e) {
+            pw->on_lifecycle_event(e);
+        });
+
+    DocumentRequest req;
+    req.file_path    = window->file_to_load_;
+    req.display_name = std::filesystem::path(window->file_to_load_)
+                            .filename().wstring();
+    window->viewer_->load_document(std::move(req));
 
     return window;
 }
@@ -88,8 +113,17 @@ LRESULT PluginWindow::window_proc(UINT msg, WPARAM wparam, LPARAM lparam) {
         // We paint the entire client area in WM_PAINT.
         return 1;
 
-    case WM_SIZE:
+    case WM_SIZE: {
+        if (viewer_) {
+            RECT rc{};
+            ::GetClientRect(hwnd_, &rc);
+            viewer_->resize(rc);
+        }
         ::InvalidateRect(hwnd_, nullptr, TRUE);
+        return 0;
+    }
+    case WM_SETFOCUS:
+        if (viewer_) viewer_->focus();
         return 0;
 
     case WM_NCDESTROY:
@@ -128,6 +162,33 @@ void PluginWindow::on_paint() {
         ::GetSysColor(COLOR_WINDOW),
         ::GetSysColor(COLOR_WINDOWTEXT),
         DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+}
+
+void PluginWindow::on_renderer_message(std::wstring_view json) {
+    if (viewer_) viewer_->dispatch_renderer_message(json);
+}
+
+void PluginWindow::on_renderer_crash(int process_failed_kind) {
+    if (viewer_) viewer_->dispatch_process_failed(process_failed_kind);
+}
+
+void PluginWindow::on_lifecycle_event(const LifecycleEvent& event) {
+    switch (event.kind) {
+    case LifecycleEvent::Kind::RendererReady:
+        status_text_.clear();
+        ::InvalidateRect(hwnd_, nullptr, TRUE);
+        break;
+    case LifecycleEvent::Kind::InitFailed:
+        status_text_ = format_init_error(event.hr);
+        ::InvalidateRect(hwnd_, nullptr, TRUE);
+        break;
+    case LifecycleEvent::Kind::RendererCrashed:
+        status_text_ = L"Renderer crashed. "
+                       L"Close and reopen the file to retry.";
+        if (viewer_) viewer_->close();
+        ::InvalidateRect(hwnd_, nullptr, TRUE);
+        break;
+    }
 }
 
 }

@@ -65,10 +65,6 @@ void ViewerHost::close() {
     if (host_) host_->close();
 }
 
-void ViewerHost::on_renderer_message_for_test(std::wstring_view json) {
-    on_host_message_(json);
-}
-
 void ViewerHost::on_host_created_(HRESULT hr) {
     if (FAILED(hr)) {
         state_ = State::Failed;
@@ -84,7 +80,7 @@ void ViewerHost::on_host_created_(HRESULT hr) {
     debug_log::log(L"viewer-host: navigated");
 }
 
-void ViewerHost::on_host_message_(std::wstring_view json) {
+void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
     auto msg = decode_renderer_message(json);
     if (!msg) {
         debug_log::log(L"viewer-host: dropped malformed message");
@@ -116,13 +112,15 @@ void ViewerHost::on_host_message_(std::wstring_view json) {
     }
 }
 
-void ViewerHost::on_host_process_failed_(int kind) {
+void ViewerHost::dispatch_process_failed(int process_failed_kind) {
     state_ = State::Crashed;
     pending_load_.reset();
-    debug_log::log(L"viewer-host: renderer crashed, kind={}", kind);
+    debug_log::log(L"viewer-host: renderer crashed, kind={}",
+                   process_failed_kind);
     if (on_event_) {
         on_event_(LifecycleEvent{
-            LifecycleEvent::Kind::RendererCrashed, S_OK, kind});
+            LifecycleEvent::Kind::RendererCrashed, S_OK,
+            process_failed_kind});
     }
 }
 
