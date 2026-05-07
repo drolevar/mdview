@@ -115,7 +115,7 @@ void PluginWindow::on_paint() {
     ::SetBkMode(hdc, TRANSPARENT);
     ::SetTextColor(hdc, ::GetSysColor(COLOR_WINDOWTEXT));
 
-    HFONT font = reinterpret_cast<HFONT>(::GetStockObject(DEFAULT_GUI_FONT));
+    HFONT font = create_ui_font_for_window(hwnd_);
     HFONT old_font = static_cast<HFONT>(::SelectObject(hdc, font));
 
     ::DrawTextW(
@@ -126,6 +126,7 @@ void PluginWindow::on_paint() {
         DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
     ::SelectObject(hdc, old_font);
+    ::DeleteObject(font);
     ::EndPaint(hwnd_, &ps);
 }
 

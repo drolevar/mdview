@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <wchar.h>
 
 namespace mdview {
 
@@ -44,6 +45,31 @@ void ensure_window_class_registered(
         throw std::runtime_error("ensure_window_class_registered: RegisterClassExW failed");
     }
     entry.registered = true;
+}
+
+HFONT create_ui_font_for_window(HWND hwnd) noexcept {
+    UINT dpi = ::GetDpiForWindow(hwnd);
+    if (dpi == 0) {
+        dpi = 96;
+    }
+
+    NONCLIENTMETRICSW ncm{};
+    ncm.cbSize = sizeof(ncm);
+    if (::SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0, dpi)) {
+        HFONT font = ::CreateFontIndirectW(&ncm.lfMessageFont);
+        if (font != nullptr) {
+            return font;
+        }
+    }
+
+    // Fallback: synthesize Segoe UI 9pt scaled to the window's DPI.
+    LOGFONTW lf{};
+    lf.lfHeight  = -::MulDiv(9, static_cast<int>(dpi), 72);
+    lf.lfWeight  = FW_NORMAL;
+    lf.lfCharSet = DEFAULT_CHARSET;
+    lf.lfQuality = CLEARTYPE_QUALITY;
+    wcscpy_s(lf.lfFaceName, L"Segoe UI");
+    return ::CreateFontIndirectW(&lf);
 }
 
 }

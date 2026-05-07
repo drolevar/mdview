@@ -11,4 +11,9 @@ void ensure_window_class_registered(
     const wchar_t* class_name,
     WNDPROC window_proc);
 
+// Creates an HFONT sized to the window's effective DPI, using the user's
+// preferred UI font (NONCLIENTMETRICSW.lfMessageFont, typically Segoe UI).
+// Caller owns the returned HFONT and must DeleteObject when done.
+HFONT create_ui_font_for_window(HWND hwnd) noexcept;
+
 }
