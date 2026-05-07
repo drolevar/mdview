@@ -30,10 +30,14 @@ LRESULT CALLBACK fallback_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam
         ::DeleteObject(bg);
         ::SetBkMode(hdc, TRANSPARENT);
         ::SetTextColor(hdc, ::GetSysColor(COLOR_WINDOWTEXT));
+        HFONT font = create_ui_font_for_window(hwnd);
+        HFONT old_font = static_cast<HFONT>(::SelectObject(hdc, font));
         if (text != nullptr) {
             ::DrawTextW(hdc, text->c_str(), -1, &rc,
                 DT_CENTER | DT_VCENTER | DT_WORDBREAK | DT_NOPREFIX);
         }
+        ::SelectObject(hdc, old_font);
+        ::DeleteObject(font);
         ::EndPaint(hwnd, &ps);
         return 0;
     }
