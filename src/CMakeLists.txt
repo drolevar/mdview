@@ -11,6 +11,7 @@ add_library(mdview_core STATIC
     native/plugin_globals.cpp
     native/debug_log.cpp
     native/detect_string.cpp
+    native/event_revoker.cpp
     native/init_error.cpp
     native/viewer_paths.cpp
     platform/win32_window.cpp

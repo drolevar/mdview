@@ -7,6 +7,7 @@ add_executable(mdview_tests
     native/version_tests.cpp
     native/plugin_globals_tests.cpp
     native/detect_string_tests.cpp
+    native/test_event_revoker.cpp
     native/test_init_error.cpp
     native/test_viewer_paths.cpp
     native/test_win32_window.cpp)
