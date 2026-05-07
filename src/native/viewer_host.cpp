@@ -95,6 +95,15 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
         state_ = State::RendererReady;
         debug_log::log(L"viewer-host: renderer ready");
 
+        // Snapshot pending_load_ BEFORE firing the event. The user
+        // callback may run for a long time and may itself call
+        // load_document, close(), etc.; reading pending_load_ after
+        // the callback risks observing partially-mutated state. With
+        // the snapshot pattern, the user's re-armed pending_load_
+        // (if any) takes precedence, otherwise we replay the snapshot.
+        auto pending = std::move(pending_load_);
+        pending_load_.reset();
+
         std::weak_ptr<bool> wp = alive_token_;
         if (on_event_) {
             on_event_(LifecycleEvent{
@@ -104,10 +113,12 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
             // Event handler destroyed *this. Bail before touching members.
             return;
         }
-        if (pending_load_) {
+        if (pending_load_.has_value()) {
             DocumentRequest req = std::move(*pending_load_);
             pending_load_.reset();
             load_document(std::move(req));
+        } else if (pending.has_value()) {
+            load_document(std::move(*pending));
         }
     }
 }
