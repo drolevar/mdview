@@ -48,7 +48,7 @@ void ensure_window_class_registered(
     entry.registered = true;
 }
 
-HFONT create_ui_font_for_window(HWND hwnd) noexcept {
+wil::unique_hfont create_ui_font_for_window(HWND hwnd) noexcept {
     UINT dpi = ::GetDpiForWindow(hwnd);
     if (dpi == 0) {
         dpi = 96;
@@ -57,9 +57,8 @@ HFONT create_ui_font_for_window(HWND hwnd) noexcept {
     NONCLIENTMETRICSW ncm{};
     ncm.cbSize = sizeof(ncm);
     if (::SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0, dpi)) {
-        HFONT font = ::CreateFontIndirectW(&ncm.lfMessageFont);
-        if (font != nullptr) {
-            return font;
+        if (HFONT font = ::CreateFontIndirectW(&ncm.lfMessageFont)) {
+            return wil::unique_hfont{font};
         }
     }
 
@@ -70,7 +69,7 @@ HFONT create_ui_font_for_window(HWND hwnd) noexcept {
     lf.lfCharSet = DEFAULT_CHARSET;
     lf.lfQuality = CLEARTYPE_QUALITY;
     wcscpy_s(lf.lfFaceName, L"Segoe UI");
-    return ::CreateFontIndirectW(&lf);
+    return wil::unique_hfont{::CreateFontIndirectW(&lf)};
 }
 
 void paint_centered_text(HWND hwnd,

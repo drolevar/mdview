@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include <wil/resource.h>
 #include <string_view>
 
 namespace mdview {
@@ -14,8 +15,8 @@ void ensure_window_class_registered(
 
 // Creates an HFONT sized to the window's effective DPI, using the user's
 // preferred UI font (NONCLIENTMETRICSW.lfMessageFont, typically Segoe UI).
-// Caller owns the returned HFONT and must DeleteObject when done.
-HFONT create_ui_font_for_window(HWND hwnd) noexcept;
+// Returns wil::unique_hfont (auto DeleteObject on destruction).
+wil::unique_hfont create_ui_font_for_window(HWND hwnd) noexcept;
 
 // Paints `text` centered in `hwnd`'s client area on a background of
 // `bg_color`, using `font` for the text and `fg_color` for the text
