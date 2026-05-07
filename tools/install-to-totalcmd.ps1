@@ -48,7 +48,25 @@ if ($null -eq $viewerSrc -or -not (Test-Path -LiteralPath $viewerSrc.Path)) {
     if (Test-Path -LiteralPath $viewerDest) {
         Remove-Item -LiteralPath $viewerDest -Recurse -Force
     }
-    Copy-Item -LiteralPath $viewerSrc.Path -Destination $PluginDir -Recurse -Force
+    New-Item -ItemType Directory -Path $viewerDest | Out-Null
+
+    $files = @("index.html", "styles.css")
+    foreach ($f in $files) {
+        $p = Join-Path $viewerSrc.Path $f
+        if (Test-Path -LiteralPath $p) {
+            Copy-Item -LiteralPath $p -Destination $viewerDest -Force
+        } else {
+            Write-Warning "$f missing from viewer/"
+        }
+    }
+
+    $distSrc = Join-Path $viewerSrc.Path "dist"
+    if (Test-Path -LiteralPath $distSrc) {
+        Copy-Item -LiteralPath $distSrc -Destination $viewerDest -Recurse -Force
+    } else {
+        Write-Warning "viewer/dist/ missing -- did you build the bundle?"
+    }
+
     Write-Host "Installed viewer/ -> $viewerDest"
 }
 
