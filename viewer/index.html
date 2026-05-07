@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>mdview</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: #ffffff; color: #1a1a1a;
+    }
+    .wordmark { font-size: 2rem; font-weight: 600; letter-spacing: 0.02em; }
+    .status   { margin-top: 0.5rem; font-size: 0.875rem; opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <div class="wordmark">mdview</div>
+  <div class="status" id="status">Renderer loaded</div>
+  <script>
+    (function () {
+      const post = (msg) => window.chrome.webview.postMessage(msg);
+      const set  = (s)   => document.getElementById('status').textContent = s;
+
+      window.chrome.webview.addEventListener('message', (e) => {
+        const msg = e.data;
+        if (!msg || msg.version !== 1) return;
+        if (msg.type === 'loadDocument') {
+          console.log('loadDocument', msg.document);
+          set('loadDocument: ' + (msg.document?.displayName || ''));
+        }
+      });
+
+      post({ type: 'ready', version: 1 });
+    })();
+  </script>
+</body>
+</html>
