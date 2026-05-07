@@ -118,3 +118,40 @@ TEST_CASE("ViewerHost drops load_document after close", "[viewer_host]") {
 
     REQUIRE(mock_ptr->posted.size() == 0);
 }
+
+TEST_CASE("ViewerHost re-entry safe when RendererReady handler "
+          "synchronously calls load_document",
+          "[viewer_host]") {
+    auto mock = std::make_unique<MockHost>();
+    auto* mock_ptr = mock.get();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+
+    bool reentered = false;
+    vh.create((HWND)1,
+        [&](mdview::LifecycleEvent e) {
+            if (e.kind == mdview::LifecycleEvent::Kind::RendererReady
+                && !reentered) {
+                reentered = true;
+                mdview::DocumentRequest req2;
+                req2.file_path    = LR"(C:\second.md)";
+                req2.display_name = L"second.md";
+                vh.load_document(std::move(req2));
+            }
+        });
+
+    mdview::DocumentRequest req1;
+    req1.file_path    = LR"(C:\first.md)";
+    req1.display_name = L"first.md";
+    vh.load_document(std::move(req1));
+
+    mock_ptr->last_create_cb(S_OK);
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
+    // Two posts total: one from the callback's synchronous re-entry
+    // (state is already RendererReady, so it fast-paths), and one from
+    // the snapshot replay of req1 after the callback returns.
+    REQUIRE(mock_ptr->posted.size() == 2);
+    REQUIRE(mock_ptr->posted[0].find(L"second.md") != std::wstring::npos);
+    REQUIRE(mock_ptr->posted[1].find(L"first.md")  != std::wstring::npos);
+}
