@@ -47,3 +47,9 @@ TEST_CASE("decode_renderer_message rejects mismatched version",
     REQUIRE_FALSE(mdview::decode_renderer_message(
         LR"({"type":"ready"})").has_value());
 }
+
+TEST_CASE("decode_renderer_message rejects string version",
+          "[renderer_protocol]") {
+    REQUIRE_FALSE(mdview::decode_renderer_message(
+        LR"({"type":"ready","version":"1"})").has_value());
+}
