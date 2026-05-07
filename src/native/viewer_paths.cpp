@@ -6,7 +6,6 @@
 #include <windows.h>
 #include <shlobj.h>
 
-#include <wil/com.h>
 #include <wil/resource.h>
 
 namespace mdview {
@@ -36,15 +35,12 @@ std::filesystem::path query_local_app_data() noexcept {
     }
 
     // Fallback: SHGetKnownFolderPath.
-    PWSTR raw = nullptr;
+    wil::unique_cotaskmem_string raw;
     HRESULT hr = ::SHGetKnownFolderPath(FOLDERID_LocalAppData,
                                         0, nullptr, &raw);
-    if (SUCCEEDED(hr) && raw != nullptr) {
-        std::filesystem::path p(raw);
-        ::CoTaskMemFree(raw);
-        return p;
+    if (SUCCEEDED(hr) && raw) {
+        return std::filesystem::path(raw.get());
     }
-    if (raw != nullptr) ::CoTaskMemFree(raw);
     return {};
 }
 
