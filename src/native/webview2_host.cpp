@@ -256,6 +256,55 @@ void WebView2Host::install_handlers_() {
                 wv->remove_NewWindowRequested(t);
             });
     }
+
+    // AcceleratorKeyPressed: forward Esc / Alt / F-keys to the Lister
+    // ancestor so TC's accelerator processing (Esc-to-close, Alt-menu)
+    // still works while the WebView has focus. F12 is left alone so
+    // the default DevTools shortcut keeps working.
+    {
+        ICoreWebView2Controller* ctrl = controller_.get();
+        EventRegistrationToken token{};
+        auto h = Microsoft::WRL::Callback<
+            ICoreWebView2AcceleratorKeyPressedEventHandler>(
+            [this, wp](ICoreWebView2Controller*,
+                       ICoreWebView2AcceleratorKeyPressedEventArgs* args)
+            noexcept -> HRESULT {
+                auto alive = wp.lock();
+                if (!alive) return S_OK;
+
+                COREWEBVIEW2_KEY_EVENT_KIND kind{};
+                if (FAILED(args->get_KeyEventKind(&kind))) return S_OK;
+                if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN &&
+                    kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN) {
+                    return S_OK;
+                }
+
+                UINT vk = 0;
+                if (FAILED(args->get_VirtualKey(&vk))) return S_OK;
+
+                const bool is_f_key = (vk >= VK_F1 && vk <= VK_F24);
+                const bool forward  = (vk == VK_ESCAPE) ||
+                                      (vk == VK_MENU)   ||  // Alt
+                                      is_f_key;
+                if (!forward) return S_OK;
+
+                // Don't intercept F12 -- leave DevTools default behavior.
+                if (vk == VK_F12) return S_OK;
+
+                LOG_IF_FAILED(args->put_Handled(TRUE));
+
+                HWND lister = ::GetAncestor(parent_hwnd_, GA_PARENT);
+                if (lister) {
+                    ::PostMessageW(lister, WM_KEYDOWN, vk, 0);
+                }
+                return S_OK;
+            });
+        THROW_IF_FAILED(controller_->add_AcceleratorKeyPressed(h.Get(), &token));
+        revokers_.emplace_back(token,
+            [ctrl](EventRegistrationToken t) {
+                ctrl->remove_AcceleratorKeyPressed(t);
+            });
+    }
 }
 
 }
