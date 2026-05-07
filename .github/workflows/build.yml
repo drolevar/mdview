@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # Opt JS-based actions into Node.js 24 ahead of GitHub's
+  # 2026-06-02 forced upgrade (Node 20 deprecation).
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   windows-x64-debug:
     runs-on: windows-2025
