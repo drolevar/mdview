@@ -18,6 +18,9 @@ target_include_directories(mdview_core PUBLIC
 target_link_libraries(mdview_core PUBLIC
     WIL::WIL)
 
+target_compile_definitions(mdview_core PUBLIC
+    WIL_LOCK_EXCEPTION_MODE)
+
 mdview_set_warnings(mdview_core)
 
 add_library(mdview_wlx SHARED
