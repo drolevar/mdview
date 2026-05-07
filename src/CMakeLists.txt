@@ -48,5 +48,7 @@ target_include_directories(mdview_wlx PRIVATE
 target_link_libraries(mdview_wlx PRIVATE
     mdview_core)
 
+add_dependencies(mdview_wlx viewer_bundle)
+
 mdview_set_warnings(mdview_wlx)
 mdview_configure_wlx_plugin(mdview_wlx)
