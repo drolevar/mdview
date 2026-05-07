@@ -40,7 +40,6 @@ private:
     MessageCallback                            on_renderer_message_;
     ProcessFailedCallback                      on_process_failed_;
     HWND                                       parent_hwnd_  = nullptr;
-    wil::com_ptr<ICoreWebView2Environment>     env_;
     wil::com_ptr<ICoreWebView2Controller>      controller_;
     wil::com_ptr<ICoreWebView2>                webview_;
     wil::com_ptr<ICoreWebView2Settings>        settings_;

@@ -1,6 +1,5 @@
 #include "native/webview2_host.hpp"
 
-#include "common/utf.hpp"
 #include "native/debug_log.hpp"
 #include "native/viewer_paths.hpp"
 #include "native/webview2_environment.hpp"
@@ -45,7 +44,6 @@ void WebView2Host::create(HWND parent_hwnd,
                 if (cb) cb(FAILED(hr) ? hr : E_FAIL);
                 return;
             }
-            env_ = env;
 
             auto handler = Microsoft::WRL::Callback<
                 ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
