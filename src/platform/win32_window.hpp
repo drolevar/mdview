@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include <string_view>
 
 namespace mdview {
 
@@ -15,5 +16,18 @@ void ensure_window_class_registered(
 // preferred UI font (NONCLIENTMETRICSW.lfMessageFont, typically Segoe UI).
 // Caller owns the returned HFONT and must DeleteObject when done.
 HFONT create_ui_font_for_window(HWND hwnd) noexcept;
+
+// Paints `text` centered in `hwnd`'s client area on a background of
+// `bg_color`, using `font` for the text and `fg_color` for the text
+// color. `draw_text_format` is the DT_* flags passed to DrawTextW
+// (e.g. DT_SINGLELINE | DT_CENTER | DT_VCENTER | DT_NOPREFIX).
+// Performs its own BeginPaint/EndPaint pair. noexcept; on any GDI
+// failure returns silently (the painting just doesn't happen).
+void paint_centered_text(HWND hwnd,
+                         std::wstring_view text,
+                         HFONT font,
+                         COLORREF bg_color,
+                         COLORREF fg_color,
+                         UINT draw_text_format) noexcept;
 
 }
