@@ -1,5 +1,8 @@
 #pragma once
 
+#include "native/viewer_host.hpp"
+#include "native/webview2_host.hpp"
+
 #include <windows.h>
 #include <wil/resource.h>
 
@@ -23,6 +26,15 @@ public:
     // Replace the splash with new text (M1: just used internally).
     void set_status_text(std::wstring text);
 
+    // Routed from WebView2Host's on_renderer_message_ callback.
+    void on_renderer_message(std::wstring_view json);
+
+    // Routed from WebView2Host's on_process_failed_ callback.
+    void on_renderer_crash(int process_failed_kind);
+
+    // Receives lifecycle events from ViewerHost.
+    void on_lifecycle_event(const LifecycleEvent& event);
+
 private:
     static LRESULT CALLBACK static_window_proc(HWND, UINT, WPARAM, LPARAM);
     LRESULT window_proc(UINT msg, WPARAM wparam, LPARAM lparam);
@@ -33,6 +45,7 @@ private:
     std::wstring file_to_load_;
     std::wstring status_text_;
     wil::unique_hfont cached_font_;
+    std::unique_ptr<ViewerHost> viewer_;
 };
 
 }

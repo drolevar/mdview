@@ -42,8 +42,8 @@ public:
     void load_document(DocumentRequest request);
     void close();
 
-    // Test hook: dispatches a renderer message as if WebView2 fired it.
-    void on_renderer_message_for_test(std::wstring_view json);
+    void dispatch_renderer_message(std::wstring_view json);
+    void dispatch_process_failed(int process_failed_kind);
 
 private:
     enum class State {
@@ -51,8 +51,6 @@ private:
         Navigated, RendererReady, Loaded, Failed, Crashed, Closed
     };
 
-    void on_host_message_(std::wstring_view json);
-    void on_host_process_failed_(int kind);
     void on_host_created_(HRESULT hr);
 
     ViewerOptions                  options_;

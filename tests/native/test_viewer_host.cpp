@@ -55,7 +55,7 @@ TEST_CASE("ViewerHost queues load_document before ready and drains on ready",
     REQUIRE(mock_ptr->posted.empty());
 
     mock_ptr->last_create_cb(S_OK);
-    vh.on_renderer_message_for_test(LR"({"type":"ready","version":1})");
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     REQUIRE(ready_count == 1);
     REQUIRE(mock_ptr->posted.size() == 1);
@@ -69,7 +69,7 @@ TEST_CASE("ViewerHost posts immediately after ready", "[viewer_host]") {
     mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
     vh.create((HWND)1, [](mdview::LifecycleEvent){});
     mock_ptr->last_create_cb(S_OK);
-    vh.on_renderer_message_for_test(LR"({"type":"ready","version":1})");
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     mdview::DocumentRequest c;
     c.file_path    = LR"(C:\c.md)";
@@ -108,7 +108,7 @@ TEST_CASE("ViewerHost drops load_document after close", "[viewer_host]") {
     mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
     vh.create((HWND)1, [](mdview::LifecycleEvent){});
     mock_ptr->last_create_cb(S_OK);
-    vh.on_renderer_message_for_test(LR"({"type":"ready","version":1})");
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
     vh.close();
 
     mdview::DocumentRequest d;
