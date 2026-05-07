@@ -16,4 +16,20 @@ std::wstring format_init_error(HRESULT hr) {
         static_cast<uint32_t>(hr));
 }
 
+std::wstring format_load_error(DocumentError e) {
+    switch (e) {
+    case DocumentError::NotFound:
+        return L"File not found.";
+    case DocumentError::TooLarge:
+        return L"File too large for preview (32 MB limit).";
+    case DocumentError::ReadFailed:
+        return L"Read error.";
+    case DocumentError::EncodingFailed:
+        return L"Encoding error.";
+    case DocumentError::None:
+        return L"";
+    }
+    return L"";
+}
+
 }

@@ -26,6 +26,12 @@ public:
     // Replace the splash with new text (M1: just used internally).
     void set_status_text(std::wstring text);
 
+    // Reads `file_to_load` via DocumentLoader and dispatches to the
+    // viewer. Returns true on success; on read/decode failure, paints
+    // a status message and returns false. Used by both the first load
+    // (from PluginWindow::create) and ListLoadNextW.
+    bool load_next(std::wstring file_to_load) noexcept;
+
     // Routed from WebView2Host's on_renderer_message_ callback.
     void on_renderer_message(std::wstring_view json);
 
