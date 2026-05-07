@@ -45,6 +45,9 @@ DocumentResult DocumentLoader::load(
         return result;
     }
 
+    // vector value-initializes to zero; the cost is ~50 ms for a 32 MB file
+    // on modern hardware and is dwarfed by the ReadFile pass that follows.
+    // We accept the wasted write to keep the code straightforward.
     std::vector<std::byte> buf(static_cast<size_t>(size.QuadPart));
     DWORD total = 0;
     while (total < buf.size()) {
@@ -63,6 +66,7 @@ DocumentResult DocumentLoader::load(
     buf.resize(total);
 
     try {
+        // encoding::decode handles empty input as empty wstring (Task 8 contract).
         result.content = encoding::decode(buf);
     } catch (...) {
         LOG_CAUGHT_EXCEPTION();
