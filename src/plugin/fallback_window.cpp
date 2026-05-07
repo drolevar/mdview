@@ -68,6 +68,20 @@ LRESULT CALLBACK fallback_proc(HWND hwnd, UINT msg,
         return 0;
     }
 
+    case WM_THEMECHANGED:
+        ::InvalidateRect(hwnd, nullptr, TRUE);
+        return 0;
+
+    case WM_SETTINGCHANGE: {
+        if (lparam != 0) {
+            const wchar_t* area = reinterpret_cast<const wchar_t*>(lparam);
+            if (::lstrcmpiW(area, L"ImmersiveColorSet") == 0) {
+                ::InvalidateRect(hwnd, nullptr, TRUE);
+            }
+        }
+        return 0;
+    }
+
     case WM_NCDESTROY:
         delete state;
         set_window_self_ptr<FallbackState>(hwnd, nullptr);

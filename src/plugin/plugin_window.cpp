@@ -151,6 +151,20 @@ LRESULT PluginWindow::window_proc(UINT msg, WPARAM wparam, LPARAM lparam) {
         return 0;
     }
 
+    case WM_THEMECHANGED:
+        ::InvalidateRect(hwnd_, nullptr, TRUE);
+        return 0;
+
+    case WM_SETTINGCHANGE: {
+        if (lparam != 0) {
+            const wchar_t* area = reinterpret_cast<const wchar_t*>(lparam);
+            if (::lstrcmpiW(area, L"ImmersiveColorSet") == 0) {
+                ::InvalidateRect(hwnd_, nullptr, TRUE);
+            }
+        }
+        return 0;
+    }
+
     default:
         return ::DefWindowProcW(hwnd_, msg, wparam, lparam);
     }
