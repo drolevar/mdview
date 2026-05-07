@@ -74,6 +74,7 @@ void ViewerHost::load_document(DocumentRequest request) {
         msg.path         = request.file_path;
         msg.display_name = request.display_name;
         msg.base_uri     = request.base_uri;
+        msg.markdown     = std::move(request.markdown);
         msg.options      = options_;
         host_->post_to_renderer(encode_load_document(msg));
         state_ = State::Loaded;

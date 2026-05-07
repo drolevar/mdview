@@ -1,11 +1,15 @@
 #include "plugin/plugin_window.hpp"
 
+#include "native/document_loader.hpp"
 #include "native/init_error.hpp"
 #include "native/plugin_globals.hpp"
 #include "platform/win32_window.hpp"
 
+#include <wil/result_macros.h>
+
 #include <filesystem>
 #include <stdexcept>
+#include <utility>
 
 namespace mdview {
 
@@ -59,11 +63,11 @@ PluginWindow::create(HWND parent, std::wstring file_to_load) {
             pw->on_lifecycle_event(e);
         });
 
-    DocumentRequest req;
-    req.file_path    = window->file_to_load_;
-    req.display_name = std::filesystem::path(window->file_to_load_)
-                            .filename().wstring();
-    window->viewer_->load_document(std::move(req));
+    // Unify the first-load path with the ListLoadNextW path: both run
+    // through DocumentLoader and load_document. A failure here paints
+    // a status message via load_next; we still return the window so
+    // TC has a Lister to host until the user closes it.
+    pw->load_next(window->file_to_load_);
 
     return window;
 }
@@ -84,6 +88,34 @@ void PluginWindow::set_status_text(std::wstring text) {
     status_text_ = std::move(text);
     if (hwnd_ != nullptr) {
         ::InvalidateRect(hwnd_, nullptr, TRUE);
+    }
+}
+
+bool PluginWindow::load_next(std::wstring file_to_load) noexcept {
+    try {
+        file_to_load_ = file_to_load;
+
+        DocumentLoader loader;
+        auto result = loader.load(std::filesystem::path{file_to_load});
+        if (result.error != DocumentError::None) {
+            set_status_text(format_load_error(result.error));
+            return false;
+        }
+
+        DocumentRequest req;
+        req.file_path    = file_to_load;
+        req.display_name = std::filesystem::path{file_to_load}
+                                .filename().wstring();
+        req.markdown     = std::move(result.content);
+        req.doc_dir      = std::move(result.doc_dir);
+
+        if (viewer_) {
+            viewer_->load_document(std::move(req));
+        }
+        return true;
+    } catch (...) {
+        LOG_CAUGHT_EXCEPTION();
+        return false;
     }
 }
 

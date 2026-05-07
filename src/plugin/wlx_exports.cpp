@@ -1,9 +1,12 @@
 #include "native/detect_string.hpp"
 #include "native/plugin_globals.hpp"
+#include "platform/win32_window.hpp"
 #include "plugin/fallback_window.hpp"
 #include "plugin/plugin_window.hpp"
 
 #include <listplug.h>   // vendored under external/totalcmd-wlx-sdk/src/
+
+#include <wil/result_macros.h>
 
 #include <windows.h>
 
@@ -11,6 +14,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <new>
+#include <string>
 
 namespace {
 
@@ -73,5 +77,26 @@ void __stdcall ListCloseWindow(HWND ListWin) {
         }
     } catch (...) {
         // Last-resort: nothing meaningful to do.
+    }
+}
+
+// NOTE: do NOT wrap in extern "C". listplug.h declares ListLoadNextW
+// with C++ linkage; wrapping triggers MSVC C2732. Export names are
+// controlled by wlx_exports.def.
+int __stdcall ListLoadNextW(
+        HWND /*parent_win*/,
+        HWND list_win,
+        wchar_t* file_to_load,
+        int /*show_flags*/) {
+    try {
+        auto* pw = mdview::get_window_self_ptr<mdview::PluginWindow>(list_win);
+        if (pw == nullptr) return LISTPLUGIN_ERROR;
+        if (file_to_load == nullptr) return LISTPLUGIN_ERROR;
+        return pw->load_next(std::wstring{file_to_load})
+            ? LISTPLUGIN_OK
+            : LISTPLUGIN_ERROR;
+    } catch (...) {
+        LOG_CAUGHT_EXCEPTION();
+        return LISTPLUGIN_ERROR;
     }
 }

@@ -17,6 +17,12 @@ struct DocumentRequest {
     std::wstring          display_name;
     bool                  quick_view_mode = false;
 
+    // M3 Task 13: decoded UTF-16 markdown body. Forwarded to the
+    // renderer as LoadDocumentMessage::markdown. Empty when the
+    // first-load path didn't read content (M2 legacy) — a renderer
+    // that receives an empty body shows an empty preview.
+    std::wstring          markdown;
+
     // M3 Task 11: monotonic id assigned by ViewerHost on dispatch;
     // doc_dir is the folder behind the mdview-doc.local mapping;
     // base_uri is set to https://mdview-doc.local/ on a successful
