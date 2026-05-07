@@ -14,6 +14,7 @@ add_library(mdview_core STATIC
     native/event_revoker.cpp
     native/init_error.cpp
     native/renderer_protocol.cpp
+    native/viewer_host.cpp
     native/viewer_paths.cpp
     native/webview2_environment.cpp
     native/webview2_host.cpp
