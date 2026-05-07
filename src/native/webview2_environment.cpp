@@ -78,6 +78,13 @@ void WebView2Environment::start_initialization_() {
     }
 }
 
+// deliver_ fires queued callbacks synchronously, in order, on the UI
+// thread. Re-entry contract: a callback that itself calls
+// ensure_initialized() will, in the Ready/Failed states, receive a
+// synchronous nested invocation; in the Initializing state, that new
+// request lands in pending_ (which is empty here because we drained
+// into a local) and will be delivered on the next state transition.
+// Either way, no partially-iterated queue is exposed.
 void WebView2Environment::deliver_(HRESULT hr,
                                    ICoreWebView2Environment* env) {
     if (SUCCEEDED(hr) && env != nullptr) {
