@@ -46,5 +46,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mdview-wlx64-debug
-          path: build/windows-msvc-x64-debug/src/mdview.wlx64
+          path: |
+            build/windows-msvc-x64-debug/src/mdview.wlx64
+            viewer/
           if-no-files-found: error
