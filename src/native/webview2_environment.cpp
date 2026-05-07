@@ -49,6 +49,14 @@ void WebView2Environment::start_initialization_() {
         return;
     }
 
+    try {
+        std::filesystem::create_directories(udf);
+    } catch (...) {
+        debug_log::log(L"env init: create_directories({}) failed", udf.wstring());
+        deliver_(HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND), nullptr);
+        return;
+    }
+
     debug_log::log(L"env init starting; udf={}", udf.wstring());
 
     auto handler =
