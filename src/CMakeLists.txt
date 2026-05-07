@@ -1,6 +1,7 @@
 include(TcmdPlugin)
 
 find_package(wil CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 add_library(mdview_core STATIC
     common/utf.cpp
@@ -16,7 +17,8 @@ target_include_directories(mdview_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(mdview_core PUBLIC
-    WIL::WIL)
+    WIL::WIL
+    nlohmann_json::nlohmann_json)
 
 target_compile_definitions(mdview_core PUBLIC
     WIL_LOCK_EXCEPTION_MODE)
