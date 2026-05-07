@@ -30,4 +30,19 @@ void paint_centered_text(HWND hwnd,
                          COLORREF fg_color,
                          UINT draw_text_format) noexcept;
 
+// Stash an arbitrary `T*` in `hwnd`'s GWLP_USERDATA slot.
+template <class T>
+void set_window_self_ptr(HWND hwnd, T* p) noexcept {
+    ::SetWindowLongPtrW(hwnd, GWLP_USERDATA,
+        reinterpret_cast<LONG_PTR>(p));
+}
+
+// Retrieve the `T*` previously stored in `hwnd`'s GWLP_USERDATA slot.
+// Returns nullptr if nothing was stored.
+template <class T>
+T* get_window_self_ptr(HWND hwnd) noexcept {
+    return reinterpret_cast<T*>(
+        ::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+}
+
 }
