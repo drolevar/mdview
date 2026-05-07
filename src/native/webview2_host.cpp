@@ -92,6 +92,7 @@ void WebView2Host::create(HWND parent_hwnd,
                     return S_OK;
                 });
 
+            debug_log::log(L"viewer-host: controller-pending");
             HRESULT chr = env->CreateCoreWebView2Controller(
                 parent_hwnd, handler.Get());
             if (FAILED(chr)) {
