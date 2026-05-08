@@ -148,6 +148,12 @@ HRESULT WebView2Host::remap_doc_dir(
     if (!webview_) return E_UNEXPECTED;
     auto wv3 = webview_.try_query<ICoreWebView2_3>();
     if (!wv3) return E_NOINTERFACE;
+
+    // WebView2's Set on an already-mapped host name doesn't reliably
+    // overwrite the previous mapping; subsequent fetches keep going
+    // to the original folder. Clear first to guarantee a fresh bind.
+    LOG_IF_FAILED(wv3->ClearVirtualHostNameToFolderMapping(kDocHostName));
+
     return wv3->SetVirtualHostNameToFolderMapping(
         kDocHostName,
         doc_dir.c_str(),
