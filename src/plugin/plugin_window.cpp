@@ -98,7 +98,21 @@ bool PluginWindow::load_next(std::wstring file_to_load) noexcept {
         DocumentLoader loader;
         auto result = loader.load(std::filesystem::path{file_to_load});
         if (result.error != DocumentError::None) {
+            // Brief pre-WebView splash for short error windows.
             set_status_text(format_load_error(result.error));
+
+            // Also post the error as document content so once the
+            // WebView2 surface comes up (and covers the splash), the
+            // renderer shows the error message.
+            if (viewer_) {
+                DocumentRequest req;
+                req.file_path    = file_to_load;
+                req.display_name = std::filesystem::path{file_to_load}
+                                        .filename().wstring();
+                req.markdown     = format_load_error_md(result.error);
+                // Intentionally no doc_dir / base_uri on error.
+                viewer_->load_document(std::move(req));
+            }
             return false;
         }
 

@@ -25,4 +25,9 @@ std::wstring format_init_error(HRESULT hr);
 // load failure. None maps to an empty string.
 std::wstring format_load_error(DocumentError e);
 
+// Returns a markdown-formatted version of the load error so the
+// renderer can present it consistently once the WebView2 surface
+// covers the parent's splash painting. None maps to an empty string.
+std::wstring format_load_error_md(DocumentError e);
+
 }
