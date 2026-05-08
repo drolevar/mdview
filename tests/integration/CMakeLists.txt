@@ -8,6 +8,7 @@ add_executable(mdview_integration_tests
     screenshot.cpp
     session.cpp
     summary.cpp
+    test_highlight.cpp
     test_lifecycle.cpp
     test_mermaid.cpp
 )
