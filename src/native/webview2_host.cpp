@@ -405,9 +405,10 @@ void WebView2Host::install_handlers_() {
         if (wv2) wv2->remove_DOMContentLoaded(dom_tok);
     });
 
-    // All five succeeded. Hand ownership to revokers_ and dismiss the
+    // All seven add_* succeeded (msg / proc / nav / win / accel /
+    // nav_done / dom). Hand ownership to revokers_ and dismiss the
     // scope guards. emplace_back can throw on allocation failure; if
-    // that happens before all five revokers are emplaced, the guards
+    // that happens before all seven revokers are emplaced, the guards
     // for the not-yet-transferred registrations still run during
     // unwinding and clean up the surplus.
     revokers_.emplace_back(msg_tok,
