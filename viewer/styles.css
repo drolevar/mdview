@@ -85,3 +85,51 @@ main#document pre code.hljs {
     padding: 0;       /* the <pre> already pads */
     background: transparent;
 }
+
+main#document .mdview-mermaid {
+    margin: 1em 0;
+}
+
+main#document .mdview-mermaid-source {
+    /* Visible until mermaid replaces it. After successful render this
+       <pre> is removed by the chunk; on failure it stays above the
+       error block. */
+    background: var(--code-bg);
+    color:      var(--code-fg);
+    padding:    0.8rem 1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+}
+
+main#document .mdview-mermaid-rendered .mdview-mermaid-source {
+    display: none;
+}
+
+main#document .mdview-mermaid-error {
+    margin-top: 0.5em;
+    padding: 0.6em 0.8em;
+    border-left: 4px solid #d33;
+    background: var(--code-bg);
+    border-radius: 0 6px 6px 0;
+}
+
+:root[data-theme="dark"] main#document .mdview-mermaid-error {
+    border-left-color: #ff6f6f;
+}
+
+main#document .mdview-mermaid-error-title {
+    font-weight: 600;
+    color: #d33;
+    margin-bottom: 0.3em;
+}
+
+:root[data-theme="dark"] main#document .mdview-mermaid-error-title {
+    color: #ff6f6f;
+}
+
+main#document .mdview-mermaid-error-msg {
+    margin: 0;
+    background: transparent;
+    padding: 0;
+    white-space: pre-wrap;
+}
