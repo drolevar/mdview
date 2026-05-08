@@ -9,6 +9,9 @@
 #include <wil/result_macros.h>
 #include <wrl.h>
 
+#include <shellapi.h>
+
+#include <string_view>
 #include <utility>
 
 namespace mdview {
@@ -212,7 +215,8 @@ void WebView2Host::install_handlers_() {
             return S_OK;
         });
 
-    // NavigationStarting (M2: log only; M6 enforces policy)
+    // NavigationStarting: allow in-app and in-doc origins; cancel
+    // anything else and shell-open it in the user's default browser.
     auto nav_cb = Microsoft::WRL::Callback<
         ICoreWebView2NavigationStartingEventHandler>(
         [wp](ICoreWebView2*,
@@ -222,9 +226,20 @@ void WebView2Host::install_handlers_() {
             if (!alive) return S_OK;
             wil::unique_cotaskmem_string uri;
             LOG_IF_FAILED(args->get_Uri(&uri));
-            if (uri) {
-                debug_log::log(L"navigation starting: {}", uri.get());
-            }
+            if (!uri) return S_OK;
+
+            debug_log::log(L"navigation starting: {}", uri.get());
+
+            const std::wstring_view sv{uri.get()};
+            const bool internal =
+                sv.starts_with(L"https://mdview-app.local/") ||
+                sv.starts_with(L"https://mdview-doc.local/");
+            if (internal) return S_OK;
+
+            // External origin: cancel and externalize.
+            LOG_IF_FAILED(args->put_Cancel(TRUE));
+            ::ShellExecuteW(nullptr, L"open", uri.get(),
+                            nullptr, nullptr, SW_SHOWNORMAL);
             return S_OK;
         });
 
