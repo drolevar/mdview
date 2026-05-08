@@ -3,6 +3,7 @@
 #include "native/document_loader.hpp"
 #include "native/init_error.hpp"
 #include "native/plugin_globals.hpp"
+#include "native/theme.hpp"
 #include "platform/win32_window.hpp"
 
 #include <listplug.h>   // vendored under external/totalcmd-wlx-sdk/src/
@@ -143,10 +144,9 @@ bool PluginWindow::send_command(int command, int parameter) noexcept {
             const bool dark =
                 (parameter & lcp_darkmode) != 0 ||
                 (parameter & lcp_darkmodenative) != 0;
-            // TODO C4: replace with viewer_->apply_theme(dark ? Theme::Dark : Theme::Light);
-            // For now we just consume the bit so the dispatch path works.
-            (void)dark;
-            (void)viewer_;
+            if (viewer_) {
+                viewer_->apply_theme(dark ? Theme::Dark : Theme::Light);
+            }
             return true;
         }
         return true;  // unknown command: don't surface as an error
@@ -273,6 +273,13 @@ void PluginWindow::on_lifecycle_event(const LifecycleEvent& event) {
         if (viewer_) viewer_->close();
         set_status_text(L"Renderer crashed. "
                         L"Close and reopen the file to retry.");
+        break;
+    case LifecycleEvent::Kind::ThemeChanged:
+        // Re-issue the most recent file so mermaid SVGs re-render
+        // with the new theme. The bool return is informational only.
+        if (!file_to_load_.empty()) {
+            (void)load_next(file_to_load_);
+        }
         break;
     }
 }

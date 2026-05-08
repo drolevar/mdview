@@ -3,8 +3,10 @@
 #include "native/debug_log.hpp"
 #include "native/host_names.hpp"
 #include "native/renderer_protocol.hpp"
+#include "native/theme.hpp"
 
 #include <cassert>
+#include <string>
 #include <utility>
 
 namespace mdview {
@@ -56,6 +58,11 @@ void ViewerHost::load_document(DocumentRequest request) {
     // The remap result is reflected in base_uri so the renderer sees
     // the same baseline whether it ran now or later.
     request.doc_id = ++doc_id_;
+    // Theme delivery: prefer pending (latest TC signal we haven't
+    // pushed yet), then current (the most recently applied), else
+    // System (renderer falls back to prefers-color-scheme).
+    request.theme = pending_theme_.value_or(current_theme_);
+    pending_theme_.reset();
     debug_log::log(L"viewer-host: load_document id={} file={}",
                    request.doc_id, request.file_path.wstring());
     if (!request.doc_dir.empty()) {
@@ -103,6 +110,48 @@ void ViewerHost::load_document(DocumentRequest request) {
         return;
     }
     pending_load_ = std::move(request);   // latest-wins
+}
+
+void ViewerHost::apply_theme(Theme theme) {
+    debug_log::log(L"viewer-host: apply_theme requested={}",
+                   to_wire(theme));
+    if (state_ == State::Failed
+     || state_ == State::Crashed
+     || state_ == State::Closed) {
+        return;
+    }
+
+    current_theme_ = theme;
+
+    // Before the renderer is ready, stash; the first loadDocument that
+    // we eventually post carries the theme in its `theme` field.
+    if (state_ != State::RendererReady && state_ != State::Loaded) {
+        pending_theme_ = theme;
+        return;
+    }
+
+    pending_theme_.reset();
+
+    // Push the theme to the renderer immediately so cheap-and-instant
+    // changes (CSS toggle, hljs stylesheet swap) happen now…
+    post_set_theme_(theme);
+
+    // …and re-issue the most recent loadDocument so mermaid SVGs
+    // re-render with the new theme. Mermaid bakes theme into the SVG
+    // at render time; toggling CSS won't recolor existing diagrams.
+    if (state_ == State::Loaded && !last_loaded_doc_dir_.empty()) {
+        if (on_event_) {
+            on_event_(LifecycleEvent{
+                LifecycleEvent::Kind::ThemeChanged, S_OK, 0});
+        }
+    }
+}
+
+void ViewerHost::post_set_theme_(Theme t) {
+    std::wstring json = L"{\"type\":\"setTheme\",\"version\":1,\"theme\":\"";
+    json.append(to_wire(t));
+    json.append(L"\"}");
+    if (host_) host_->post_to_renderer(json);
 }
 
 void ViewerHost::close() {
@@ -224,6 +273,8 @@ void ViewerHost::post_request_(DocumentRequest req) {
     msg.base_uri     = req.base_uri;
     msg.markdown     = std::move(req.markdown);
     msg.options      = options_;
+    msg.theme            = req.theme;
+    msg.summary_requested = req.summary_requested;
     host_->post_to_renderer(encode_load_document(msg));
     state_               = State::Loaded;
     last_loaded_doc_dir_ = req.doc_dir;

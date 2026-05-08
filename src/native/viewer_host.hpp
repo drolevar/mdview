@@ -2,6 +2,7 @@
 
 #include "native/i_webview2_host.hpp"
 #include "native/renderer_protocol.hpp"
+#include "native/theme.hpp"
 
 #include <windows.h>
 
@@ -30,10 +31,17 @@ struct DocumentRequest {
     int                   doc_id = 0;
     std::filesystem::path doc_dir;
     std::wstring          base_uri;
+
+    // M4: theme delivered with this document. Defaults to System;
+    // ViewerHost::load_document fills it from current/pending_theme.
+    Theme theme = Theme::System;
+
+    // M4: integration harness opt-in for renderer summary on rendered ack.
+    bool  summary_requested = false;
 };
 
 struct LifecycleEvent {
-    enum class Kind { RendererReady, InitFailed, RendererCrashed };
+    enum class Kind { RendererReady, InitFailed, RendererCrashed, ThemeChanged };
     Kind    kind;
     HRESULT hr = S_OK;
     int     process_failed_kind = 0;
@@ -54,6 +62,7 @@ public:
     void resize(RECT bounds);
     void focus();
     void load_document(DocumentRequest request);
+    void apply_theme(Theme theme);
     void close();
 
     void dispatch_renderer_message(std::wstring_view json);
@@ -68,6 +77,7 @@ private:
     void on_host_created_(HRESULT hr);
     void post_pending_directly_();
     void post_request_(DocumentRequest req);
+    void post_set_theme_(Theme t);
 
     ViewerOptions                  options_;
     std::unique_ptr<IWebView2Host> host_;
@@ -77,6 +87,8 @@ private:
     std::optional<DocumentRequest> pending_load_;
     std::filesystem::path          last_loaded_doc_dir_;
     int                            doc_id_ = 0;  // monotonic, ++ per load_document
+    Theme               current_theme_   = Theme::System;
+    std::optional<Theme> pending_theme_;  // delivered before first ready
 };
 
 }

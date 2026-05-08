@@ -129,3 +129,42 @@ TEST_CASE("decode_renderer_message rejects rendered with non-integer elapsedMs",
         LR"({"type":"rendered","version":1,"id":1,"elapsedMs":"x"})");
     REQUIRE_FALSE(r.has_value());
 }
+
+TEST_CASE("encode_load_document includes theme field",
+          "[renderer_protocol][theme]") {
+    mdview::LoadDocumentMessage msg;
+    msg.id           = 1;
+    msg.path         = LR"(C:\x.md)";
+    msg.display_name = L"x.md";
+    msg.theme        = mdview::Theme::Dark;
+    auto json = mdview::encode_load_document(msg);
+    REQUIRE(json.find(L"\"theme\":\"dark\"") != std::wstring::npos);
+}
+
+TEST_CASE("encode_load_document defaults theme to system",
+          "[renderer_protocol][theme]") {
+    mdview::LoadDocumentMessage msg;
+    msg.id   = 1;
+    msg.path = LR"(C:\x.md)";
+    auto json = mdview::encode_load_document(msg);
+    REQUIRE(json.find(L"\"theme\":\"system\"") != std::wstring::npos);
+}
+
+TEST_CASE("encode_load_document omits summary flag by default",
+          "[renderer_protocol]") {
+    mdview::LoadDocumentMessage msg;
+    msg.id   = 1;
+    msg.path = LR"(C:\x.md)";
+    auto json = mdview::encode_load_document(msg);
+    REQUIRE(json.find(L"\"summary\"") == std::wstring::npos);
+}
+
+TEST_CASE("encode_load_document includes summary flag when requested",
+          "[renderer_protocol]") {
+    mdview::LoadDocumentMessage msg;
+    msg.id                = 1;
+    msg.path              = LR"(C:\x.md)";
+    msg.summary_requested = true;
+    auto json = mdview::encode_load_document(msg);
+    REQUIRE(json.find(L"\"summary\":true") != std::wstring::npos);
+}
