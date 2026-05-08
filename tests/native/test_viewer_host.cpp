@@ -20,6 +20,7 @@ public:
     std::filesystem::path                 last_remap_dir;
     int                                   remap_count  = 0;
     HRESULT                               remap_result = S_OK;  // override to inject failure
+    int                                   reload_count = 0;
     bool                                  closed       = false;
     int                                   resize_count = 0;
     int                                   focus_count  = 0;
@@ -39,6 +40,7 @@ public:
         ++remap_count;
         return remap_result;
     }
+    void reload() noexcept override { ++reload_count; }
 
     // Parses the last posted JSON and returns its "id" field, or -1.
     int last_posted_doc_id() const {
@@ -91,7 +93,9 @@ TEST_CASE("ViewerHost queues load_document before ready and drains on ready",
     REQUIRE(mock_ptr->posted[0].find(L"b.md") != std::wstring::npos);
 }
 
-TEST_CASE("ViewerHost posts immediately after ready", "[viewer_host]") {
+TEST_CASE("ViewerHost reloads when a new load_document arrives after ready, "
+          "then posts on the post-reload ready",
+          "[viewer_host]") {
     auto mock = std::make_unique<MockHost>();
     auto* mock_ptr = mock.get();
 
@@ -105,6 +109,14 @@ TEST_CASE("ViewerHost posts immediately after ready", "[viewer_host]") {
     c.display_name = L"c.md";
     vh.load_document(c);
 
+    // Mapping changes don't propagate to the current page's resource
+    // loaders, so the load is queued and a reload is issued. Nothing
+    // is posted yet.
+    REQUIRE(mock_ptr->reload_count == 1);
+    REQUIRE(mock_ptr->posted.empty());
+
+    // Post-reload ready: the queued load drains.
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
     REQUIRE(mock_ptr->posted.size() == 1);
     REQUIRE(mock_ptr->posted[0].find(L"c.md") != std::wstring::npos);
 }
@@ -189,16 +201,24 @@ TEST_CASE("ViewerHost assigns monotonic doc ids and remaps doc dirs",
     b.display_name = L"b.md";
     b.doc_dir      = LR"(C:\dir_b)";
 
-    vh.load_document(std::move(a));
-    vh.load_document(std::move(b));
+    vh.load_document(std::move(a));   // RendererReady -> reload, queue a
+    vh.load_document(std::move(b));   // Navigated     -> latest-wins, queue b
 
-    REQUIRE(mp->posted.size() == 2);
+    // Both remaps fired; only one reload (the second load arrived
+    // while a reload was already in flight).
+    REQUIRE(mp->remap_count  == 2);
+    REQUIRE(mp->reload_count == 1);
+    REQUIRE(mp->posted.empty());
+
+    // Post-reload ready drains the latest queued request (b).
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
+    REQUIRE(mp->posted.size() == 1);
     REQUIRE(mp->last_posted_doc_id() == 2);
-    REQUIRE(mp->remap_count == 2);
     REQUIRE(mp->last_remap_dir ==
             std::filesystem::path(LR"(C:\dir_b)"));
     // Successful remap fills base_uri in the load message.
-    REQUIRE(mp->posted[1].find(L"https://mdview-doc.local/")
+    REQUIRE(mp->posted[0].find(L"https://mdview-doc.example/")
             != std::wstring::npos);
 }
 
@@ -218,8 +238,15 @@ TEST_CASE("ViewerHost skips remap when doc_dir is empty",
     // doc_dir intentionally left empty
     vh.load_document(std::move(req));
 
+    // Post-ready load still reloads (queue + drain on next ready),
+    // even when no remap is needed, so the post-reload page sees a
+    // fresh navigation state. No remap because doc_dir is empty.
+    REQUIRE(mp->remap_count  == 0);
+    REQUIRE(mp->reload_count == 1);
+    REQUIRE(mp->posted.empty());
+
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
     REQUIRE(mp->posted.size() == 1);
-    REQUIRE(mp->remap_count == 0);
     REQUIRE(mp->last_posted_doc_id() == 1);
 }
 
@@ -240,8 +267,14 @@ TEST_CASE("ViewerHost clears base_uri when remap_doc_dir fails",
     req.doc_dir      = LR"(C:\nope)";
     vh.load_document(std::move(req));
 
+    // Post-ready load: queue + reload, drain on next ready.
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
     REQUIRE(mp->posted.size() == 1);
-    REQUIRE(mp->remap_count == 1);
+    // remap is retried at drain time when base_uri stayed empty
+    // (the drop-and-retry path for first-load races); both attempts
+    // fail here because remap_result is pinned to E_FAIL.
+    REQUIRE(mp->remap_count == 2);
 
     // The encoder nests the load-document fields under "document"; the
     // base URI key is "baseUri" (camelCase). On remap failure the
@@ -254,6 +287,50 @@ TEST_CASE("ViewerHost clears base_uri when remap_doc_dir fails",
     REQUIRE(j["document"].contains("baseUri"));
     REQUIRE(j["document"]["baseUri"].is_string());
     REQUIRE(j["document"]["baseUri"].get<std::string>().empty());
+}
+
+TEST_CASE("ViewerHost posts directly without reload when doc_dir is unchanged",
+          "[viewer_host]") {
+    auto mock = std::make_unique<MockHost>();
+    auto* mp = mock.get();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    vh.create((HWND)1, [](mdview::LifecycleEvent){});
+    mp->last_create_cb(S_OK);
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
+    // First file in dir D: triggers reload+drain to bind the mapping.
+    mdview::DocumentRequest a;
+    a.file_path    = LR"(D:\d\a.md)";
+    a.display_name = L"a.md";
+    a.doc_dir      = LR"(D:\d)";
+    vh.load_document(std::move(a));
+    REQUIRE(mp->reload_count == 1);
+    REQUIRE(mp->posted.empty());
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+    REQUIRE(mp->posted.size() == 1);  // a drained
+
+    // Second file in same dir: no reload, just post.
+    mdview::DocumentRequest b;
+    b.file_path    = LR"(D:\d\b.md)";
+    b.display_name = L"b.md";
+    b.doc_dir      = LR"(D:\d)";
+    vh.load_document(std::move(b));
+    REQUIRE(mp->reload_count == 1);  // unchanged
+    REQUIRE(mp->posted.size() == 2);
+    REQUIRE(mp->posted[1].find(L"b.md") != std::wstring::npos);
+
+    // Third file in DIFFERENT dir: reload + drain on next ready.
+    mdview::DocumentRequest c;
+    c.file_path    = LR"(E:\e\c.md)";
+    c.display_name = L"c.md";
+    c.doc_dir      = LR"(E:\e)";
+    vh.load_document(std::move(c));
+    REQUIRE(mp->reload_count == 2);
+    REQUIRE(mp->posted.size() == 2);  // not posted yet
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+    REQUIRE(mp->posted.size() == 3);
+    REQUIRE(mp->posted[2].find(L"c.md") != std::wstring::npos);
 }
 
 TEST_CASE("ViewerHost re-entry safe when RendererReady handler "
@@ -285,10 +362,19 @@ TEST_CASE("ViewerHost re-entry safe when RendererReady handler "
     mock_ptr->last_create_cb(S_OK);
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
-    // Two posts total: one from the callback's synchronous re-entry
-    // (state is already RendererReady, so it fast-paths), and one from
-    // the snapshot replay of req1 after the callback returns.
-    REQUIRE(mock_ptr->posted.size() == 2);
+    // Inside the ready handler:
+    //   - state transitions Navigated -> RendererReady
+    //   - snapshot of pending = req1
+    //   - user callback calls load_document(req2): state is
+    //     RendererReady, so this triggers a reload and queues req2.
+    //     state becomes Navigated.
+    //   - after callback, state != RendererReady, so the snapshot
+    //     (req1) is discarded -- the user's call took precedence.
+    REQUIRE(mock_ptr->reload_count == 1);
+    REQUIRE(mock_ptr->posted.empty());
+
+    // Post-reload ready drains req2.
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+    REQUIRE(mock_ptr->posted.size() == 1);
     REQUIRE(mock_ptr->posted[0].find(L"second.md") != std::wstring::npos);
-    REQUIRE(mock_ptr->posted[1].find(L"first.md")  != std::wstring::npos);
 }

@@ -34,6 +34,7 @@ public:
     void post_to_renderer(std::wstring_view json) override;
     HRESULT remap_doc_dir(
         const std::filesystem::path& doc_dir) noexcept override;
+    void reload() noexcept override;
 
 private:
     void apply_settings_();

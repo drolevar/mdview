@@ -29,13 +29,21 @@ public:
     // call as a no-op rather than crash.
     virtual void post_to_renderer(std::wstring_view json) = 0;
 
-    // Remaps the "mdview-doc.local" virtual host to point at the
+    // Remaps the "mdview-doc.example" virtual host to point at the
     // directory containing the document being loaded. Called once per
     // load_document. On older WebView2 runtimes that don't expose
     // ICoreWebView2_3, returns E_NOINTERFACE and the caller falls
     // back to an empty base URI.
     virtual HRESULT remap_doc_dir(
         const std::filesystem::path& doc_dir) noexcept = 0;
+
+    // Reloads the current top-level page. Required after remap_doc_dir
+    // when there is already a live page: WebView2 caches mapping state
+    // for the resource loaders of the current page, and a Set on an
+    // already-mapped host doesn't propagate to those loaders without
+    // a fresh navigation. See WebView2Feedback #2456 and the
+    // SetVirtualHostNameToFolderMapping docs.
+    virtual void reload() noexcept = 0;
 };
 
 }

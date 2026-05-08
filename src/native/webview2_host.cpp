@@ -18,7 +18,7 @@ namespace mdview {
 
 namespace {
 
-constexpr const wchar_t* kAppNavigateTo = L"https://mdview-app.local/index.html";
+constexpr const wchar_t* kAppNavigateTo = L"https://mdview-app.example/index.html";
 
 }
 
@@ -149,15 +149,22 @@ HRESULT WebView2Host::remap_doc_dir(
     auto wv3 = webview_.try_query<ICoreWebView2_3>();
     if (!wv3) return E_NOINTERFACE;
 
-    // WebView2's Set on an already-mapped host name doesn't reliably
-    // overwrite the previous mapping; subsequent fetches keep going
-    // to the original folder. Clear first to guarantee a fresh bind.
+    // Clear before Set so the mapping table itself is in a clean state.
+    // The bigger issue (mapping changes don't propagate to the current
+    // page's resource loaders) is solved by ViewerHost calling reload()
+    // after remap; see comment on IWebView2Host::reload.
     LOG_IF_FAILED(wv3->ClearVirtualHostNameToFolderMapping(kDocHostName));
 
     return wv3->SetVirtualHostNameToFolderMapping(
         kDocHostName,
         doc_dir.c_str(),
         COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS);
+}
+
+void WebView2Host::reload() noexcept {
+    if (webview_) {
+        LOG_IF_FAILED(webview_->Reload());
+    }
 }
 
 void WebView2Host::apply_settings_() {
@@ -246,8 +253,8 @@ void WebView2Host::install_handlers_() {
 
             const std::wstring_view sv{uri.get()};
             const bool internal =
-                sv.starts_with(L"https://mdview-app.local/") ||
-                sv.starts_with(L"https://mdview-doc.local/");
+                sv.starts_with(L"https://mdview-app.example/") ||
+                sv.starts_with(L"https://mdview-doc.example/");
             if (internal) return S_OK;
 
             // External origin: cancel and externalize.
@@ -266,6 +273,41 @@ void WebView2Host::install_handlers_() {
             auto alive = wp.lock();
             if (!alive) return S_OK;
             LOG_IF_FAILED(args->put_Handled(TRUE));
+            return S_OK;
+        });
+
+    // NavigationCompleted: log success/failure + WebErrorStatus per nav id.
+    auto nav_done_cb = Microsoft::WRL::Callback<
+        ICoreWebView2NavigationCompletedEventHandler>(
+        [wp](ICoreWebView2*,
+             ICoreWebView2NavigationCompletedEventArgs* args)
+        noexcept -> HRESULT {
+            auto alive = wp.lock();
+            if (!alive) return S_OK;
+            BOOL ok = FALSE;
+            COREWEBVIEW2_WEB_ERROR_STATUS status{};
+            UINT64 nav_id = 0;
+            LOG_IF_FAILED(args->get_IsSuccess(&ok));
+            LOG_IF_FAILED(args->get_WebErrorStatus(&status));
+            LOG_IF_FAILED(args->get_NavigationId(&nav_id));
+            debug_log::log(
+                L"navigation completed: nav={} ok={} status={}",
+                nav_id, ok ? 1 : 0, static_cast<int>(status));
+            return S_OK;
+        });
+
+    // DOMContentLoaded: log each DOM-ready boundary so we can tell
+    // a fresh document load from a same-page mutation.
+    auto dom_cb = Microsoft::WRL::Callback<
+        ICoreWebView2DOMContentLoadedEventHandler>(
+        [wp](ICoreWebView2*,
+             ICoreWebView2DOMContentLoadedEventArgs* args)
+        noexcept -> HRESULT {
+            auto alive = wp.lock();
+            if (!alive) return S_OK;
+            UINT64 nav_id = 0;
+            LOG_IF_FAILED(args->get_NavigationId(&nav_id));
+            debug_log::log(L"dom content loaded: nav={}", nav_id);
             return S_OK;
         });
 
@@ -347,6 +389,22 @@ void WebView2Host::install_handlers_() {
         ctrl->remove_AcceleratorKeyPressed(accel_tok);
     });
 
+    EventRegistrationToken nav_done_tok{};
+    THROW_IF_FAILED(webview_->add_NavigationCompleted(
+        nav_done_cb.Get(), &nav_done_tok));
+    auto revoke_nav_done = wil::scope_exit([wv, nav_done_tok]() noexcept {
+        wv->remove_NavigationCompleted(nav_done_tok);
+    });
+
+    auto wv2 = webview_.try_query<ICoreWebView2_2>();
+    EventRegistrationToken dom_tok{};
+    if (wv2) {
+        THROW_IF_FAILED(wv2->add_DOMContentLoaded(dom_cb.Get(), &dom_tok));
+    }
+    auto revoke_dom = wil::scope_exit([wv2, dom_tok]() noexcept {
+        if (wv2) wv2->remove_DOMContentLoaded(dom_tok);
+    });
+
     // All five succeeded. Hand ownership to revokers_ and dismiss the
     // scope guards. emplace_back can throw on allocation failure; if
     // that happens before all five revokers are emplaced, the guards
@@ -373,6 +431,16 @@ void WebView2Host::install_handlers_() {
             ctrl->remove_AcceleratorKeyPressed(t);
         });
     revoke_accel.release();
+
+    revokers_.emplace_back(nav_done_tok,
+        [wv](EventRegistrationToken t) { wv->remove_NavigationCompleted(t); });
+    revoke_nav_done.release();
+
+    revokers_.emplace_back(dom_tok,
+        [wv2](EventRegistrationToken t) {
+            if (wv2) wv2->remove_DOMContentLoaded(t);
+        });
+    revoke_dom.release();
 }
 
 }
