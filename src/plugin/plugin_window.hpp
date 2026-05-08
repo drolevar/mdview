@@ -32,6 +32,10 @@ public:
     // (from PluginWindow::create) and ListLoadNextW.
     bool load_next(std::wstring file_to_load) noexcept;
 
+    // Routed from the WLX ListSendCommand export. Returns true iff the
+    // command was understood and applied (or harmlessly ignored).
+    bool send_command(int command, int parameter) noexcept;
+
     // Routed from WebView2Host's on_renderer_message_ callback.
     void on_renderer_message(std::wstring_view json);
 

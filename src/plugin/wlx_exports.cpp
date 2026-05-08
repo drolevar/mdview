@@ -108,3 +108,23 @@ int __stdcall ListLoadNextW(
         return LISTPLUGIN_ERROR;
     }
 }
+
+// Per TC dev-build changelog 2020-01-22 ("Tell Lister plugins with
+// ListSendCommand also when switching between dark and normal mode"),
+// TC delivers theme changes via this entry point. Command codes and
+// parameter bitmask are listplug.h's lc_* / lcp_* constants.
+int __stdcall ListSendCommand(HWND list_win, int command, int parameter) {
+    mdview::debug_log::log(
+        L"wlx: ListSendCommand cmd={} param=0x{:x}",
+        command, static_cast<uint32_t>(parameter));
+    try {
+        auto* pw = mdview::get_window_self_ptr<mdview::PluginWindow>(list_win);
+        if (pw == nullptr) return LISTPLUGIN_ERROR;
+        return pw->send_command(command, parameter)
+            ? LISTPLUGIN_OK
+            : LISTPLUGIN_ERROR;
+    } catch (...) {
+        LOG_CAUGHT_EXCEPTION();
+        return LISTPLUGIN_ERROR;
+    }
+}

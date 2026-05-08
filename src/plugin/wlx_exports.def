@@ -3,4 +3,5 @@ EXPORTS
     ListGetDetectString
     ListLoadW
     ListLoadNextW
+    ListSendCommand
     ListCloseWindow
