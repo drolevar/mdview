@@ -197,8 +197,8 @@ void WebView2Host::install_handlers_() {
     ICoreWebView2*           wv   = webview_.get();
     ICoreWebView2Controller* ctrl = controller_.get();
 
-    // Build all five WRL callbacks up front. None of these touch the
-    // host yet -- they're just heap-allocated objects.
+    // Build all seven WRL callbacks up front. None of these touch
+    // the host yet -- they're just heap-allocated objects.
 
     auto msg_cb = Microsoft::WRL::Callback<
         ICoreWebView2WebMessageReceivedEventHandler>(
@@ -351,12 +351,13 @@ void WebView2Host::install_handlers_() {
             return S_OK;
         });
 
-    // Register all five. Each registration is paired with an in-scope
-    // scope_exit guard so that if any later add_* call throws, the
-    // partial registrations from earlier calls are revoked during
-    // stack unwinding before the exception propagates. After the
-    // final add_* succeeds, the tokens are emplaced into revokers_
-    // and the guards are dismissed via release().
+    // Register all seven. Each registration is paired with an
+    // in-scope scope_exit guard so that if any later add_* call
+    // throws, the partial registrations from earlier calls are
+    // revoked during stack unwinding before the exception
+    // propagates. After the final add_* succeeds, the tokens are
+    // emplaced into revokers_ and the guards are dismissed via
+    // release().
 
     EventRegistrationToken msg_tok{};
     THROW_IF_FAILED(webview_->add_WebMessageReceived(msg_cb.Get(), &msg_tok));
