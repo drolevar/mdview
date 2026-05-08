@@ -66,5 +66,6 @@ jobs:
             build/windows-msvc-x64-debug/src/mdview.wlx64
             viewer/index.html
             viewer/styles.css
+            viewer/styles/
             viewer/dist/
           if-no-files-found: error
