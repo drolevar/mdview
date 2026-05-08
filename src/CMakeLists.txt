@@ -19,6 +19,7 @@ add_library(mdview_core STATIC
     native/viewer_host.cpp
     native/viewer_paths.cpp
     native/webview2_environment.cpp
+    native/webview2_externalize.cpp
     native/webview2_host.cpp
     platform/win32_window.cpp
     plugin/plugin_window.cpp
