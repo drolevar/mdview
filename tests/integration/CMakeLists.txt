@@ -5,6 +5,8 @@ add_executable(mdview_integration_tests
     main.cpp
     debug_monitor.cpp
     pump.cpp
+    session.cpp
+    summary.cpp
 )
 
 target_include_directories(mdview_integration_tests PRIVATE

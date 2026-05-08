@@ -98,6 +98,15 @@ bool PluginWindow::load_next(std::wstring file_to_load) noexcept {
     try {
         file_to_load_ = file_to_load;
 
+        // Integration harness opt-in: when MDVIEW_REQUEST_SUMMARY=1,
+        // ask the renderer to emit a structured summary on the
+        // resulting `rendered` ack. Production runs do not set this.
+        wchar_t env_buf[8] = {};
+        const DWORD env_len = ::GetEnvironmentVariableW(
+            L"MDVIEW_REQUEST_SUMMARY", env_buf,
+            static_cast<DWORD>(sizeof(env_buf) / sizeof(wchar_t)));
+        const bool want_summary = (env_len > 0 && env_buf[0] == L'1');
+
         DocumentLoader loader;
         auto result = loader.load(std::filesystem::path{file_to_load});
         if (result.error != DocumentError::None) {
@@ -111,6 +120,7 @@ bool PluginWindow::load_next(std::wstring file_to_load) noexcept {
                 req.display_name = std::filesystem::path{file_to_load}
                                         .filename().wstring();
                 req.markdown     = format_load_error_md(result.error);
+                req.summary_requested = want_summary;
                 // Intentionally no doc_dir / base_uri on error.
                 viewer_->load_document(std::move(req));
             }
@@ -123,6 +133,7 @@ bool PluginWindow::load_next(std::wstring file_to_load) noexcept {
                                 .filename().wstring();
         req.markdown     = std::move(result.content);
         req.doc_dir      = std::move(result.doc_dir);
+        req.summary_requested = want_summary;
 
         if (viewer_) {
             viewer_->load_document(std::move(req));

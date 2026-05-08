@@ -1,0 +1,90 @@
+#include "summary.hpp"
+
+#include "common/utf.hpp"
+
+#include <nlohmann/json.hpp>
+
+namespace mdview::integration {
+
+std::optional<RenderedSummary>
+parse_summary_json(const std::wstring& payload) {
+    try {
+        std::string utf8 = mdview::utf16_to_utf8(payload);
+        auto j = nlohmann::json::parse(utf8, nullptr,
+                                       /*allow_exceptions=*/false);
+        if (j.is_discarded() || !j.is_object()) return std::nullopt;
+        if (!j.contains("summarySchema")
+         || !j["summarySchema"].is_number_integer()
+         || j["summarySchema"].get<int>() < 1) {
+            return std::nullopt;
+        }
+
+        RenderedSummary s;
+        s.summary_schema = j["summarySchema"].get<int>();
+        s.duration_ms    = j.value("durationMs", 0);
+        s.theme          = j.value("theme", std::string{});
+
+        const auto& bc = j.value("blockCount", nlohmann::json::object());
+        s.paragraph     = bc.value("paragraph", 0);
+        s.heading       = bc.value("heading", 0);
+        s.code_fence    = bc.value("codeFence", 0);
+        s.table         = bc.value("table", 0);
+        s.blockquote    = bc.value("blockquote", 0);
+        s.list_ordered  = bc.value("listOrdered", 0);
+        s.list_unordered = bc.value("listUnordered", 0);
+        s.image         = bc.value("image", 0);
+        s.link          = bc.value("link", 0);
+        s.hr            = bc.value("hr", 0);
+
+        if (j.contains("codeFences") && j["codeFences"].is_array()) {
+            for (auto& cf : j["codeFences"]) {
+                CodeFenceRecord r;
+                if (cf.contains("language") && cf["language"].is_string()) {
+                    r.language = cf["language"].get<std::string>();
+                }
+                r.highlighted = cf.value("highlighted", false);
+                s.code_fences.push_back(std::move(r));
+            }
+        }
+
+        if (j.contains("mermaid") && j["mermaid"].is_object()) {
+            const auto& m = j["mermaid"];
+            s.mermaid_chunk_loaded   = m.value("chunkLoaded", false);
+            s.mermaid_chunk_load_ms  = m.contains("chunkLoadMs")
+                ? (m["chunkLoadMs"].is_number()
+                    ? m["chunkLoadMs"].get<int>()
+                    : -1)
+                : -1;
+            if (m.contains("diagrams") && m["diagrams"].is_array()) {
+                for (auto& d : m["diagrams"]) {
+                    DiagramRecord r;
+                    r.id            = d.value("id", std::string{});
+                    r.status        = d.value("status", std::string{});
+                    if (d.contains("diagramType") &&
+                        d["diagramType"].is_string()) {
+                        r.diagram_type = d["diagramType"].get<std::string>();
+                    }
+                    if (d.contains("errorMessage") &&
+                        d["errorMessage"].is_string()) {
+                        r.error_message = d["errorMessage"].get<std::string>();
+                    }
+                    r.render_ms      = d.value("renderMs", 0);
+                    s.mermaid_diagrams.push_back(std::move(r));
+                }
+            }
+        }
+
+        if (j.contains("imageRequests") && j["imageRequests"].is_array()) {
+            for (auto& ir : j["imageRequests"]) {
+                s.image_requests.emplace_back(
+                    ir.value("url", std::string{}),
+                    ir.value("inDocBaseUri", false));
+            }
+        }
+        return s;
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+}
