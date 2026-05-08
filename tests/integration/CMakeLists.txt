@@ -11,6 +11,7 @@ add_executable(mdview_integration_tests
     test_highlight.cpp
     test_lifecycle.cpp
     test_mermaid.cpp
+    test_theme.cpp
 )
 
 target_include_directories(mdview_integration_tests PRIVATE
