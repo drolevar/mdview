@@ -98,12 +98,10 @@ bool PluginWindow::load_next(std::wstring file_to_load) noexcept {
         DocumentLoader loader;
         auto result = loader.load(std::filesystem::path{file_to_load});
         if (result.error != DocumentError::None) {
-            // Brief pre-WebView splash for short error windows.
-            set_status_text(format_load_error(result.error));
-
-            // Also post the error as document content so once the
-            // WebView2 surface comes up (and covers the splash), the
-            // renderer shows the error message.
+            // Post the error as document content so once the WebView2
+            // surface comes up the renderer shows the error message.
+            // The default status_text_ ("Loading…") covers the brief
+            // pre-renderer-ready window.
             if (viewer_) {
                 DocumentRequest req;
                 req.file_path    = file_to_load;
