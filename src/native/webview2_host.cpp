@@ -5,6 +5,7 @@
 #include "native/viewer_paths.hpp"
 #include "native/webview2_environment.hpp"
 #include "native/webview2_externalize.hpp"
+#include "plugin/tc_lister_constants.hpp"
 
 #include <wil/resource.h>
 #include <wil/result_macros.h>
@@ -196,7 +197,7 @@ void WebView2Host::install_handlers_() {
     ICoreWebView2*           wv   = webview_.get();
     ICoreWebView2Controller* ctrl = controller_.get();
 
-    // Build all seven WRL callbacks up front. None of these touch
+    // Build all eight WRL callbacks up front. None of these touch
     // the host yet -- they're just heap-allocated objects.
 
     auto msg_cb = Microsoft::WRL::Callback<
@@ -352,7 +353,26 @@ void WebView2Host::install_handlers_() {
             return S_OK;
         });
 
-    // Register all seven. Each registration is paired with an
+    // GotFocus: notify TC's Lister-pane that our plugin gained focus,
+    // so Quick View pane updates its header color. See
+    // tc_lister_constants.hpp for the changelog citation.
+    auto focus_cb = Microsoft::WRL::Callback<
+        ICoreWebView2FocusChangedEventHandler>(
+        [this, wp](ICoreWebView2Controller*, IUnknown*) noexcept
+            -> HRESULT {
+            auto alive = wp.lock();
+            if (!alive) return S_OK;
+            HWND lister = ::GetParent(parent_hwnd_);
+            if (lister != nullptr) {
+                ::PostMessageW(
+                    lister, WM_COMMAND,
+                    MAKEWPARAM(0, mdview::tc::ITM_FOCUS),
+                    reinterpret_cast<LPARAM>(parent_hwnd_));
+            }
+            return S_OK;
+        });
+
+    // Register all eight. Each registration is paired with an
     // in-scope scope_exit guard so that if any later add_* call
     // throws, the partial registrations from earlier calls are
     // revoked during stack unwinding before the exception
@@ -391,6 +411,13 @@ void WebView2Host::install_handlers_() {
         ctrl->remove_AcceleratorKeyPressed(accel_tok);
     });
 
+    EventRegistrationToken focus_tok{};
+    THROW_IF_FAILED(controller_->add_GotFocus(
+        focus_cb.Get(), &focus_tok));
+    auto revoke_focus = wil::scope_exit([ctrl, focus_tok]() noexcept {
+        ctrl->remove_GotFocus(focus_tok);
+    });
+
     EventRegistrationToken nav_done_tok{};
     THROW_IF_FAILED(webview_->add_NavigationCompleted(
         nav_done_cb.Get(), &nav_done_tok));
@@ -407,10 +434,10 @@ void WebView2Host::install_handlers_() {
         if (wv2) wv2->remove_DOMContentLoaded(dom_tok);
     });
 
-    // All seven add_* succeeded (msg / proc / nav / win / accel /
-    // nav_done / dom). Hand ownership to revokers_ and dismiss the
+    // All eight add_* succeeded (msg / proc / nav / win / accel /
+    // focus / nav_done / dom). Hand ownership to revokers_ and dismiss the
     // scope guards. emplace_back can throw on allocation failure; if
-    // that happens before all seven revokers are emplaced, the guards
+    // that happens before all eight revokers are emplaced, the guards
     // for the not-yet-transferred registrations still run during
     // unwinding and clean up the surplus.
     revokers_.emplace_back(msg_tok,
@@ -434,6 +461,12 @@ void WebView2Host::install_handlers_() {
             ctrl->remove_AcceleratorKeyPressed(t);
         });
     revoke_accel.release();
+
+    revokers_.emplace_back(focus_tok,
+        [ctrl](EventRegistrationToken t) {
+            ctrl->remove_GotFocus(t);
+        });
+    revoke_focus.release();
 
     revokers_.emplace_back(nav_done_tok,
         [wv](EventRegistrationToken t) { wv->remove_NavigationCompleted(t); });
