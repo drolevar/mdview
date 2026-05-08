@@ -9,6 +9,7 @@ add_executable(mdview_integration_tests
     session.cpp
     summary.cpp
     test_lifecycle.cpp
+    test_mermaid.cpp
 )
 
 target_include_directories(mdview_integration_tests PRIVATE
