@@ -5,6 +5,17 @@ import {
     isLoadDocument, isSetTheme,
     postReady, postRendered, postRenderError,
 } from './protocol.js';
+import type { DiagramOutcome } from './mermaid-chunk.js';
+
+interface MermaidPass {
+    chunkLoaded:  boolean;
+    chunkLoadMs:  number | null;
+    diagrams:     DiagramOutcome[];
+}
+
+let lastMermaidPass: MermaidPass = {
+    chunkLoaded: false, chunkLoadMs: null, diagrams: [],
+};
 
 function run(): void {
     applyInitialTheme();
@@ -25,28 +36,77 @@ function run(): void {
     const renderLatest = (): void => {
         if (rendering) return;
         rendering = true;
-        try {
-            while (true) {
-                const idAtStart = latestId;
-                const start     = performance.now();
-                try {
-                    container.innerHTML = renderMarkdown(latestContent);
-                    postRendered(
-                        idAtStart,
-                        Math.round(performance.now() - start));
-                } catch (err) {
-                    const e = err as Error;
-                    postRenderError(
-                        idAtStart,
-                        e.message ?? 'render failed',
-                        e.stack ?? null);
+        void (async () => {
+            try {
+                while (true) {
+                    const idAtStart = latestId;
+                    const start     = performance.now();
+                    let succeeded = false;
+                    try {
+                        container.innerHTML = renderMarkdown(latestContent);
+                        succeeded = true;
+                    } catch (err) {
+                        const e = err as Error;
+                        postRenderError(
+                            idAtStart,
+                            e.message ?? 'render failed',
+                            e.stack ?? null);
+                    }
+
+                    if (succeeded) {
+                        // Mermaid pass: after markdown HTML is in the
+                        // DOM, look for placeholders and lazy-load the
+                        // chunk only if any are present.
+                        lastMermaidPass = await runMermaidPass(
+                            getResolvedTheme());
+                        postRendered(
+                            idAtStart,
+                            Math.round(performance.now() - start));
+                    }
+
+                    if (latestId === idAtStart) return;
                 }
-                if (latestId === idAtStart) return;
+            } finally {
+                rendering = false;
             }
-        } finally {
-            rendering = false;
-        }
+        })();
     };
+
+    async function runMermaidPass(
+        theme: 'light' | 'dark',
+    ): Promise<MermaidPass> {
+        const placeholders = container!.querySelectorAll<HTMLElement>(
+            '[data-mermaid-id]');
+        if (placeholders.length === 0) {
+            return { chunkLoaded: false, chunkLoadMs: null, diagrams: [] };
+        }
+        const t0 = performance.now();
+        try {
+            const mod = await import('./mermaid-chunk.js');
+            const chunkLoadMs = Math.round(performance.now() - t0);
+            const diagrams = await mod.renderAll(placeholders, { theme });
+            return { chunkLoaded: true, chunkLoadMs, diagrams };
+        } catch (err) {
+            const msg = err instanceof Error
+                ? err.message
+                : String(err ?? '');
+            for (const el of Array.from(placeholders)) {
+                el.classList.add('mdview-mermaid-failed');
+                const errBlock = document.createElement('div');
+                errBlock.className = 'mdview-mermaid-error';
+                errBlock.innerHTML =
+                    `<div class="mdview-mermaid-error-title">` +
+                    `Diagram support failed to load` +
+                    `</div>` +
+                    `<pre class="mdview-mermaid-error-msg">${msg
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')}` +
+                    `</pre>`;
+                el.appendChild(errBlock);
+            }
+            return { chunkLoaded: false, chunkLoadMs: null, diagrams: [] };
+        }
+    }
 
     window.chrome.webview.addEventListener('message',
         (e: MessageEvent) => {
@@ -60,9 +120,6 @@ function run(): void {
             if (!isLoadDocument(m))   return;
             if (m.id <= latestId)     return;
 
-            // Apply theme BEFORE the render so the first paint uses
-            // the requested colors. If absent, the caller wants the
-            // current value to persist.
             if (m.theme !== undefined) {
                 setTheme(m.theme);
             }
@@ -97,6 +154,10 @@ function run(): void {
     });
 
     postReady();
+}
+
+export function getLastMermaidPass(): MermaidPass {
+    return lastMermaidPass;
 }
 
 run();
