@@ -27,3 +27,11 @@ mdview_set_warnings(mdview_tests)
 
 include(Catch)
 catch_discover_tests(mdview_tests)
+
+option(MDVIEW_BUILD_INTEGRATION_TESTS
+       "Build the WLX integration test executable"
+       ON)
+
+if(MDVIEW_BUILD_INTEGRATION_TESTS)
+    add_subdirectory(integration)
+endif()
