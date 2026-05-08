@@ -105,3 +105,27 @@ TEST_CASE("encode_load_document includes id field",
     auto json_text = mdview::encode_load_document(msg);
     REQUIRE(json_text.find(L"\"id\":12") != std::wstring::npos);
 }
+
+TEST_CASE("decode_renderer_message rejects rendered with missing elapsedMs",
+          "[renderer_protocol]") {
+    // Previously: would throw a nlohmann::json type_error inside
+    // get_int_in_range; the catch-all returned nullopt, but only by
+    // accident. After A3 the helper guards explicitly.
+    auto r = mdview::decode_renderer_message(
+        LR"({"type":"rendered","version":1,"id":1})");
+    REQUIRE_FALSE(r.has_value());
+}
+
+TEST_CASE("decode_renderer_message rejects rendered with non-integer id",
+          "[renderer_protocol]") {
+    auto r = mdview::decode_renderer_message(
+        LR"({"type":"rendered","version":1,"id":"x","elapsedMs":1})");
+    REQUIRE_FALSE(r.has_value());
+}
+
+TEST_CASE("decode_renderer_message rejects rendered with non-integer elapsedMs",
+          "[renderer_protocol]") {
+    auto r = mdview::decode_renderer_message(
+        LR"({"type":"rendered","version":1,"id":1,"elapsedMs":"x"})");
+    REQUIRE_FALSE(r.has_value());
+}
