@@ -1,8 +1,3 @@
-// Wire-format types for the renderer <-> native bridge. Mirrors the JSON
-// emitted by `encode_load_document` and consumed by `decode_renderer_message`
-// in `src/native/renderer_protocol.cpp`. Field names must stay in lock-step
-// with the native side; an audit point is the cpp file referenced above.
-
 declare global {
     interface Window {
         chrome: {
@@ -25,6 +20,8 @@ export interface ViewerOptions {
     enableMath:        boolean;
 }
 
+export type ThemeName = 'light' | 'dark' | 'system';
+
 export interface LoadDocumentDocument {
     path:        string;
     displayName: string;
@@ -38,6 +35,51 @@ export interface LoadDocumentMessage {
     id:       number;
     document: LoadDocumentDocument;
     options:  ViewerOptions;
+    theme?:   ThemeName;     // M4; absent treated as 'system'
+    summary?: boolean;       // M4; integration harness only
+}
+
+export interface SetThemeMessage {
+    type:    'setTheme';
+    version: 1;
+    theme:   ThemeName;
+}
+
+export interface RenderedSummary {
+    summarySchema: 1;
+    durationMs:    number;
+    theme:         'light' | 'dark';
+    blockCount: {
+        paragraph:    number;
+        heading:      number;
+        codeFence:    number;
+        table:        number;
+        blockquote:   number;
+        listOrdered:  number;
+        listUnordered: number;
+        image:        number;
+        link:         number;
+        hr:           number;
+    };
+    codeFences: Array<{
+        language:    string | null;
+        highlighted: boolean;
+    }>;
+    mermaid: {
+        chunkLoaded:  boolean;
+        chunkLoadMs:  number | null;
+        diagrams: Array<{
+            id:           string;
+            status:       'rendered' | 'failed';
+            diagramType:  string | null;
+            errorMessage: string | null;
+            renderMs:     number;
+        }>;
+    };
+    imageRequests: Array<{
+        url:           string;
+        inDocBaseUri:  boolean;
+    }>;
 }
 
 export function isLoadDocument(m: unknown): m is LoadDocumentMessage {
@@ -46,7 +88,6 @@ export function isLoadDocument(m: unknown): m is LoadDocumentMessage {
     if (o['type'] !== 'loadDocument') return false;
     if (o['version'] !== 1)            return false;
     if (typeof o['id'] !== 'number')   return false;
-
     const doc = o['document'];
     if (typeof doc !== 'object' || doc === null) return false;
     const d = doc as Record<string, unknown>;
@@ -54,26 +95,45 @@ export function isLoadDocument(m: unknown): m is LoadDocumentMessage {
     if (typeof d['path']        !== 'string') return false;
     if (typeof d['displayName'] !== 'string') return false;
     if (typeof d['baseUri']     !== 'string') return false;
-
     return true;
+}
+
+export function isSetTheme(m: unknown): m is SetThemeMessage {
+    if (typeof m !== 'object' || m === null) return false;
+    const o = m as Record<string, unknown>;
+    if (o['type']    !== 'setTheme') return false;
+    if (o['version'] !== 1)          return false;
+    const t = o['theme'];
+    return t === 'light' || t === 'dark' || t === 'system';
 }
 
 export function postReady(): void {
     window.chrome.webview.postMessage({ type: 'ready', version: 1 });
 }
 
-export function postRendered(id: number, elapsedMs: number): void {
-    window.chrome.webview.postMessage({
+export function postRendered(
+    id: number,
+    elapsedMs: number,
+    summary?: RenderedSummary,
+): void {
+    const msg: Record<string, unknown> = {
         type: 'rendered', version: 1, id, elapsedMs,
-    });
+    };
+    if (summary !== undefined) msg['summary'] = summary;
+    window.chrome.webview.postMessage(msg);
 }
 
 export function postRenderError(
-    id: number, message: string, stack: string | null,
+    id: number,
+    message: string,
+    stack: string | null,
+    summary?: Partial<RenderedSummary>,
 ): void {
-    window.chrome.webview.postMessage({
+    const msg: Record<string, unknown> = {
         type: 'renderError', version: 1, id, message, stack,
-    });
+    };
+    if (summary !== undefined) msg['summary'] = summary;
+    window.chrome.webview.postMessage(msg);
 }
 
 export {};
