@@ -1,5 +1,7 @@
 #pragma once
 
+#include "native/theme.hpp"
+
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -36,6 +38,8 @@ struct LoadDocumentMessage {
     std::wstring          base_uri;     // empty in M2; M3 fills
     std::wstring          markdown;     // empty in M2; M3 fills
     ViewerOptions         options;
+    Theme                 theme            = Theme::System;
+    bool                  summary_requested = false;
 };
 
 using RendererMessage = std::variant<

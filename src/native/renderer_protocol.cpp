@@ -50,6 +50,11 @@ std::wstring encode_load_document(const LoadDocumentMessage& msg) {
 
     j["options"] = options_to_json(msg.options);
 
+    j["theme"] = utf16_to_utf8(std::wstring(to_wire(msg.theme)));
+    if (msg.summary_requested) {
+        j["summary"] = true;
+    }
+
     std::string utf8 = j.dump();
     return utf8_to_utf16(utf8);
 }

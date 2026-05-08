@@ -423,3 +423,70 @@ TEST_CASE("ViewerHost retries remap at drain and reloads when "
     REQUIRE(mp->posted[0].find(L"https://mdview-doc.example/")
             != std::wstring::npos);
 }
+
+TEST_CASE("ViewerHost::apply_theme stashes when not yet ready",
+          "[viewer_host][theme]") {
+    auto mock = std::make_unique<MockHost>();
+    auto* mp = mock.get();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    vh.create((HWND)1, [](mdview::LifecycleEvent){});
+    // Don't call last_create_cb yet; state stays at EnvPending.
+
+    vh.apply_theme(mdview::Theme::Dark);
+
+    REQUIRE(mp->posted.empty());  // no setTheme yet
+}
+
+TEST_CASE("ViewerHost::apply_theme posts setTheme when renderer ready",
+          "[viewer_host][theme]") {
+    auto mock = std::make_unique<MockHost>();
+    auto* mp = mock.get();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    vh.create((HWND)1, [](mdview::LifecycleEvent){});
+    mp->last_create_cb(S_OK);
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
+    vh.apply_theme(mdview::Theme::Dark);
+
+    REQUIRE(mp->posted.size() == 1);
+    REQUIRE(mp->posted[0].find(L"\"type\":\"setTheme\"")
+            != std::wstring::npos);
+    REQUIRE(mp->posted[0].find(L"\"theme\":\"dark\"")
+            != std::wstring::npos);
+}
+
+TEST_CASE("ViewerHost::apply_theme fires ThemeChanged event when "
+          "a document is loaded",
+          "[viewer_host][theme]") {
+    auto mock = std::make_unique<MockHost>();
+    auto* mp = mock.get();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+
+    int theme_changed_count = 0;
+    vh.create((HWND)1, [&](mdview::LifecycleEvent e) {
+        if (e.kind == mdview::LifecycleEvent::Kind::ThemeChanged) {
+            ++theme_changed_count;
+        }
+    });
+    mp->last_create_cb(S_OK);
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
+    // Load a document so state becomes Loaded.
+    mdview::DocumentRequest req;
+    req.file_path    = LR"(D:\d\a.md)";
+    req.display_name = L"a.md";
+    req.doc_dir      = LR"(D:\d)";
+    vh.load_document(std::move(req));
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+    REQUIRE(mp->posted.size() == 1);
+
+    vh.apply_theme(mdview::Theme::Dark);
+
+    // Posted: setTheme. Event fired: ThemeChanged.
+    REQUIRE(mp->posted.size() == 2);
+    REQUIRE(mp->posted[1].find(L"setTheme") != std::wstring::npos);
+    REQUIRE(theme_changed_count == 1);
+}
