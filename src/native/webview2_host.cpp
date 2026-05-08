@@ -76,7 +76,15 @@ void WebView2Host::create(HWND parent_hwnd,
                                 wv3->SetVirtualHostNameToFolderMapping(
                                     kAppHostName,
                                     root.c_str(),
-                                    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW));
+                                    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS));
+                            // Pre-register the doc host with a placeholder
+                            // folder; remapped per loadDocument once we know
+                            // the document directory.
+                            THROW_IF_FAILED(
+                                wv3->SetVirtualHostNameToFolderMapping(
+                                    kDocHostName,
+                                    root.c_str(),
+                                    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS));
                         } else {
                             debug_log::log(
                                 L"ICoreWebView2_3 unavailable; "
@@ -143,7 +151,7 @@ HRESULT WebView2Host::remap_doc_dir(
     return wv3->SetVirtualHostNameToFolderMapping(
         kDocHostName,
         doc_dir.c_str(),
-        COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
+        COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS);
 }
 
 void WebView2Host::apply_settings_() {
