@@ -26,7 +26,8 @@ add_library(mdview_core STATIC
     plugin/fallback_window.cpp)
 
 target_include_directories(mdview_core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR})
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/external/totalcmd-wlx-sdk/src)
 
 target_link_libraries(mdview_core PUBLIC
     WIL::WIL
@@ -42,9 +43,6 @@ add_library(mdview_wlx SHARED
     plugin/dll_main.cpp
     plugin/wlx_exports.cpp
     plugin/wlx_exports.def)
-
-target_include_directories(mdview_wlx PRIVATE
-    ${CMAKE_SOURCE_DIR}/external/totalcmd-wlx-sdk/src)
 
 target_link_libraries(mdview_wlx PRIVATE
     mdview_core)

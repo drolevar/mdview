@@ -5,6 +5,8 @@
 #include "native/plugin_globals.hpp"
 #include "platform/win32_window.hpp"
 
+#include <listplug.h>   // vendored under external/totalcmd-wlx-sdk/src/
+
 #include <wil/result_macros.h>
 
 #include <filesystem>
@@ -125,6 +127,29 @@ bool PluginWindow::load_next(std::wstring file_to_load) noexcept {
             viewer_->load_document(std::move(req));
         }
         return true;
+    } catch (...) {
+        LOG_CAUGHT_EXCEPTION();
+        return false;
+    }
+}
+
+bool PluginWindow::send_command(int command, int parameter) noexcept {
+    try {
+        // listplug.h: lc_newparams = 2. The lcp_darkmode (128) and
+        // lcp_darkmodenative (256) bits in parameter indicate dark mode.
+        // Other lc_* commands (lc_copy, lc_selectall, lc_setpercent)
+        // are logged and ignored for M4.
+        if (command == lc_newparams) {
+            const bool dark =
+                (parameter & lcp_darkmode) != 0 ||
+                (parameter & lcp_darkmodenative) != 0;
+            // TODO C4: replace with viewer_->apply_theme(dark ? Theme::Dark : Theme::Light);
+            // For now we just consume the bit so the dispatch path works.
+            (void)dark;
+            (void)viewer_;
+            return true;
+        }
+        return true;  // unknown command: don't surface as an error
     } catch (...) {
         LOG_CAUGHT_EXCEPTION();
         return false;
