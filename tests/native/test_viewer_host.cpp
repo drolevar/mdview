@@ -378,3 +378,48 @@ TEST_CASE("ViewerHost re-entry safe when RendererReady handler "
     REQUIRE(mock_ptr->posted.size() == 1);
     REQUIRE(mock_ptr->posted[0].find(L"second.md") != std::wstring::npos);
 }
+
+TEST_CASE("ViewerHost retries remap at drain and reloads when "
+          "first remap failed",
+          "[viewer_host]") {
+    auto mock = std::make_unique<MockHost>();
+    auto* mp = mock.get();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    vh.create((HWND)1, [](mdview::LifecycleEvent){});
+    mp->last_create_cb(S_OK);
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
+    // First remap fails (simulates the controller-not-ready race).
+    mp->remap_result = E_UNEXPECTED;
+
+    mdview::DocumentRequest req;
+    req.file_path    = LR"(D:\d\a.md)";
+    req.display_name = L"a.md";
+    req.doc_dir      = LR"(D:\d)";
+    vh.load_document(std::move(req));
+
+    // First load_document path: remap fails (count 1), state goes to
+    // Navigated, reload count 1; nothing posted yet.
+    REQUIRE(mp->remap_count  == 1);
+    REQUIRE(mp->reload_count == 1);
+    REQUIRE(mp->posted.empty());
+
+    // Now flip remap_result to success so the drain-time retry works.
+    mp->remap_result = S_OK;
+
+    // Post-reload ready: drain fires post_pending_directly_, which
+    // re-runs remap (count 2, succeeds), queues the request again,
+    // and triggers a SECOND reload.
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+    REQUIRE(mp->remap_count  == 2);
+    REQUIRE(mp->reload_count == 2);
+    REQUIRE(mp->posted.empty());
+
+    // The second post-reload ready posts the document, this time with
+    // a populated base_uri (because the drain-time remap succeeded).
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+    REQUIRE(mp->posted.size() == 1);
+    REQUIRE(mp->posted[0].find(L"https://mdview-doc.example/")
+            != std::wstring::npos);
+}
