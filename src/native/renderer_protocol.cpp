@@ -93,6 +93,9 @@ decode_renderer_message(std::wstring_view json) noexcept {
             RenderedMessage m;
             m.id         = *id;
             m.elapsed_ms = *elapsed_ms;
+            if (j.contains("summary") && j["summary"].is_object()) {
+                m.summary_json = utf8_to_utf16(j["summary"].dump());
+            }
             return RendererMessage{m};
         }
         if (type == "renderError") {
@@ -107,6 +110,9 @@ decode_renderer_message(std::wstring_view json) noexcept {
             if (j.contains("stack") && !j["stack"].is_null()) {
                 if (!j["stack"].is_string()) return std::nullopt;
                 m.stack = utf8_to_utf16(j["stack"].get<std::string>());
+            }
+            if (j.contains("summary") && j["summary"].is_object()) {
+                m.summary_json = utf8_to_utf16(j["summary"].dump());
             }
             return RendererMessage{m};
         }

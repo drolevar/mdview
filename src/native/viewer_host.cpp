@@ -226,6 +226,25 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
             pending_load_ = std::move(snapshot);
             post_pending_directly_();
         }
+        return;
+    }
+    if (auto* rendered = std::get_if<RenderedMessage>(&*msg)) {
+        if (rendered->summary_json.empty()) {
+            debug_log::log(L"viewer: rendered id={} elapsed={}ms",
+                           rendered->id, rendered->elapsed_ms);
+        } else {
+            debug_log::emit_chunked_summary(
+                rendered->id, rendered->summary_json);
+        }
+        return;
+    }
+    if (auto* err = std::get_if<RenderErrorMessage>(&*msg)) {
+        debug_log::log(L"viewer: renderError id={} msg={}",
+                       err->id, err->message);
+        if (!err->summary_json.empty()) {
+            debug_log::emit_chunked_summary(err->id, err->summary_json);
+        }
+        return;
     }
 }
 

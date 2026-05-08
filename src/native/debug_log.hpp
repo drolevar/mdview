@@ -20,4 +20,9 @@ void log(std::wformat_string<Args...> fmt, Args&&... args) noexcept {
     }
 }
 
+// Emit a `viewer: rendered id={} summary=...` line, splitting long
+// payloads into multiple `summary[i/N]=...` lines that each stay
+// safely under OutputDebugStringW's ~4 KiB practical limit.
+void emit_chunked_summary(int id, std::wstring_view summary_json) noexcept;
+
 }
