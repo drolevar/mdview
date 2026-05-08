@@ -1,7 +1,9 @@
-import { applyInitialTheme }                  from './theme.js';
+import { applyInitialTheme, setTheme, getResolvedTheme }
+                                              from './theme.js';
 import { render as renderMarkdown }           from './markdown.js';
 import {
-    isLoadDocument, postReady, postRendered, postRenderError,
+    isLoadDocument, isSetTheme,
+    postReady, postRendered, postRenderError,
 } from './protocol.js';
 
 function run(): void {
@@ -24,9 +26,6 @@ function run(): void {
         if (rendering) return;
         rendering = true;
         try {
-            // Loop so a fresh arrival during one render is picked
-            // up immediately afterward (latest-wins; intermediate
-            // ids do not produce rendered acks).
             while (true) {
                 const idAtStart = latestId;
                 const start     = performance.now();
@@ -52,8 +51,22 @@ function run(): void {
     window.chrome.webview.addEventListener('message',
         (e: MessageEvent) => {
             const m = e.data;
+
+            if (isSetTheme(m)) {
+                setTheme(m.theme);
+                return;
+            }
+
             if (!isLoadDocument(m))   return;
             if (m.id <= latestId)     return;
+
+            // Apply theme BEFORE the render so the first paint uses
+            // the requested colors. If absent, the caller wants the
+            // current value to persist.
+            if (m.theme !== undefined) {
+                setTheme(m.theme);
+            }
+
             latestId      = m.id;
             latestContent = m.document.markdown;
             if (baseEl) {
