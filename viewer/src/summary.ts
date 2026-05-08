@@ -1,17 +1,6 @@
-import type { RenderedSummary } from './protocol.js';
-import { fenceRecords }         from './markdown.js';
-
-export interface MermaidPassData {
-    chunkLoaded:  boolean;
-    chunkLoadMs:  number | null;
-    diagrams: Array<{
-        id:           string;
-        status:       'rendered' | 'failed';
-        diagramType:  string | null;
-        errorMessage: string | null;
-        renderMs:     number;
-    }>;
-}
+import type { RenderedSummary }   from './protocol.js';
+import type { MermaidPassData }   from './mermaid-chunk.js';
+import { fenceRecords }           from './markdown.js';
 
 export function buildSummary(
     container: HTMLElement,
