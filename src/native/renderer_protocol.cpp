@@ -22,12 +22,15 @@ nlohmann::json options_to_json(const ViewerOptions& o) {
 
 std::optional<int> get_int_in_range(const nlohmann::json& j,
                                     const char* key) {
-    auto v = j[key].get<int64_t>();
-    if (v < std::numeric_limits<int>::min() ||
-        v > std::numeric_limits<int>::max()) {
+    if (!j.contains(key)) return std::nullopt;
+    const auto& v = j[key];
+    if (!v.is_number_integer()) return std::nullopt;
+    const auto i = v.get<int64_t>();
+    if (i < std::numeric_limits<int>::min() ||
+        i > std::numeric_limits<int>::max()) {
         return std::nullopt;
     }
-    return static_cast<int>(v);
+    return static_cast<int>(i);
 }
 
 }
@@ -79,41 +82,25 @@ decode_renderer_message(std::wstring_view json) noexcept {
             return RendererMessage{ReadyMessage{}};
         }
         if (type == "rendered") {
-            if (!j.contains("id") || !j["id"].is_number_integer()) {
-                return std::nullopt;
-            }
-            if (!j.contains("elapsedMs")
-                || !j["elapsedMs"].is_number_integer()) {
-                return std::nullopt;
-            }
             auto id         = get_int_in_range(j, "id");
             auto elapsed_ms = get_int_in_range(j, "elapsedMs");
-            if (!id || !elapsed_ms) {
-                return std::nullopt;
-            }
+            if (!id || !elapsed_ms) return std::nullopt;
             RenderedMessage m;
             m.id         = *id;
             m.elapsed_ms = *elapsed_ms;
             return RendererMessage{m};
         }
         if (type == "renderError") {
-            if (!j.contains("id") || !j["id"].is_number_integer()) {
-                return std::nullopt;
-            }
-            if (!j.contains("message") || !j["message"].is_string()) {
-                return std::nullopt;
-            }
             auto id = get_int_in_range(j, "id");
-            if (!id) {
+            if (!id) return std::nullopt;
+            if (!j.contains("message") || !j["message"].is_string()) {
                 return std::nullopt;
             }
             RenderErrorMessage m;
             m.id      = *id;
             m.message = utf8_to_utf16(j["message"].get<std::string>());
             if (j.contains("stack") && !j["stack"].is_null()) {
-                if (!j["stack"].is_string()) {
-                    return std::nullopt;
-                }
+                if (!j["stack"].is_string()) return std::nullopt;
                 m.stack = utf8_to_utf16(j["stack"].get<std::string>());
             }
             return RendererMessage{m};
