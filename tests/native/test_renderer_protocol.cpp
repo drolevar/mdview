@@ -1,8 +1,10 @@
 #include "native/renderer_protocol.hpp"
 
+#include "common/utf.hpp"
 #include "native/debug_log.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <nlohmann/json.hpp>
 
 TEST_CASE("encode_load_document produces JSON with required fields",
           "[renderer_protocol]") {
@@ -204,4 +206,18 @@ TEST_CASE("emit_chunked_summary handles multi-chunk payloads",
           "[debug_log]") {
     std::wstring big(10000, L'x');
     REQUIRE_NOTHROW(mdview::debug_log::emit_chunked_summary(2, big));
+}
+
+TEST_CASE("setTheme inline JSON has expected shape",
+          "[renderer_protocol][theme]") {
+    // Mirrors what ViewerHost::post_set_theme_ builds (no encoder fn yet).
+    const std::wstring inline_json =
+        L"{\"type\":\"setTheme\",\"version\":1,\"theme\":\"dark\"}";
+    std::string utf8 = mdview::utf16_to_utf8(inline_json);
+    auto j = nlohmann::json::parse(utf8, nullptr,
+                                   /*allow_exceptions=*/false);
+    REQUIRE_FALSE(j.is_discarded());
+    REQUIRE(j["type"]    == "setTheme");
+    REQUIRE(j["version"] == 1);
+    REQUIRE(j["theme"]   == "dark");
 }
