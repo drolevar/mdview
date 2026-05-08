@@ -77,3 +77,11 @@ main#document th, main#document td {
     border:  1px solid var(--rule);
     padding: 0.4rem 0.7rem;
 }
+
+/* highlight.js container — defers actual token colors to hljs-*.css */
+main#document pre code.hljs {
+    display: block;
+    overflow-x: auto;
+    padding: 0;       /* the <pre> already pads */
+    background: transparent;
+}
