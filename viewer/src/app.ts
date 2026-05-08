@@ -27,8 +27,8 @@ function run(): void {
     let latestId      = 0;
     let latestContent = '';
     let rendering     = false;
-    let summaryRequested = false;
-    let docBaseUri       = '';
+    let latestSummaryRequested = false;
+    let latestDocBaseUri       = '';
 
     const renderLatest = (): void => {
         if (rendering) return;
@@ -37,6 +37,8 @@ function run(): void {
             try {
                 while (true) {
                     const idAtStart = latestId;
+                    const summaryAtStart = latestSummaryRequested;
+                    const baseUriAtStart = latestDocBaseUri;
                     const start     = performance.now();
                     let succeeded = false;
                     try {
@@ -58,13 +60,13 @@ function run(): void {
                             getResolvedTheme());
                         const elapsed = Math.round(
                             performance.now() - start);
-                        if (summaryRequested) {
+                        if (summaryAtStart) {
                             const summary = buildSummary(
                                 container,
                                 elapsed,
                                 getResolvedTheme(),
                                 lastMermaidPass,
-                                docBaseUri,
+                                baseUriAtStart,
                             );
                             postRendered(idAtStart, elapsed, summary);
                         } else {
@@ -141,8 +143,8 @@ function run(): void {
                     baseEl.removeAttribute('href');
                 }
             }
-            summaryRequested = m.summary === true;
-            docBaseUri       = m.document.baseUri ?? '';
+            latestSummaryRequested = m.summary === true;
+            latestDocBaseUri       = m.document.baseUri ?? '';
             renderLatest();
         });
 
