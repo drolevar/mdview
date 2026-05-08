@@ -21,14 +21,16 @@ struct ViewerOptions {
 struct ReadyMessage {};
 
 struct RenderedMessage {
-    int id         = 0;
-    int elapsed_ms = 0;
+    int          id         = 0;
+    int          elapsed_ms = 0;
+    std::wstring summary_json;  // empty if summary not provided
 };
 
 struct RenderErrorMessage {
     int                         id = 0;
     std::wstring                message;
     std::optional<std::wstring> stack;
+    std::wstring                summary_json;  // empty if not provided
 };
 
 struct LoadDocumentMessage {

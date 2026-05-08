@@ -1,5 +1,7 @@
 #include "native/renderer_protocol.hpp"
 
+#include "native/debug_log.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("encode_load_document produces JSON with required fields",
@@ -167,4 +169,39 @@ TEST_CASE("encode_load_document includes summary flag when requested",
     msg.summary_requested = true;
     auto json = mdview::encode_load_document(msg);
     REQUIRE(json.find(L"\"summary\":true") != std::wstring::npos);
+}
+
+TEST_CASE("decode_renderer_message preserves rendered summary as raw json",
+          "[renderer_protocol]") {
+    auto r = mdview::decode_renderer_message(
+        LR"({"type":"rendered","version":1,"id":7,"elapsedMs":1,)"
+        LR"("summary":{"summarySchema":1,"theme":"dark"}})");
+    REQUIRE(r.has_value());
+    auto* m = std::get_if<mdview::RenderedMessage>(&*r);
+    REQUIRE(m != nullptr);
+    REQUIRE(m->summary_json.find(L"\"theme\":\"dark\"")
+            != std::wstring::npos);
+}
+
+TEST_CASE("decode_renderer_message tolerates missing summary",
+          "[renderer_protocol]") {
+    auto r = mdview::decode_renderer_message(
+        LR"({"type":"rendered","version":1,"id":1,"elapsedMs":2})");
+    REQUIRE(r.has_value());
+    auto* m = std::get_if<mdview::RenderedMessage>(&*r);
+    REQUIRE(m != nullptr);
+    REQUIRE(m->summary_json.empty());
+}
+
+TEST_CASE("emit_chunked_summary single-line for short payloads",
+          "[debug_log]") {
+    // No way to capture OutputDebugStringW in-process without a real
+    // DebugMonitor. Smoke test: just verify the helper doesn't throw.
+    REQUIRE_NOTHROW(mdview::debug_log::emit_chunked_summary(1, L"{\"k\":1}"));
+}
+
+TEST_CASE("emit_chunked_summary handles multi-chunk payloads",
+          "[debug_log]") {
+    std::wstring big(10000, L'x');
+    REQUIRE_NOTHROW(mdview::debug_log::emit_chunked_summary(2, big));
 }
