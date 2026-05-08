@@ -5,15 +5,10 @@ import {
     isLoadDocument, isSetTheme,
     postReady, postRendered, postRenderError,
 } from './protocol.js';
-import type { DiagramOutcome } from './mermaid-chunk.js';
+import type { MermaidPassData }               from './mermaid-chunk.js';
+import { buildSummary }                       from './summary.js';
 
-interface MermaidPass {
-    chunkLoaded:  boolean;
-    chunkLoadMs:  number | null;
-    diagrams:     DiagramOutcome[];
-}
-
-let lastMermaidPass: MermaidPass = {
+let lastMermaidPass: MermaidPassData = {
     chunkLoaded: false, chunkLoadMs: null, diagrams: [],
 };
 
@@ -32,6 +27,8 @@ function run(): void {
     let latestId      = 0;
     let latestContent = '';
     let rendering     = false;
+    let summaryRequested = false;
+    let docBaseUri       = '';
 
     const renderLatest = (): void => {
         if (rendering) return;
@@ -59,9 +56,20 @@ function run(): void {
                         // chunk only if any are present.
                         lastMermaidPass = await runMermaidPass(
                             getResolvedTheme());
-                        postRendered(
-                            idAtStart,
-                            Math.round(performance.now() - start));
+                        const elapsed = Math.round(
+                            performance.now() - start);
+                        if (summaryRequested) {
+                            const summary = buildSummary(
+                                container,
+                                elapsed,
+                                getResolvedTheme(),
+                                lastMermaidPass,
+                                docBaseUri,
+                            );
+                            postRendered(idAtStart, elapsed, summary);
+                        } else {
+                            postRendered(idAtStart, elapsed);
+                        }
                     }
 
                     if (latestId === idAtStart) return;
@@ -74,7 +82,7 @@ function run(): void {
 
     async function runMermaidPass(
         theme: 'light' | 'dark',
-    ): Promise<MermaidPass> {
+    ): Promise<MermaidPassData> {
         const placeholders = container!.querySelectorAll<HTMLElement>(
             '[data-mermaid-id]');
         if (placeholders.length === 0) {
@@ -133,6 +141,8 @@ function run(): void {
                     baseEl.removeAttribute('href');
                 }
             }
+            summaryRequested = m.summary === true;
+            docBaseUri       = m.document.baseUri ?? '';
             renderLatest();
         });
 
@@ -156,7 +166,7 @@ function run(): void {
     postReady();
 }
 
-export function getLastMermaidPass(): MermaidPass {
+export function getLastMermaidPass(): MermaidPassData {
     return lastMermaidPass;
 }
 
