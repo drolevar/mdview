@@ -12,6 +12,12 @@ export interface DiagramOutcome {
     renderMs:     number;
 }
 
+export interface MermaidPassData {
+    chunkLoaded:  boolean;
+    chunkLoadMs:  number | null;
+    diagrams:     DiagramOutcome[];
+}
+
 let initialized = false;
 let initializedTheme: 'light' | 'dark' | null = null;
 
