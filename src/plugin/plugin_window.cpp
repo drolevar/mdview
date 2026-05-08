@@ -239,18 +239,15 @@ void PluginWindow::on_renderer_crash(int process_failed_kind) {
 void PluginWindow::on_lifecycle_event(const LifecycleEvent& event) {
     switch (event.kind) {
     case LifecycleEvent::Kind::RendererReady:
-        status_text_.clear();
-        ::InvalidateRect(hwnd_, nullptr, TRUE);
+        set_status_text(L"");
         break;
     case LifecycleEvent::Kind::InitFailed:
-        status_text_ = format_init_error(event.hr);
-        ::InvalidateRect(hwnd_, nullptr, TRUE);
+        set_status_text(format_init_error(event.hr));
         break;
     case LifecycleEvent::Kind::RendererCrashed:
-        status_text_ = L"Renderer crashed. "
-                       L"Close and reopen the file to retry.";
         if (viewer_) viewer_->close();
-        ::InvalidateRect(hwnd_, nullptr, TRUE);
+        set_status_text(L"Renderer crashed. "
+                        L"Close and reopen the file to retry.");
         break;
     }
 }
