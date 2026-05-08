@@ -60,6 +60,13 @@ if ($null -eq $viewerSrc -or -not (Test-Path -LiteralPath $viewerSrc.Path)) {
         }
     }
 
+    $stylesSrc = Join-Path $viewerSrc.Path "styles"
+    if (Test-Path -LiteralPath $stylesSrc) {
+        Copy-Item -LiteralPath $stylesSrc -Destination $viewerDest -Recurse -Force
+    } else {
+        Write-Warning "viewer/styles/ missing"
+    }
+
     $distSrc = Join-Path $viewerSrc.Path "dist"
     if (Test-Path -LiteralPath $distSrc) {
         Copy-Item -LiteralPath $distSrc -Destination $viewerDest -Recurse -Force
