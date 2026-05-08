@@ -32,4 +32,24 @@ std::wstring format_load_error(DocumentError e) {
     return L"";
 }
 
+std::wstring format_load_error_md(DocumentError e) {
+    switch (e) {
+    case DocumentError::NotFound:
+        return L"# File not found\n\n"
+               L"The file could not be opened.\n";
+    case DocumentError::TooLarge:
+        return L"# File too large for preview\n\n"
+               L"The file exceeds the 32 MB limit.\n";
+    case DocumentError::ReadFailed:
+        return L"# Read error\n\n"
+               L"Could not read the file contents.\n";
+    case DocumentError::EncodingFailed:
+        return L"# Encoding error\n\n"
+               L"The file's encoding could not be determined.\n";
+    case DocumentError::None:
+        return L"";
+    }
+    return L"";
+}
+
 }
