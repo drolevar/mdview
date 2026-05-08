@@ -50,7 +50,7 @@ DocumentResult DocumentLoader::load(
     // We accept the wasted write to keep the code straightforward.
     std::vector<std::byte> buf(static_cast<size_t>(size.QuadPart));
     DWORD total = 0;
-    while (total < buf.size()) {
+    while (total < static_cast<DWORD>(buf.size())) {
         DWORD got = 0;
         if (!::ReadFile(
                 fh.get(),
