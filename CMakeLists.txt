@@ -22,10 +22,10 @@ find_program(NODE_EXECUTABLE node REQUIRED
     DOC "Node.js 20+ required to build viewer/ bundle")
 
 set(VIEWER_DIR    ${CMAKE_CURRENT_SOURCE_DIR}/viewer)
-set(VIEWER_BUNDLE ${VIEWER_DIR}/dist/bundle.js)
+set(VIEWER_STAMP  ${VIEWER_DIR}/dist/.viewer.stamp)
 
 add_custom_command(
-    OUTPUT ${VIEWER_BUNDLE}
+    OUTPUT ${VIEWER_STAMP}
     COMMAND ${CMAKE_COMMAND} -E env
         "NODE_ENV=$<IF:$<CONFIG:Release>,production,development>"
         ${NODE_EXECUTABLE} ${VIEWER_DIR}/build.mjs
@@ -36,12 +36,13 @@ add_custom_command(
         ${VIEWER_DIR}/src/markdown.ts
         ${VIEWER_DIR}/src/protocol.ts
         ${VIEWER_DIR}/src/theme.ts
+        ${VIEWER_DIR}/src/declarations.d.ts
         ${VIEWER_DIR}/package-lock.json
-    COMMENT "Bundling viewer/ via esbuild"
+    COMMENT "Bundling viewer/ via esbuild (ESM + splitting)"
     VERBATIM)
 
 add_custom_target(viewer_bundle ALL
-    DEPENDS ${VIEWER_BUNDLE})
+    DEPENDS ${VIEWER_STAMP})
 
 add_subdirectory(src)
 add_subdirectory(tests)
