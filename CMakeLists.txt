@@ -37,6 +37,7 @@ add_custom_command(
         ${VIEWER_DIR}/src/protocol.ts
         ${VIEWER_DIR}/src/theme.ts
         ${VIEWER_DIR}/src/highlight.ts
+        ${VIEWER_DIR}/src/mermaid-chunk.ts
         ${VIEWER_DIR}/src/declarations.d.ts
         ${VIEWER_DIR}/package-lock.json
     COMMENT "Bundling viewer/ via esbuild (ESM + splitting)"
