@@ -1,3 +1,4 @@
+#include "native/debug_log.hpp"
 #include "native/detect_string.hpp"
 #include "native/plugin_globals.hpp"
 #include "platform/win32_window.hpp"
@@ -44,6 +45,8 @@ void __stdcall ListGetDetectString(char* DetectString, int maxlen) {
 }
 
 HWND __stdcall ListLoadW(HWND ParentWin, WCHAR* FileToLoad, int /*ShowFlags*/) {
+    mdview::debug_log::log(L"wlx: ListLoadW file={}",
+        FileToLoad != nullptr ? FileToLoad : L"(null)");
     try {
         std::wstring path = (FileToLoad != nullptr) ? std::wstring(FileToLoad) : std::wstring();
         auto window = mdview::PluginWindow::create(ParentWin, std::move(path));
@@ -53,12 +56,15 @@ HWND __stdcall ListLoadW(HWND ParentWin, WCHAR* FileToLoad, int /*ShowFlags*/) {
         g_windows.emplace(hwnd, std::move(window));
         return hwnd;
     } catch (...) {
+        mdview::debug_log::log(L"wlx: ListLoadW failed; using fallback window");
         return mdview::create_fallback_window(
             ParentWin, L"mdview failed to initialize. See debug output for details.");
     }
 }
 
 void __stdcall ListCloseWindow(HWND ListWin) {
+    mdview::debug_log::log(L"wlx: ListCloseWindow hwnd=0x{:p}",
+                           static_cast<void*>(ListWin));
     try {
         std::unique_ptr<mdview::PluginWindow> doomed;
         {
@@ -88,6 +94,8 @@ int __stdcall ListLoadNextW(
         HWND list_win,
         wchar_t* file_to_load,
         int /*show_flags*/) {
+    mdview::debug_log::log(L"wlx: ListLoadNextW file={}",
+        file_to_load != nullptr ? file_to_load : L"(null)");
     try {
         auto* pw = mdview::get_window_self_ptr<mdview::PluginWindow>(list_win);
         if (pw == nullptr) return LISTPLUGIN_ERROR;

@@ -24,8 +24,8 @@ struct DocumentRequest {
     std::wstring          markdown;
 
     // M3 Task 11: monotonic id assigned by ViewerHost on dispatch;
-    // doc_dir is the folder behind the mdview-doc.local mapping;
-    // base_uri is set to https://mdview-doc.local/ on a successful
+    // doc_dir is the folder behind the mdview-doc.example mapping;
+    // base_uri is set to https://mdview-doc.example/ on a successful
     // remap, cleared otherwise.
     int                   doc_id = 0;
     std::filesystem::path doc_dir;
@@ -66,6 +66,8 @@ private:
     };
 
     void on_host_created_(HRESULT hr);
+    void post_pending_directly_();
+    void post_request_(DocumentRequest req);
 
     ViewerOptions                  options_;
     std::unique_ptr<IWebView2Host> host_;
@@ -73,6 +75,7 @@ private:
     LifecycleCallback              on_event_;
     State                          state_ = State::Constructed;
     std::optional<DocumentRequest> pending_load_;
+    std::filesystem::path          last_loaded_doc_dir_;
     int                            doc_id_ = 0;  // monotonic, ++ per load_document
 };
 
