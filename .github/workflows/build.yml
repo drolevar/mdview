@@ -73,6 +73,37 @@ jobs:
             build/windows-msvc-x64-debug/tests/integration/screenshots/
             build/windows-msvc-x64-debug/tests/integration/Testing/
 
+      - name: Build production viewer bundle
+        working-directory: viewer
+        env:
+          NODE_ENV: production
+        run: node build.mjs
+
+      - name: Bundle size budget
+        shell: pwsh
+        run: |
+          $entry = "viewer/dist/app.js"
+          if (-not (Test-Path $entry)) {
+            Write-Error "viewer/dist/app.js missing"
+            exit 1
+          }
+          $size = (Get-Item $entry).Length
+          $kb   = [math]::Round($size / 1024, 1)
+          Write-Host "viewer entry: $kb KB"
+          if ($size -gt 400 * 1024) {
+            Write-Error "viewer entry exceeds 400 KB budget ($kb KB)"
+            exit 1
+          }
+          $chunks = Get-ChildItem viewer/dist/chunks -ErrorAction SilentlyContinue
+          foreach ($c in $chunks) {
+            $ckb = [math]::Round($c.Length / 1024, 1)
+            Write-Host "chunk: $($c.Name) = $ckb KB"
+            if ($c.Name -match "mermaid" -and $c.Length -gt 3 * 1024 * 1024) {
+              Write-Error "mermaid chunk exceeds 3 MB sanity cap ($ckb KB)"
+              exit 1
+            }
+          }
+
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
