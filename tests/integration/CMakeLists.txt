@@ -5,6 +5,7 @@ add_executable(mdview_integration_tests
     main.cpp
     debug_monitor.cpp
     pump.cpp
+    screenshot.cpp
     session.cpp
     summary.cpp
     test_lifecycle.cpp

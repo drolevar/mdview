@@ -1,9 +1,13 @@
 #include "session.hpp"
 
 #include "pump.hpp"
+#include "screenshot.hpp"
 
+#include <chrono>
 #include <regex>
 #include <stdexcept>
+#include <string>
+#include <system_error>
 
 namespace mdview::integration {
 
@@ -47,7 +51,27 @@ Session::Session() : monitor_(global_monitor) {
     load_dll_();
 }
 
-Session::~Session() { close(); }
+Session::~Session() {
+    bool save = false;
+    {
+        wchar_t buf[8] = {};
+        const DWORD n = ::GetEnvironmentVariableW(
+            L"MDVIEW_SCREENSHOT_ON_FAILURE", buf,
+            static_cast<DWORD>(sizeof(buf) / sizeof(wchar_t)));
+        save = (n > 0 && buf[0] == L'1');
+    }
+    if (save && parent_hwnd_) {
+        std::filesystem::path dir = std::filesystem::current_path()
+                                       / L"screenshots";
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        const auto ts = std::chrono::system_clock::now()
+                            .time_since_epoch().count();
+        save_window_screenshot(parent_hwnd_,
+            dir / (std::to_wstring(ts) + L".png"));
+    }
+    close();
+}
 
 void Session::create_parent_window_() {
     register_parent_class_once();
