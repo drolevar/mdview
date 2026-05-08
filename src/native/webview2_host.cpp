@@ -4,12 +4,11 @@
 #include "native/host_names.hpp"
 #include "native/viewer_paths.hpp"
 #include "native/webview2_environment.hpp"
+#include "native/webview2_externalize.hpp"
 
 #include <wil/resource.h>
 #include <wil/result_macros.h>
 #include <wrl.h>
-
-#include <shellapi.h>
 
 #include <string_view>
 #include <utility>
@@ -248,23 +247,17 @@ void WebView2Host::install_handlers_() {
             wil::unique_cotaskmem_string uri;
             LOG_IF_FAILED(args->get_Uri(&uri));
             if (!uri) return S_OK;
-
             debug_log::log(L"navigation starting: {}", uri.get());
-
-            const std::wstring_view sv{uri.get()};
-            const bool internal =
-                sv.starts_with(L"https://mdview-app.example/") ||
-                sv.starts_with(L"https://mdview-doc.example/");
-            if (internal) return S_OK;
-
-            // External origin: cancel and externalize.
+            if (detail::is_internal_uri(std::wstring_view{uri.get()})) {
+                return S_OK;
+            }
             LOG_IF_FAILED(args->put_Cancel(TRUE));
-            ::ShellExecuteW(nullptr, L"open", uri.get(),
-                            nullptr, nullptr, SW_SHOWNORMAL);
+            detail::externalize_uri(uri.get());
             return S_OK;
         });
 
-    // NewWindowRequested (M2: cancel; M6 routes to ShellExecuteEx)
+    // NewWindowRequested: target="_blank" / window.open. Cancel and
+    // shell-open externally, mirroring NavigationStarting.
     auto win_cb = Microsoft::WRL::Callback<
         ICoreWebView2NewWindowRequestedEventHandler>(
         [wp](ICoreWebView2*,
@@ -272,7 +265,15 @@ void WebView2Host::install_handlers_() {
         noexcept -> HRESULT {
             auto alive = wp.lock();
             if (!alive) return S_OK;
+            wil::unique_cotaskmem_string uri;
+            LOG_IF_FAILED(args->get_Uri(&uri));
             LOG_IF_FAILED(args->put_Handled(TRUE));
+            if (!uri) return S_OK;
+            debug_log::log(L"new-window requested: {}", uri.get());
+            if (detail::is_internal_uri(std::wstring_view{uri.get()})) {
+                return S_OK;  // odd, but defer to default
+            }
+            detail::externalize_uri(uri.get());
             return S_OK;
         });
 

@@ -14,7 +14,8 @@ add_executable(mdview_tests
     native/test_viewer_paths.cpp
     native/test_win32_window.cpp
     native/test_encoding.cpp
-    native/test_document_loader.cpp)
+    native/test_document_loader.cpp
+    native/test_externalize.cpp)
 
 target_link_libraries(mdview_tests PRIVATE
     mdview_core
