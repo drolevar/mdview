@@ -55,8 +55,23 @@ jobs:
       - name: Build
         run: cmake --build --preset windows-msvc-x64-debug
 
-      - name: Test
-        run: ctest --preset windows-msvc-x64-debug
+      - name: Run unit tests
+        run: ctest --preset windows-msvc-x64-debug --label-exclude integration --output-on-failure
+
+      - name: Run integration tests
+        env:
+          MDVIEW_HARNESS_HIDDEN: '1'
+          MDVIEW_SMOKE_DIR: ${{ github.workspace }}/tests/smoke
+        run: ctest --preset windows-msvc-x64-debug --label-include integration --output-on-failure
+
+      - name: Upload integration logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs
+          path: |
+            build/windows-msvc-x64-debug/tests/integration/screenshots/
+            build/windows-msvc-x64-debug/tests/integration/Testing/
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
