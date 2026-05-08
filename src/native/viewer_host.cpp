@@ -64,6 +64,9 @@ void ViewerHost::load_document(DocumentRequest request) {
                 static_cast<uint32_t>(hr));
             request.base_uri.clear();
         } else {
+            debug_log::log(
+                L"viewer-host: remap ok dir={}",
+                request.doc_dir.wstring());
             request.base_uri = kDocBaseUri;
         }
     }
