@@ -13,6 +13,9 @@ function run(): void {
         return;
     }
 
+    const baseEl = document.getElementById(
+        'mdview-base') as HTMLBaseElement | null;
+
     let latestId      = 0;
     let latestContent = '';
     let rendering     = false;
@@ -53,6 +56,13 @@ function run(): void {
             if (m.id <= latestId)     return;
             latestId      = m.id;
             latestContent = m.document.markdown;
+            if (baseEl) {
+                if (m.document.baseUri) {
+                    baseEl.href = m.document.baseUri;
+                } else {
+                    baseEl.removeAttribute('href');
+                }
+            }
             renderLatest();
         });
 
