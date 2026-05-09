@@ -6,6 +6,7 @@
 
 #include <windows.h>
 
+#include <chrono>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -89,6 +90,15 @@ private:
     int                            doc_id_ = 0;  // monotonic, ++ per load_document
     Theme               current_theme_   = Theme::System;
     std::optional<Theme> pending_theme_;  // delivered before first ready
+
+    // Lifecycle timing for the precache/cold-start investigation.
+    // t_start_ is set in create(); the optionals fire on first reach
+    // of the corresponding state. The summary emits once per host
+    // lifetime on the first RenderedMessage.
+    std::chrono::steady_clock::time_point                t_start_{};
+    std::optional<std::chrono::steady_clock::time_point> t_host_created_;
+    std::optional<std::chrono::steady_clock::time_point> t_renderer_ready_;
+    bool                                                 first_load_summary_logged_ = false;
 };
 
 }

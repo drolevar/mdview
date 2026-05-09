@@ -6,6 +6,7 @@
 #include "native/theme.hpp"
 
 #include <cassert>
+#include <chrono>
 #include <string>
 #include <utility>
 
@@ -27,6 +28,7 @@ ViewerHost::~ViewerHost() {
 void ViewerHost::create(HWND parent_hwnd, LifecycleCallback on_event) {
     on_event_ = std::move(on_event);
     state_    = State::EnvPending;
+    t_start_  = std::chrono::steady_clock::now();
     debug_log::log(L"viewer-host create: env-pending");
 
     std::weak_ptr<bool> wp = alive_token_;
@@ -171,8 +173,11 @@ void ViewerHost::on_host_created_(HRESULT hr) {
         }
         return;
     }
-    state_ = State::Navigated;
-    debug_log::log(L"viewer-host: navigated");
+    state_          = State::Navigated;
+    t_host_created_ = std::chrono::steady_clock::now();
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        *t_host_created_ - t_start_).count();
+    debug_log::log(L"viewer-host: navigated t={}ms", ms);
 }
 
 void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
@@ -187,8 +192,12 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
                            static_cast<int>(state_));
             return;
         }
-        state_ = State::RendererReady;
-        debug_log::log(L"viewer-host: renderer ready");
+        state_            = State::RendererReady;
+        t_renderer_ready_ = std::chrono::steady_clock::now();
+        const auto ready_ms = std::chrono::duration_cast<
+            std::chrono::milliseconds>(
+                *t_renderer_ready_ - t_start_).count();
+        debug_log::log(L"viewer-host: renderer ready t={}ms", ready_ms);
 
         // Snapshot pending_load_ BEFORE firing the event. The user
         // callback may run for a long time and may itself call
@@ -235,6 +244,22 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
         } else {
             debug_log::emit_chunked_summary(
                 rendered->id, rendered->summary_json);
+        }
+        if (!first_load_summary_logged_
+         && t_host_created_ && t_renderer_ready_) {
+            first_load_summary_logged_ = true;
+            const auto t_first = std::chrono::steady_clock::now();
+            const auto ms = [](auto a, auto b) {
+                return std::chrono::duration_cast<
+                    std::chrono::milliseconds>(b - a).count();
+            };
+            debug_log::log(
+                L"viewer-host: first-load complete; "
+                L"ctrl={}ms nav={}ms render={}ms total={}ms",
+                ms(t_start_, *t_host_created_),
+                ms(*t_host_created_, *t_renderer_ready_),
+                ms(*t_renderer_ready_, t_first),
+                ms(t_start_, t_first));
         }
         return;
     }
