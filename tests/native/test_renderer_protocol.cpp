@@ -197,8 +197,9 @@ TEST_CASE("decode_renderer_message tolerates missing summary",
 
 TEST_CASE("emit_chunked_summary single-line for short payloads",
           "[debug_log]") {
-    // No way to capture OutputDebugStringW in-process without a real
-    // DebugMonitor. Smoke test: just verify the helper doesn't throw.
+    // Smoke test: just verify the helper doesn't throw. (Capturing the
+    // emitted text would require installing a debug_log::set_sink, which
+    // is exercised in the integration harness, not here.)
     REQUIRE_NOTHROW(mdview::debug_log::emit_chunked_summary(1, L"{\"k\":1}"));
 }
 

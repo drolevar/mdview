@@ -51,3 +51,24 @@ add_dependencies(mdview_wlx viewer_bundle)
 
 mdview_set_warnings(mdview_wlx)
 mdview_configure_wlx_plugin(mdview_wlx)
+
+# Stage viewer assets next to the built WLX so that the plugin can
+# resolve <module_dir>/viewer/index.html when loaded from the build
+# tree (used by integration tests). The install step performs the
+# same copy into the TC plugin directory.
+set(VIEWER_STAGED_ROOT $<TARGET_FILE_DIR:mdview_wlx>/viewer)
+add_custom_command(TARGET mdview_wlx POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${VIEWER_STAGED_ROOT}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${VIEWER_STAGED_ROOT}
+    COMMAND ${CMAKE_COMMAND} -E copy
+        ${VIEWER_DIR}/index.html
+        ${VIEWER_DIR}/styles.css
+        ${VIEWER_STAGED_ROOT}
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${VIEWER_DIR}/styles
+        ${VIEWER_STAGED_ROOT}/styles
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${VIEWER_DIR}/dist
+        ${VIEWER_STAGED_ROOT}/dist
+    COMMENT "Staging viewer/ next to mdview.wlx64"
+    VERBATIM)

@@ -3,9 +3,14 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <atomic>
 #include <string>
 
 namespace mdview::debug_log {
+
+namespace {
+std::atomic<LogSink> g_sink_{nullptr};
+}
 
 void emit(std::wstring_view message) noexcept {
     std::wstring buf;
@@ -14,6 +19,13 @@ void emit(std::wstring_view message) noexcept {
     buf.append(message);
     buf.append(L"\n");
     ::OutputDebugStringW(buf.c_str());
+    if (auto sink = g_sink_.load(std::memory_order_acquire)) {
+        sink(buf.c_str(), buf.size());
+    }
+}
+
+void set_sink(LogSink sink) noexcept {
+    g_sink_.store(sink, std::memory_order_release);
 }
 
 namespace {

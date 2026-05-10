@@ -4,6 +4,8 @@
 #include "screenshot.hpp"
 
 #include <chrono>
+#include <deque>
+#include <mutex>
 #include <regex>
 #include <stdexcept>
 #include <string>
@@ -11,8 +13,8 @@
 
 namespace mdview::integration {
 
-DebugMonitor*       Session::global_monitor = nullptr;
-bool                Session::hidden         = false;
+Session*              Session::current_      = nullptr;
+bool                  Session::hidden        = false;
 std::filesystem::path Session::smoke_dir;
 
 namespace {
@@ -45,10 +47,33 @@ void apply_summary_env(bool want) {
 
 }
 
-Session::Session() : monitor_(global_monitor) {
-    if (monitor_) monitor_->clear();
-    create_parent_window_();
-    load_dll_();
+Session::Session() {
+    if (current_ != nullptr) {
+        // Catch2 runs cases sequentially; this should never fire. If
+        // it does, a previous Session leaked or a test spawned two.
+        throw std::runtime_error(
+            "Session: a prior instance is still alive");
+    }
+    current_ = this;
+    try {
+        sink_event_ = ::CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        create_parent_window_();
+        load_dll_();
+    } catch (...) {
+        // Constructor failed: tear down anything that did get set up
+        // and clear `current_` so the next Session can be created.
+        if (fn_set_log_sink_) fn_set_log_sink_(nullptr);
+        if (plugin_hwnd_ && fn_close_) fn_close_(plugin_hwnd_);
+        plugin_hwnd_ = nullptr;
+        if (parent_hwnd_) ::DestroyWindow(parent_hwnd_);
+        parent_hwnd_ = nullptr;
+        if (dll_) ::FreeLibrary(dll_);
+        dll_ = nullptr;
+        if (sink_event_) ::CloseHandle(sink_event_);
+        sink_event_ = nullptr;
+        current_ = nullptr;
+        throw;
+    }
 }
 
 Session::~Session() {
@@ -70,7 +95,13 @@ Session::~Session() {
         save_window_screenshot(parent_hwnd_,
             dir / (std::to_wstring(ts) + L".png"));
     }
+    if (fn_set_log_sink_) fn_set_log_sink_(nullptr);
     close();
+    if (sink_event_) {
+        ::CloseHandle(sink_event_);
+        sink_event_ = nullptr;
+    }
+    if (current_ == this) current_ = nullptr;
 }
 
 void Session::create_parent_window_() {
@@ -92,14 +123,18 @@ void Session::create_parent_window_() {
 void Session::load_dll_() {
     wchar_t exe_path[MAX_PATH];
     ::GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
-    std::filesystem::path dll = std::filesystem::path{exe_path}
-                                   .parent_path() / L"mdview.wlx64";
-    dll_ = ::LoadLibraryW(dll.c_str());
-    if (!dll_) {
-        // Fallback: search alongside other build outputs.
-        dll = std::filesystem::path{exe_path}.parent_path()
-                  .parent_path() / L"src" / L"mdview.wlx64";
-        dll_ = ::LoadLibraryW(dll.c_str());
+    std::filesystem::path exe_dir =
+        std::filesystem::path{exe_path}.parent_path();
+    // Try a few candidate locations: same dir as the test exe (used
+    // when the DLL is staged next to it), and `<build>/src/` for the
+    // standard layout where exe lives at `<build>/tests/integration/`.
+    std::filesystem::path candidates[] = {
+        exe_dir / L"mdview.wlx64",
+        exe_dir.parent_path().parent_path() / L"src" / L"mdview.wlx64",
+    };
+    for (auto& c : candidates) {
+        dll_ = ::LoadLibraryW(c.c_str());
+        if (dll_) break;
     }
     if (!dll_) {
         throw std::runtime_error("LoadLibrary mdview.wlx64 failed");
@@ -120,6 +155,15 @@ void Session::load_dll_() {
         throw std::runtime_error("WLX exports missing in mdview.wlx64");
     }
 
+    fn_set_log_sink_ = reinterpret_cast<Fn_MdviewTest_SetLogSink>(
+        ::GetProcAddress(dll_, "MdviewTest_SetLogSink"));
+    if (!fn_set_log_sink_) {
+        throw std::runtime_error(
+            "WLX missing MdviewTest_SetLogSink export — "
+            "rebuild with current changes");
+    }
+    fn_set_log_sink_(&Session::on_log_line_);
+
     struct ListDefaultParamStruct {
         int   size;
         DWORD verLow;
@@ -129,6 +173,16 @@ void Session::load_dll_() {
     dps.size = sizeof(dps);
     dps.verHi = 2; dps.verLow = 12;
     fn_set_params_(&dps);
+}
+
+void Session::on_log_line_(const wchar_t* line, size_t len) noexcept {
+    Session* s = current_;
+    if (!s) return;
+    {
+        std::lock_guard<std::mutex> lk(s->sink_mu_);
+        s->sink_lines_.emplace_back(line, len);
+    }
+    if (s->sink_event_) ::SetEvent(s->sink_event_);
 }
 
 bool Session::load(const std::wstring& fixture_name,
@@ -160,14 +214,17 @@ void Session::close() {
     plugin_hwnd_ = nullptr;
     if (parent_hwnd_) ::DestroyWindow(parent_hwnd_);
     parent_hwnd_ = nullptr;
-    if (dll_) ::FreeLibrary(dll_);
+    // Intentionally do NOT FreeLibrary the WLX. The WLX registers
+    // window classes against its HMODULE; on reload the OS keeps the
+    // class but the DLL's static state forgets it, so a second
+    // RegisterClassExW with the same name fails. Keeping the DLL
+    // loaded for the test process matches TC's real lifecycle (TC
+    // never unloads a WLX) and keeps subsequent Sessions usable.
     dll_ = nullptr;
 }
 
 std::optional<RenderedSummary>
 Session::wait_for_summary(std::chrono::milliseconds timeout) {
-    if (!monitor_) return std::nullopt;
-
     auto matches_any_summary = [](const std::wstring& line) {
         if (line.find(L"viewer: rendered id=") == std::wstring::npos)
             return false;
@@ -175,18 +232,24 @@ Session::wait_for_summary(std::chrono::milliseconds timeout) {
             || line.find(L"summary[") != std::wstring::npos;
     };
 
+    auto local_snapshot = [this]() {
+        std::lock_guard<std::mutex> lk(sink_mu_);
+        return std::vector<std::wstring>(
+            sink_lines_.begin(), sink_lines_.end());
+    };
+
     bool got = pump_until(
         [&]() {
-            for (auto& line : monitor_->snapshot()) {
+            for (auto& line : local_snapshot()) {
                 if (matches_any_summary(line)) return true;
             }
             return false;
         },
-        timeout, monitor_->log_event());
+        timeout, sink_event_);
 
     if (!got) return std::nullopt;
 
-    captured_log_ = monitor_->snapshot();
+    captured_log_ = local_snapshot();
 
     std::wregex single_re(L"viewer: rendered id=\\d+ summary=(\\{.*\\})");
     std::wregex chunk_re(
@@ -223,7 +286,10 @@ const std::vector<std::wstring>& Session::captured_log() const {
 }
 
 void Session::reset_log() {
-    if (monitor_) monitor_->clear();
+    {
+        std::lock_guard<std::mutex> lk(sink_mu_);
+        sink_lines_.clear();
+    }
     captured_log_.clear();
 }
 
