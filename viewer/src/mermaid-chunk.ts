@@ -41,6 +41,7 @@ function init(theme: 'light' | 'dark'): void {
     mermaid.initialize({
         startOnLoad: false,
         securityLevel: 'strict',
+        suppressErrorRendering: true,
         theme: theme === 'dark' ? 'dark' : 'default',
         flowchart: { htmlLabels: false },
     });
