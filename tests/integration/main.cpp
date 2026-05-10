@@ -1,12 +1,10 @@
 #include <catch2/catch_session.hpp>
 
-#include "debug_monitor.hpp"
-#include "pump.hpp"
 #include "session.hpp"
 
 #include <windows.h>
+#include <combaseapi.h>
 
-#include <chrono>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -35,6 +33,17 @@ bool env_set_truthy(const wchar_t* name) {
 int wmain(int argc, wchar_t** argv) {
     using namespace mdview::integration;
 
+    // Total Commander initializes COM (STA) before loading WLX
+    // plugins; mirror that here so WebView2 environment creation
+    // doesn't fail with CO_E_NOTINITIALIZED when the WLX is exercised
+    // via Session.
+    HRESULT co_hr = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(co_hr) && co_hr != RPC_E_CHANGED_MODE) {
+        std::wcerr << L"CoInitializeEx failed: 0x" << std::hex << co_hr << L"\n";
+        return 4;
+    }
+    bool co_owned = SUCCEEDED(co_hr);
+
     Session::hidden = flag_set(argc, argv, L"--hidden")
                    || env_set_truthy(L"MDVIEW_HARNESS_HIDDEN");
 
@@ -52,39 +61,6 @@ int wmain(int argc, wchar_t** argv) {
                                 .parent_path().parent_path()
                                 .parent_path() / L"tests" / L"smoke";
     }
-
-    DebugMonitor monitor;
-    if (auto* err = monitor.start()) {
-        std::wcerr << L"DebugMonitor::start failed: " << err << L"\n";
-        return 2;
-    }
-    Session::global_monitor = &monitor;
-
-    // Case-marker probe: emit a known [mdview] line, expect to see it
-    // within 1 s. If another DBWIN_BUFFER consumer (DebugView, dbgview
-    // MCP, Sysinternals) is attached, we won't see it — bail with an
-    // explanatory message.
-    monitor.clear();
-    ::OutputDebugStringW(L"[mdview] integration: case-marker probe\n");
-    const bool got_probe = pump_until(
-        [&]() {
-            for (auto& l : monitor.snapshot()) {
-                if (l.find(L"case-marker probe") != std::wstring::npos)
-                    return true;
-            }
-            return false;
-        },
-        std::chrono::milliseconds{1000}, monitor.log_event());
-    if (!got_probe) {
-        std::wcerr <<
-            L"DebugMonitor case-marker probe failed.\n"
-            L"Another DBWIN_BUFFER consumer (DebugView, dbgview MCP, "
-            L"Sysinternals) appears to be active.\n"
-            L"Stop it and re-run.\n";
-        monitor.stop();
-        return 3;
-    }
-    monitor.clear();
 
     // Hand off to Catch2. Strip our own flags from argv before
     // converting to UTF-8 (Catch2's session.run takes char**).
@@ -104,10 +80,9 @@ int wmain(int argc, wchar_t** argv) {
     ansi_argv.reserve(kept.size());
     for (auto& s : kept) ansi_argv.push_back(s.data());
 
-    const int rc = Catch::Session().run(
+    int rc = Catch::Session().run(
         static_cast<int>(ansi_argv.size()), ansi_argv.data());
 
-    Session::global_monitor = nullptr;
-    monitor.stop();
+    if (co_owned) ::CoUninitialize();
     return rc;
 }

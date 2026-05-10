@@ -128,3 +128,8 @@ int __stdcall ListSendCommand(HWND list_win, int command, int parameter) {
         return LISTPLUGIN_ERROR;
     }
 }
+
+extern "C" __declspec(dllexport)
+void MdviewTest_SetLogSink(mdview::debug_log::LogSink sink) noexcept {
+    mdview::debug_log::set_sink(sink);
+}

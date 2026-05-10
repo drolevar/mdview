@@ -3,7 +3,6 @@ find_package(unofficial-nlohmann-json CONFIG QUIET)
 
 add_executable(mdview_integration_tests
     main.cpp
-    debug_monitor.cpp
     pump.cpp
     screenshot.cpp
     session.cpp

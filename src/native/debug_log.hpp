@@ -9,6 +9,14 @@ namespace mdview::debug_log {
 // and a trailing newline. Visible in DbgView with filter `[mdview]`.
 void emit(std::wstring_view message) noexcept;
 
+// Optional in-process sink. When non-null, every `emit(...)` call
+// invokes the sink with the formed line (after the `[mdview] ` prefix
+// has been added). The sink runs synchronously on the calling thread.
+// MUST NOT call back into `debug_log::log/emit` (would infinitely
+// recurse). Used by the integration harness; production never sets it.
+using LogSink = void (*)(const wchar_t* line, size_t len) noexcept;
+void set_sink(LogSink sink) noexcept;
+
 // Variadic wrapper using std::format. Format failures are caught and
 // logged as `[mdview] (debug_log format error)`.
 template <class... Args>
