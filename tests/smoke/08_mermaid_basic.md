@@ -6,7 +6,7 @@ A flowchart:
 flowchart TD
     A[Start] --> B{Decision}
     B -->|Yes| C[End]
-    B -->|No|  D[Loop] --> B
+    B -->|No| D[Loop] --> B
 ```
 
 A sequence diagram:
