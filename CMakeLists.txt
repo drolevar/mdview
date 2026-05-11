@@ -49,3 +49,4 @@ add_custom_target(viewer_bundle ALL
 
 add_subdirectory(src)
 add_subdirectory(tests)
+add_subdirectory(tools/precache_probe)
