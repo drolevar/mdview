@@ -330,6 +330,14 @@ LRESULT PluginWindow::window_proc(UINT msg, WPARAM wparam, LPARAM lparam) {
                 suggested->bottom - suggested->top,
                 SWP_NOZORDER | SWP_NOACTIVATE);
         }
+        // Re-rasterize the WebView2 controller for the new monitor.
+        // Without this, content stays bitmap-scaled (blurry) after a
+        // cross-DPI move. put_RasterizationScale validated by dpi_probe.
+        const UINT  new_dpi   = static_cast<UINT>(HIWORD(wparam));
+        const float new_scale = static_cast<float>(new_dpi) / 96.0f;
+        if (viewer_) {
+            viewer_->set_rasterization_scale(new_scale);
+        }
         ::InvalidateRect(hwnd_, nullptr, TRUE);
         return 0;
     }

@@ -70,6 +70,7 @@ public:
     void focus();
     void load_document(DocumentRequest request);
     void apply_theme(Theme theme);
+    void set_rasterization_scale(float scale) noexcept;
     void close();
 
     void dispatch_renderer_message(std::wstring_view json);

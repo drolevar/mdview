@@ -98,6 +98,19 @@ public:
 
 }
 
+TEST_CASE("ViewerHost::set_rasterization_scale forwards to host",
+          "[viewer_host]") {
+    auto mock = std::make_unique<MockHost>();
+    auto* mock_ptr = mock.get();
+    mock->simulate_adopt();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
+    vh.create(std::move(mock), [](mdview::LifecycleEvent){});
+
+    vh.set_rasterization_scale(1.5f);
+    CHECK(mock_ptr->last_raster_scale == 1.5f);
+}
+
 TEST_CASE("ViewerHost queues load_document before ready and drains on ready",
           "[viewer_host]") {
     auto mock = std::make_unique<MockHost>();

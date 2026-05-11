@@ -183,6 +183,10 @@ void ViewerHost::post_set_theme_(Theme t) {
     if (host_) host_->post_to_renderer(json);
 }
 
+void ViewerHost::set_rasterization_scale(float scale) noexcept {
+    if (host_) host_->set_rasterization_scale(scale);
+}
+
 void ViewerHost::close() {
     state_ = State::Closed;
     pending_load_.reset();
