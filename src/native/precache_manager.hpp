@@ -61,8 +61,9 @@ public:
     using HostFactory = std::function<
         std::unique_ptr<IWebView2Host>(
             HWND hwnd_message_parent,
-            std::function<void()> on_ready,
-            std::function<void(int kind)> on_process_failed)>;
+            std::function<void()>        on_ready,
+            std::function<void(int kind)> on_process_failed,
+            std::function<void(HRESULT)> on_env_failed)>;
     void set_host_factory_for_test(HostFactory factory);
 
 private:
@@ -81,6 +82,7 @@ private:
     void start_build_locked_();
     void on_precache_ready_();
     void on_precache_process_failed_(int kind);
+    void on_env_init_failed_(HRESULT hr);
 
     HWND create_message_only_parent_() noexcept;
 

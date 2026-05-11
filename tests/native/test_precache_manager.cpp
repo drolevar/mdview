@@ -64,7 +64,8 @@ TEST_CASE("precache_manager ensure_started is idempotent",
     int host_create_count = 0;
     auto factory =
         [&](HWND, std::function<void()> on_ready,
-            std::function<void(int)> on_pf)
+            std::function<void(int)> on_pf,
+            std::function<void(HRESULT)>)
         -> std::unique_ptr<IWebView2Host> {
             ++host_create_count;
             auto h = std::make_unique<TestHost>();
@@ -88,7 +89,8 @@ TEST_CASE("precache_manager acquire pumps until ready",
     int       host_create_count = 0;
     auto factory =
         [&](HWND, std::function<void()> on_ready,
-            std::function<void(int)> on_pf)
+            std::function<void(int)> on_pf,
+            std::function<void(HRESULT)>)
         -> std::unique_ptr<IWebView2Host> {
             ++host_create_count;
             auto h = std::make_unique<TestHost>();
@@ -125,7 +127,8 @@ TEST_CASE("precache rebuilds on ProcessFailed (within budget)",
     int host_create_count = 0;
     std::vector<TestHost*> created;
     auto factory = [&](HWND, std::function<void()> on_ready,
-                       std::function<void(int)> on_pf)
+                       std::function<void(int)> on_pf,
+                       std::function<void(HRESULT)>)
         -> std::unique_ptr<IWebView2Host> {
         ++host_create_count;
         auto h = std::make_unique<TestHost>();
@@ -158,7 +161,8 @@ TEST_CASE("precache exhausts retry budget -> EnvFailed",
     int host_create_count = 0;
     std::function<void(int)> last_pf;
     auto factory = [&](HWND, std::function<void()>,
-                       std::function<void(int)> on_pf)
+                       std::function<void(int)> on_pf,
+                       std::function<void(HRESULT)>)
         -> std::unique_ptr<IWebView2Host> {
         ++host_create_count;
         last_pf = on_pf;
@@ -176,4 +180,29 @@ TEST_CASE("precache exhausts retry budget -> EnvFailed",
 
     auto result = m.acquire(HWND_MESSAGE, Theme::Dark, 1.0f);
     REQUIRE(std::holds_alternative<precache_manager::InitFailedToken>(result));
+}
+
+TEST_CASE("acquire returns InitFailedToken with real hr on env failure",
+          "[precache_manager]") {
+    constexpr HRESULT kFakeRuntimeMissing = 0x80070002;
+    std::function<void(HRESULT)> deferred_on_env_failed;
+    auto factory =
+        [&](HWND, std::function<void()>, std::function<void(int)>,
+            std::function<void(HRESULT)> on_env_failed)
+        -> std::unique_ptr<IWebView2Host> {
+            // Capture and defer: the real env callback fires asynchronously
+            // from the WebView2 COM callback, not synchronously inside the
+            // factory. Deferring here avoids a deadlock on mu_.
+            deferred_on_env_failed = std::move(on_env_failed);
+            return nullptr;
+        };
+    auto& m = fresh_manager();
+    m.set_host_factory_for_test(factory);
+    m.ensure_started();
+    deferred_on_env_failed(kFakeRuntimeMissing);
+
+    auto result = m.acquire(HWND_MESSAGE, Theme::Light, 1.0f);
+    REQUIRE(std::holds_alternative<precache_manager::InitFailedToken>(result));
+    CHECK(std::get<precache_manager::InitFailedToken>(result).hr
+          == kFakeRuntimeMissing);
 }

@@ -49,6 +49,9 @@ public:
     // Routed from WebView2Host's on_process_failed_ callback.
     void on_renderer_crash(int process_failed_kind);
 
+    // Routed from WebView2Host's on_env_failed_ callback (env-init failure).
+    void on_init_failed(HRESULT hr) noexcept;
+
     // Receives lifecycle events from ViewerHost.
     void on_lifecycle_event(const LifecycleEvent& event);
 

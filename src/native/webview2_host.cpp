@@ -33,13 +33,15 @@ WebView2Host::~WebView2Host() {
 }
 
 std::unique_ptr<WebView2Host> WebView2Host::create_under_message_only(
-    HWND                  hwnd_message_parent,
-    std::function<void()> on_ready,
-    ProcessFailedCallback on_process_failed) noexcept {
+    HWND                          hwnd_message_parent,
+    std::function<void()>          on_ready,
+    ProcessFailedCallback          on_process_failed,
+    std::function<void(HRESULT)>   on_env_failed) noexcept {
 
     auto host = std::unique_ptr<WebView2Host>(new WebView2Host());
     host->precache_on_ready_          = std::move(on_ready);
     host->precache_on_process_failed_ = std::move(on_process_failed);
+    host->precache_on_env_failed_     = std::move(on_env_failed);
     host->phase_                      = Phase::Building;
     host->parent_hwnd_                = hwnd_message_parent;
 
@@ -56,16 +58,12 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
             auto alive = wp.lock();
             if (!alive) return;
             if (FAILED(hr) || env == nullptr) {
+                const HRESULT fail_hr = FAILED(hr) ? hr : E_FAIL;
                 debug_log::log(
                     L"webview2-host: env init failed hr=0x{:08x}",
-                    static_cast<uint32_t>(FAILED(hr) ? hr : E_FAIL));
-                if (precache_on_process_failed_) {
-                    // Surface env-init failure through the same channel
-                    // as ProcessFailed so the manager's retry path
-                    // covers both. Use a sentinel kind that's outside
-                    // the documented COREWEBVIEW2_PROCESS_FAILED_KIND
-                    // enum range.
-                    precache_on_process_failed_(-1);
+                    static_cast<uint32_t>(fail_hr));
+                if (precache_on_env_failed_) {
+                    precache_on_env_failed_(fail_hr);
                 }
                 return;
             }
@@ -202,6 +200,7 @@ void WebView2Host::rebind_callbacks(
     on_process_failed_   = std::move(on_process_failed);
     precache_on_ready_          = nullptr;
     precache_on_process_failed_ = nullptr;
+    precache_on_env_failed_     = nullptr;
 
     // Go live: with callbacks in place, it's safe to flip visibility
     // and let WebView2 paint into the now-real parent.
