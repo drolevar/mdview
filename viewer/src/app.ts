@@ -55,10 +55,14 @@ function run(): void {
                         succeeded = true;
                     } catch (err) {
                         const e = err as Error;
+                        // Render failed before the mermaid pass ran;
+                        // no theme-baked output exists, so the host
+                        // doesn't need to re-render on theme change.
                         postRenderError(
                             idAtStart,
                             e.message ?? 'render failed',
-                            e.stack ?? null);
+                            e.stack ?? null,
+                            /*requiresThemeRerender=*/false);
                     }
 
                     if (succeeded) {
@@ -70,6 +74,12 @@ function run(): void {
                         lastMathPass = await runMathPass();
                         const elapsed = Math.round(
                             performance.now() - start);
+                        // Only mermaid bakes theme into rendered output
+                        // (SVG); math (currentColor), hljs (CSS classes)
+                        // and markdown text all retint via CSS.
+                        const requiresThemeRerender =
+                            lastMermaidPass.chunkLoaded
+                            && lastMermaidPass.diagrams.length > 0;
                         if (summaryAtStart) {
                             const summary = buildSummary(
                                 container,
@@ -79,9 +89,11 @@ function run(): void {
                                 lastMathPass,
                                 baseUriAtStart,
                             );
-                            postRendered(idAtStart, elapsed, summary);
+                            postRendered(idAtStart, elapsed,
+                                requiresThemeRerender, summary);
                         } else {
-                            postRendered(idAtStart, elapsed);
+                            postRendered(idAtStart, elapsed,
+                                requiresThemeRerender);
                         }
                     }
 
@@ -219,10 +231,17 @@ function run(): void {
         });
 
     window.addEventListener('error', (ev) => {
+        // Conservative on unknown-source errors: keep whatever the
+        // last successful render established. lastMermaidPass tracks
+        // the previously-rendered DOM state, so a window error after
+        // a mermaid doc rendered should still re-render on theme
+        // change to refresh the SVG.
         postRenderError(
             latestId,
             ev.message ?? 'window error',
-            ev.error?.stack ?? null);
+            ev.error?.stack ?? null,
+            lastMermaidPass.chunkLoaded
+                && lastMermaidPass.diagrams.length > 0);
     });
     window.addEventListener('unhandledrejection', (ev) => {
         const reason = ev.reason as unknown;
@@ -232,7 +251,9 @@ function run(): void {
         const stack = reason instanceof Error
             ? (reason.stack ?? null)
             : null;
-        postRenderError(latestId, msg, stack);
+        postRenderError(latestId, msg, stack,
+            lastMermaidPass.chunkLoaded
+                && lastMermaidPass.diagrams.length > 0);
     });
 
     postReady();

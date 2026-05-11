@@ -96,6 +96,13 @@ decode_renderer_message(std::wstring_view json) noexcept {
             if (j.contains("summary") && j["summary"].is_object()) {
                 m.summary_json = utf8_to_utf16(j["summary"].dump());
             }
+            // Safe default (true) when missing or wrong type — assume
+            // re-render needed unless the renderer explicitly tells us
+            // otherwise.
+            if (auto it = j.find("requiresThemeRerender");
+                it != j.end() && it->is_boolean()) {
+                m.requires_theme_rerender = it->get<bool>();
+            }
             return RendererMessage{m};
         }
         if (type == "renderError") {
@@ -113,6 +120,10 @@ decode_renderer_message(std::wstring_view json) noexcept {
             }
             if (j.contains("summary") && j["summary"].is_object()) {
                 m.summary_json = utf8_to_utf16(j["summary"].dump());
+            }
+            if (auto it = j.find("requiresThemeRerender");
+                it != j.end() && it->is_boolean()) {
+                m.requires_theme_rerender = it->get<bool>();
             }
             return RendererMessage{m};
         }

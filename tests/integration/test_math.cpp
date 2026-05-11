@@ -78,19 +78,9 @@ TEST_CASE("math chunk not loaded when doc has no math",
 TEST_CASE("math: theme change does not re-render math",
           "[integration][math][theme]") {
     // Per the M5 design ("Theme integration"): KaTeX uses currentColor,
-    // so a math-only doc should re-tint via CSS without re-rendering.
-    // The current native plugin re-issues `loadDocument` unconditionally
-    // on every theme change (see PluginWindow::on_lifecycle_event,
-    // ThemeChanged branch), so a second summary DOES arrive for a
-    // math-only doc. Gating that re-issue on whether the previously-
-    // loaded doc contained mermaid would be a Task 5 follow-up: it
-    // needs the renderer to surface "had-mermaid" back to the host
-    // (the summary already carries mermaid.diagrams.length, just not
-    // observed by apply_theme yet). Kept as a SKIP so the spec stays
-    // documented in code; flip to a real assertion once the impl gap
-    // is closed.
-    SKIP("math-only theme retint without re-render: pending impl "
-         "(see M5 design \"Theme integration\")");
+    // so a math-only doc retints via CSS without re-rendering. The
+    // renderer emits `requiresThemeRerender` on every `rendered` ack;
+    // ViewerHost::apply_theme gates the ThemeChanged event on it.
     Session s;
     REQUIRE(s.load(L"15_math_basic.md"));
     auto first = s.wait_for_summary();

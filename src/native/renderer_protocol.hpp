@@ -24,6 +24,13 @@ struct RenderedMessage {
     int          id         = 0;
     int          elapsed_ms = 0;
     std::wstring summary_json;  // empty if summary not provided
+    // True iff the rendered DOM has theme-baked output that CSS can't
+    // retint (currently: mermaid SVG). The host uses this to gate
+    // re-render on light/dark toggle. Emitted unconditionally by the
+    // renderer so it works in production (no summary opt-in needed).
+    // Defaults to true if the field is missing on the wire so older
+    // renderers / unexpected omission stays on the safe side.
+    bool         requires_theme_rerender = true;
 };
 
 struct RenderErrorMessage {
@@ -31,6 +38,7 @@ struct RenderErrorMessage {
     std::wstring                message;
     std::optional<std::wstring> stack;
     std::wstring                summary_json;  // empty if not provided
+    bool                        requires_theme_rerender = true;
 };
 
 struct LoadDocumentMessage {
