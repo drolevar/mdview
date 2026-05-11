@@ -99,6 +99,23 @@ PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags) {
     const float scale =
         static_cast<float>(::GetDpiForWindow(hwnd)) / 96.0f;
 
+    // Integration-test failure injection: MDVIEW_FORCE_ENV_FAILURE=1
+    // short-circuits acquire and paints the install-URL status text
+    // exactly as the real EnvFailed path would. Skips touching the
+    // process-wide singleton so test ordering stays clean.
+    wchar_t fail_buf[8] = {};
+    const DWORD fail_len = ::GetEnvironmentVariableW(
+        L"MDVIEW_FORCE_ENV_FAILURE", fail_buf,
+        static_cast<DWORD>(sizeof(fail_buf) / sizeof(wchar_t)));
+    if (fail_len > 0 && fail_buf[0] == L'1') {
+        constexpr HRESULT kFakeRuntimeMissing = 0x80070002;
+        debug_log::log(
+            L"plugin_window: MDVIEW_FORCE_ENV_FAILURE=1 hr=0x{:08x}",
+            static_cast<uint32_t>(kFakeRuntimeMissing));
+        window->set_status_text(format_init_error(kFakeRuntimeMissing));
+        return window;
+    }
+
     auto acquire_result =
         precache_manager::instance().acquire(hwnd, theme, scale);
 
