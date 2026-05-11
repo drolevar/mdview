@@ -36,6 +36,15 @@ function renderOne(
     kind:      'inline' | 'display',
     state:     RenderState,
 ): void {
+    // Skip nodes a prior pass already processed. No re-walk path
+    // exists today (theme changes don't re-render math), but the
+    // guard is cheap insurance against double-processing if one
+    // gets added — re-rendering a failed node would re-throw with
+    // the source TeX no longer in the DOM.
+    if (el.dataset['state'] === 'rendered' ||
+        el.dataset['state'] === 'failed') {
+        return;
+    }
     const id  = el.dataset['mathId'] ?? '';
     const tex = el.dataset['tex']    ?? '';
     try {
@@ -44,6 +53,7 @@ function renderOne(
             throwOnError: true,
             output:       'html',
         });
+        el.dataset['state'] = 'rendered';
         state.outcomes.push({
             id, kind, status: 'rendered', errorMessage: null,
         });
@@ -60,6 +70,7 @@ function renderOne(
             `<span class="mdview-math-error" title="${escapeHtml(msg)}">` +
             escapeHtml(tex) +
             `</span>`;
+        el.dataset['state'] = 'failed';
         state.outcomes.push({
             id, kind, status: 'failed', errorMessage: msg,
         });
