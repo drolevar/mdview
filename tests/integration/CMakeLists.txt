@@ -11,6 +11,7 @@ add_executable(mdview_integration_tests
     test_focus.cpp
     test_highlight.cpp
     test_lifecycle.cpp
+    test_math.cpp
     test_mermaid.cpp
     test_theme.cpp
 )
