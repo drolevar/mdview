@@ -177,9 +177,10 @@ void WebView2Host::adopt(HWND  new_parent,
             L"webview2-host: ICoreWebView2Controller3 unavailable; "
             L"RasterizationScale skipped");
     }
-    LOG_IF_FAILED(controller_->put_IsVisible(TRUE));
-    LOG_IF_FAILED(controller_->NotifyParentWindowPositionChanged());
-
+    // NB: put_IsVisible(TRUE) and NotifyParentWindowPositionChanged
+    // are deferred to rebind_callbacks() so the message + ProcessFailed
+    // callbacks are installed before any WebView2 COM re-entry on the
+    // go-live calls can dispatch WebMessageReceived.
     phase_ = Phase::Adopted;
 
     debug_log::log(
@@ -201,6 +202,13 @@ void WebView2Host::rebind_callbacks(
     on_process_failed_   = std::move(on_process_failed);
     precache_on_ready_          = nullptr;
     precache_on_process_failed_ = nullptr;
+
+    // Go live: with callbacks in place, it's safe to flip visibility
+    // and let WebView2 paint into the now-real parent.
+    if (controller_) {
+        LOG_IF_FAILED(controller_->put_IsVisible(TRUE));
+        LOG_IF_FAILED(controller_->NotifyParentWindowPositionChanged());
+    }
 }
 
 void WebView2Host::set_rasterization_scale(float scale) noexcept {
