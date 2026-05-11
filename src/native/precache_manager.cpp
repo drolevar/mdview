@@ -82,7 +82,7 @@ void precache_manager::on_precache_process_failed_(int kind) {
         return;
     }
     state_ = State::Empty;
-    // Re-enter Build orchestration arrives in Task 6.
+    start_build_locked_();
 }
 
 precache_manager::AcquireResult precache_manager::acquire(
@@ -172,12 +172,6 @@ void reset_precache_manager_for_test(precache_manager& m) noexcept {
     m.test_host_factory_      = {};
 }
 
-void force_env_failed_for_test(precache_manager& m, HRESULT hr) noexcept {
-    std::lock_guard<std::mutex> lk(m.mu_);
-    m.state_         = precache_manager::State::EnvFailed;
-    m.env_failed_hr_ = hr;
-    m.pending_host_.reset();
-}
 }
 
 }

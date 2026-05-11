@@ -17,11 +17,6 @@ namespace mdview::detail {
 // and call it without touching unrelated translation units.
 void reset_precache_manager_for_test(precache_manager&) noexcept;
 
-// Test seam: directly forces the singleton into EnvFailed with the
-// given HRESULT. Lets tests exercise the acquire-EnvFailed branch
-// without driving the retry counter through self-destructing host
-// callbacks (which require Task 6's rebuild logic to be sound).
-void force_env_failed_for_test(precache_manager&, HRESULT hr) noexcept;
 }
 
 namespace mdview {
@@ -105,8 +100,6 @@ private:
 
     friend void detail::reset_precache_manager_for_test(
         precache_manager&) noexcept;
-    friend void detail::force_env_failed_for_test(
-        precache_manager&, HRESULT) noexcept;
 };
 
 }
