@@ -9,6 +9,7 @@ add_executable(mdview_tests
     native/detect_string_tests.cpp
     native/test_event_revoker.cpp
     native/test_init_error.cpp
+    native/test_precache_manager.cpp
     native/test_renderer_protocol.cpp
     native/test_viewer_host.cpp
     native/test_viewer_paths.cpp
