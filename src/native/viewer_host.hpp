@@ -91,6 +91,15 @@ private:
     Theme               current_theme_   = Theme::System;
     std::optional<Theme> pending_theme_;  // delivered before first ready
 
+    // M5 audit: gate the ThemeChanged event (which triggers a
+    // loadDocument re-issue) on whether the last rendered DOM has
+    // theme-baked output. Math (currentColor), hljs (CSS classes) and
+    // markdown text all retint via CSS; only mermaid SVG needs a
+    // re-render. Default true so a theme change in the race window
+    // between load_document and the first `rendered` ack still
+    // re-renders a mermaid doc — safe fallback when we don't yet know.
+    bool last_doc_requires_theme_rerender_ = true;
+
     // Lifecycle timing for the precache/cold-start investigation.
     // t_start_ is set in create(); the optionals fire on first reach
     // of the corresponding state. The summary emits once per host

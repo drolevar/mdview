@@ -482,10 +482,142 @@ TEST_CASE("ViewerHost::apply_theme fires ThemeChanged event when "
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
     REQUIRE(mp->posted.size() == 1);
 
+    // No `rendered` ack yet — last_doc_requires_theme_rerender_ is
+    // at its safe default (true), so the event fires.
     vh.apply_theme(mdview::Theme::Dark);
 
     // Posted: setTheme. Event fired: ThemeChanged.
     REQUIRE(mp->posted.size() == 2);
     REQUIRE(mp->posted[1].find(L"setTheme") != std::wstring::npos);
+    REQUIRE(theme_changed_count == 1);
+}
+
+TEST_CASE("ViewerHost::apply_theme skips ThemeChanged when last render "
+          "had no theme-baked output",
+          "[viewer_host][theme]") {
+    // M5 design: math (currentColor), hljs (CSS classes) and markdown
+    // text retint via CSS — only mermaid SVG requires re-render. The
+    // renderer signals this via the `requiresThemeRerender` field on
+    // the `rendered` ack; ViewerHost gates ThemeChanged on it.
+    auto mock = std::make_unique<MockHost>();
+    auto* mp = mock.get();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+
+    int theme_changed_count = 0;
+    vh.create((HWND)1, [&](mdview::LifecycleEvent e) {
+        if (e.kind == mdview::LifecycleEvent::Kind::ThemeChanged) {
+            ++theme_changed_count;
+        }
+    });
+    mp->last_create_cb(S_OK);
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
+    mdview::DocumentRequest req;
+    req.file_path    = LR"(D:\d\a.md)";
+    req.display_name = L"a.md";
+    req.doc_dir      = LR"(D:\d)";
+    vh.load_document(std::move(req));
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+    REQUIRE(mp->posted.size() == 1);
+
+    // Renderer reports: doc rendered, no theme-baked output (e.g.,
+    // math-only or plain markdown).
+    vh.dispatch_renderer_message(
+        LR"({"type":"rendered","version":1,"id":1,"elapsedMs":5,)"
+        LR"("requiresThemeRerender":false})");
+
+    vh.apply_theme(mdview::Theme::Dark);
+
+    // setTheme still posted (CSS retint is cheap and instant), but
+    // no ThemeChanged event fired — no loadDocument re-issue.
+    REQUIRE(mp->posted.size() == 2);
+    REQUIRE(mp->posted[1].find(L"setTheme") != std::wstring::npos);
+    REQUIRE(theme_changed_count == 0);
+}
+
+TEST_CASE("ViewerHost::apply_theme fires ThemeChanged when last render "
+          "had mermaid",
+          "[viewer_host][theme]") {
+    // Counterpart to the no-rerender case: a doc with mermaid (or any
+    // future theme-baked output) sets requiresThemeRerender=true on
+    // the wire, and ThemeChanged fires as before.
+    auto mock = std::make_unique<MockHost>();
+    auto* mp = mock.get();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+
+    int theme_changed_count = 0;
+    vh.create((HWND)1, [&](mdview::LifecycleEvent e) {
+        if (e.kind == mdview::LifecycleEvent::Kind::ThemeChanged) {
+            ++theme_changed_count;
+        }
+    });
+    mp->last_create_cb(S_OK);
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
+    mdview::DocumentRequest req;
+    req.file_path    = LR"(D:\d\a.md)";
+    req.display_name = L"a.md";
+    req.doc_dir      = LR"(D:\d)";
+    vh.load_document(std::move(req));
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+    REQUIRE(mp->posted.size() == 1);
+
+    vh.dispatch_renderer_message(
+        LR"({"type":"rendered","version":1,"id":1,"elapsedMs":5,)"
+        LR"("requiresThemeRerender":true})");
+
+    vh.apply_theme(mdview::Theme::Dark);
+
+    REQUIRE(theme_changed_count == 1);
+}
+
+TEST_CASE("ViewerHost: load_document resets theme-rerender flag",
+          "[viewer_host][theme]") {
+    // After a no-rerender doc renders, a fresh load_document for a
+    // possibly-mermaid doc must reset the flag to true so a theme
+    // change between load_document and the new doc's first
+    // `rendered` ack still re-renders (safe fallback for the race).
+    auto mock = std::make_unique<MockHost>();
+    auto* mp = mock.get();
+
+    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+
+    int theme_changed_count = 0;
+    vh.create((HWND)1, [&](mdview::LifecycleEvent e) {
+        if (e.kind == mdview::LifecycleEvent::Kind::ThemeChanged) {
+            ++theme_changed_count;
+        }
+    });
+    mp->last_create_cb(S_OK);
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+
+    // Doc 1: no theme-baked output. After the rendered ack the gate
+    // is `false`.
+    mdview::DocumentRequest a;
+    a.file_path = LR"(D:\d\a.md)";
+    a.doc_dir   = LR"(D:\d)";
+    vh.load_document(std::move(a));
+    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+    vh.dispatch_renderer_message(
+        LR"({"type":"rendered","version":1,"id":1,"elapsedMs":5,)"
+        LR"("requiresThemeRerender":false})");
+
+    // Sanity: gate is now false; a theme change on this state should
+    // be skipped.
+    vh.apply_theme(mdview::Theme::Dark);
+    REQUIRE(theme_changed_count == 0);
+
+    // Doc 2: same doc-dir → fast-post path (no reload). Goes
+    // straight back to State::Loaded with the flag reset to true.
+    mdview::DocumentRequest b;
+    b.file_path = LR"(D:\d\b.md)";
+    b.doc_dir   = LR"(D:\d)";
+    vh.load_document(std::move(b));
+
+    // Theme change before the new doc's rendered ack: flag is at
+    // its safe default `true`, so ThemeChanged fires.
+    vh.apply_theme(mdview::Theme::Light);
     REQUIRE(theme_changed_count == 1);
 }

@@ -131,10 +131,17 @@ export function postReady(): void {
 export function postRendered(
     id: number,
     elapsedMs: number,
+    requiresThemeRerender: boolean,
     summary?: RenderedSummary,
 ): void {
+    // requiresThemeRerender is always emitted (independent of the
+    // summary opt-in) so the host can gate ThemeChanged -> re-render
+    // on it in production too. True iff the rendered DOM contains
+    // theme-baked output that CSS can't retint — currently only
+    // mermaid SVG.
     const msg: Record<string, unknown> = {
         type: 'rendered', version: 1, id, elapsedMs,
+        requiresThemeRerender,
     };
     if (summary !== undefined) msg['summary'] = summary;
     window.chrome.webview.postMessage(msg);
@@ -144,10 +151,12 @@ export function postRenderError(
     id: number,
     message: string,
     stack: string | null,
+    requiresThemeRerender: boolean,
     summary?: Partial<RenderedSummary>,
 ): void {
     const msg: Record<string, unknown> = {
         type: 'renderError', version: 1, id, message, stack,
+        requiresThemeRerender,
     };
     if (summary !== undefined) msg['summary'] = summary;
     window.chrome.webview.postMessage(msg);

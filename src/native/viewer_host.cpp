@@ -55,6 +55,12 @@ void ViewerHost::load_document(DocumentRequest request) {
         return;
     }
 
+    // New doc: reset the theme-rerender flag to its safe default
+    // (true). The renderer overrides this on the next `rendered`
+    // ack with the actual DOM state; until then a theme change is
+    // safely conservative (re-renders a doc that might have mermaid).
+    last_doc_requires_theme_rerender_ = true;
+
     // Assign the monotonic id and remap the doc-dir virtual host
     // before either dispatching now or queuing for replay on ready.
     // The remap result is reflected in base_uri so the renderer sees
@@ -138,10 +144,15 @@ void ViewerHost::apply_theme(Theme theme) {
     // changes (CSS toggle, hljs stylesheet swap) happen now…
     post_set_theme_(theme);
 
-    // …and re-issue the most recent loadDocument so mermaid SVGs
-    // re-render with the new theme. Mermaid bakes theme into the SVG
-    // at render time; toggling CSS won't recolor existing diagrams.
-    if (state_ == State::Loaded && !last_loaded_doc_dir_.empty()) {
+    // …and re-issue the most recent loadDocument iff the rendered DOM
+    // has theme-baked output. Only mermaid SVGs need this — math
+    // (currentColor), hljs (CSS classes) and markdown text all retint
+    // via CSS. Skipping the re-render for the no-mermaid case avoids
+    // double work and matches the M5 design promise (Theme integration:
+    // "no re-render on light/dark toggle" for math).
+    if (state_ == State::Loaded
+        && !last_loaded_doc_dir_.empty()
+        && last_doc_requires_theme_rerender_) {
         if (on_event_) {
             on_event_(LifecycleEvent{
                 LifecycleEvent::Kind::ThemeChanged, S_OK, 0});
@@ -238,6 +249,11 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
         return;
     }
     if (auto* rendered = std::get_if<RenderedMessage>(&*msg)) {
+        // Update the theme-rerender gate from the wire signal. The
+        // renderer emits this unconditionally (regardless of summary
+        // opt-in) so production runs see the same gating as tests.
+        last_doc_requires_theme_rerender_ =
+            rendered->requires_theme_rerender;
         if (rendered->summary_json.empty()) {
             debug_log::log(L"viewer: rendered id={} elapsed={}ms",
                            rendered->id, rendered->elapsed_ms);
@@ -264,6 +280,8 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
         return;
     }
     if (auto* err = std::get_if<RenderErrorMessage>(&*msg)) {
+        last_doc_requires_theme_rerender_ =
+            err->requires_theme_rerender;
         debug_log::log(L"viewer: renderError id={} msg={}",
                        err->id, err->message);
         if (!err->summary_json.empty()) {

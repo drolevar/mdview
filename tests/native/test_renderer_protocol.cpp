@@ -195,6 +195,39 @@ TEST_CASE("decode_renderer_message tolerates missing summary",
     REQUIRE(m->summary_json.empty());
 }
 
+TEST_CASE("decode_renderer_message reads requiresThemeRerender field",
+          "[renderer_protocol][theme]") {
+    auto r = mdview::decode_renderer_message(
+        LR"({"type":"rendered","version":1,"id":1,"elapsedMs":2,)"
+        LR"("requiresThemeRerender":false})");
+    REQUIRE(r.has_value());
+    auto* m = std::get_if<mdview::RenderedMessage>(&*r);
+    REQUIRE(m != nullptr);
+    REQUIRE_FALSE(m->requires_theme_rerender);
+
+    auto r2 = mdview::decode_renderer_message(
+        LR"({"type":"rendered","version":1,"id":1,"elapsedMs":2,)"
+        LR"("requiresThemeRerender":true})");
+    REQUIRE(r2.has_value());
+    auto* m2 = std::get_if<mdview::RenderedMessage>(&*r2);
+    REQUIRE(m2 != nullptr);
+    REQUIRE(m2->requires_theme_rerender);
+}
+
+TEST_CASE("decode_renderer_message defaults requiresThemeRerender to true "
+          "when absent",
+          "[renderer_protocol][theme]") {
+    // Safe default: if the renderer didn't tell us, assume re-render
+    // is needed. Belt-and-suspenders for older builds or unexpected
+    // omission.
+    auto r = mdview::decode_renderer_message(
+        LR"({"type":"rendered","version":1,"id":1,"elapsedMs":2})");
+    REQUIRE(r.has_value());
+    auto* m = std::get_if<mdview::RenderedMessage>(&*r);
+    REQUIRE(m != nullptr);
+    REQUIRE(m->requires_theme_rerender);
+}
+
 TEST_CASE("emit_chunked_summary single-line for short payloads",
           "[debug_log]") {
     // Smoke test: just verify the helper doesn't throw. (Capturing the
