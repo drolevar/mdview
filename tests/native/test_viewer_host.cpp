@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include <filesystem>
+#include <optional>
 #include <vector>
 
 namespace {
@@ -24,6 +25,8 @@ public:
     bool                                  closed       = false;
     int                                   resize_count = 0;
     int                                   focus_count  = 0;
+    std::optional<mdview::Theme>          last_color_scheme;
+    int                                   color_scheme_count = 0;
 
     void create(HWND, std::function<void(HRESULT)> on_created) override {
         last_create_cb = std::move(on_created);
@@ -41,6 +44,10 @@ public:
         return remap_result;
     }
     void reload() noexcept override { ++reload_count; }
+    void set_color_scheme(mdview::Theme theme) noexcept override {
+        last_color_scheme = theme;
+        ++color_scheme_count;
+    }
 
     // Parses the last posted JSON and returns its "id" field, or -1.
     int last_posted_doc_id() const {

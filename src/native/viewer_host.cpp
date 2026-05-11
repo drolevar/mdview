@@ -139,6 +139,14 @@ void ViewerHost::apply_theme(Theme theme) {
 
     current_theme_ = theme;
 
+    // Push the theme to WebView2 itself (default bg + preferred color
+    // scheme) so pre-CSS paint background, scrollbars and native form
+    // controls match. Safe to call before controller-ready: the host
+    // stashes pending_color_scheme_ and applies before the first Navigate.
+    if (host_) {
+        host_->set_color_scheme(theme);
+    }
+
     // Before the renderer is ready, stash; the first loadDocument that
     // we eventually post carries the theme in its `theme` field.
     if (state_ != State::RendererReady && state_ != State::Loaded) {
