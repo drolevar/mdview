@@ -91,26 +91,26 @@ PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags) {
     ::InvalidateRect(hwnd, nullptr, TRUE);
 
     PluginWindow* pw = window.get();
-    // pw is captured raw in the closures below. Lifetime is safe because
-    // the destruction chain unwinds in order: ~PluginWindow → ~viewer_
-    // (~ViewerHost) → ~host_ (~WebView2Host) → revokers cleared (events
-    // unsubscribed) → callback fields destroyed. So a callback cannot
-    // fire on a dangling pw — by the time pw is gone, the closures are
+    // pw is captured raw in the closures below. Lifetime is safe
+    // because PluginWindow owns both pending_host_ (pre-adopt) and
+    // viewer_ (post-adopt). The destruction chain unwinds with
+    // callbacks held inside those objects, so a callback cannot fire
+    // on a dangling pw — by the time pw is gone, the closures are
     // gone too.
-    auto host = std::make_unique<WebView2Host>(
-        [pw](std::wstring_view json) noexcept {
-            pw->on_renderer_message(json);
+    //
+    // Interim path until Task 9 wires precache_manager: build the
+    // host under the real Lister HWND (no message-only parent yet),
+    // navigate, and on renderer 'ready' adopt + install viewer_. The
+    // adoption is no-op-y for parent (already the lister), but
+    // theme/scale/visibility/callbacks all flip.
+    window->viewer_ = std::make_unique<ViewerHost>(ViewerOptions{});
+    window->pending_host_ = WebView2Host::create_under_message_only(
+        hwnd,
+        [pw]() noexcept {
+            pw->finish_create_after_precache_();
         },
         [pw](int kind) noexcept {
             pw->on_renderer_crash(kind);
-        });
-
-    window->viewer_ = std::make_unique<ViewerHost>(
-        ViewerOptions{}, std::move(host));
-
-    window->viewer_->create(hwnd,
-        [pw](LifecycleEvent e) {
-            pw->on_lifecycle_event(e);
         });
 
     // Unify the first-load path with the ListLoadNextW path: both run
@@ -346,6 +346,43 @@ void PluginWindow::update_theme_(bool dark) noexcept {
     if (hwnd_ != nullptr) {
         ::InvalidateRect(hwnd_, nullptr, TRUE);
     }
+}
+
+void PluginWindow::finish_create_after_precache_() {
+    if (!pending_host_ || !viewer_) {
+        debug_log::log(
+            L"plugin_window: finish_create_after_precache_ called with "
+            L"pending_host={} viewer={}",
+            pending_host_ ? L"non-null" : L"null",
+            viewer_ ? L"non-null" : L"null");
+        return;
+    }
+
+    RECT rc{};
+    ::GetClientRect(hwnd_, &rc);
+    const Theme theme = is_dark_ ? Theme::Dark : Theme::Light;
+
+    PluginWindow* pw = this;
+    pending_host_->adopt(
+        hwnd_, rc, theme, /*raster_scale=*/1.0f,
+        [pw](std::wstring_view json) noexcept {
+            pw->on_renderer_message(json);
+        },
+        [pw](int kind) noexcept {
+            pw->on_renderer_crash(kind);
+        });
+
+    auto host = std::move(pending_host_);
+    viewer_->create(std::move(host),
+        [pw](LifecycleEvent e) {
+            pw->on_lifecycle_event(e);
+        });
+
+    // The renderer's `ready` message was consumed by the precache
+    // phase. Synthesize one for ViewerHost so it advances to
+    // RendererReady and drains any queued load_document.
+    viewer_->dispatch_renderer_message(
+        std::wstring_view{LR"({"type":"ready","version":1})"});
 }
 
 void PluginWindow::on_renderer_message(std::wstring_view json) {

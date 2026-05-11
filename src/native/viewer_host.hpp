@@ -52,14 +52,20 @@ using LifecycleCallback = std::function<void(LifecycleEvent)>;
 
 class ViewerHost {
 public:
-    ViewerHost(ViewerOptions options,
-               std::unique_ptr<IWebView2Host> host);
+    explicit ViewerHost(ViewerOptions options);
     ~ViewerHost();
 
     ViewerHost(const ViewerHost&)            = delete;
     ViewerHost& operator=(const ViewerHost&) = delete;
 
-    void create(HWND parent_hwnd, LifecycleCallback on_event);
+    // M6: the host arrives pre-built and pre-adopted. ViewerHost no
+    // longer drives env/controller creation — that work was done by
+    // precache_manager (or PluginWindow's transitional wrapper) before
+    // this call. The renderer's `ready` signal was consumed during the
+    // precache phase; ViewerHost transitions straight into a ready-to-
+    // render state on this call and drains any queued load_document.
+    void create(std::unique_ptr<IWebView2Host> host,
+                LifecycleCallback on_event);
     void resize(RECT bounds);
     void focus();
     void load_document(DocumentRequest request);
@@ -75,7 +81,6 @@ private:
         Navigated, RendererReady, Loaded, Failed, Crashed, Closed
     };
 
-    void on_host_created_(HRESULT hr);
     void post_pending_directly_();
     void post_request_(DocumentRequest req);
     void post_set_theme_(Theme t);

@@ -12,12 +12,9 @@
 
 namespace mdview {
 
-ViewerHost::ViewerHost(ViewerOptions options,
-                       std::unique_ptr<IWebView2Host> host)
+ViewerHost::ViewerHost(ViewerOptions options)
     : options_(options)
-    , host_(std::move(host))
     , alive_token_(std::make_shared<bool>(true)) {
-    assert(host_);
 }
 
 ViewerHost::~ViewerHost() {
@@ -25,19 +22,19 @@ ViewerHost::~ViewerHost() {
     if (host_) host_->close();
 }
 
-void ViewerHost::create(HWND parent_hwnd, LifecycleCallback on_event) {
+void ViewerHost::create(std::unique_ptr<IWebView2Host> host,
+                        LifecycleCallback on_event) {
+    assert(host);
+    host_     = std::move(host);
     on_event_ = std::move(on_event);
-    state_    = State::EnvPending;
-    t_start_  = std::chrono::steady_clock::now();
-    debug_log::log(L"viewer-host create: env-pending");
-
-    std::weak_ptr<bool> wp = alive_token_;
-    host_->create(parent_hwnd,
-        [this, wp](HRESULT hr) {
-            auto alive = wp.lock();
-            if (!alive) return;
-            on_host_created_(hr);
-        });
+    // The host arrives already adopted (controller built, navigated,
+    // renderer-ready consumed during precache). Transition straight
+    // into Navigated; the caller is responsible for dispatching the
+    // renderer 'ready' signal that drives the final state advance.
+    state_           = State::Navigated;
+    t_start_         = std::chrono::steady_clock::now();
+    t_host_created_  = t_start_;
+    debug_log::log(L"viewer-host create: adopted host installed");
 }
 
 void ViewerHost::resize(RECT bounds) {
@@ -73,7 +70,10 @@ void ViewerHost::load_document(DocumentRequest request) {
     pending_theme_.reset();
     debug_log::log(L"viewer-host: load_document id={} file={}",
                    request.doc_id, request.file_path.wstring());
-    if (!request.doc_dir.empty()) {
+    // Skip remap when the host hasn't been installed yet (pre-create
+    // queueing window). The drain path in post_pending_directly_
+    // retries remap once the host is available.
+    if (host_ && !request.doc_dir.empty()) {
         const HRESULT hr = host_->remap_doc_dir(request.doc_dir);
         if (FAILED(hr)) {
             debug_log::log(
@@ -114,7 +114,7 @@ void ViewerHost::load_document(DocumentRequest request) {
         pending_load_ = std::move(request);
         state_        = State::Navigated;
         debug_log::log(L"viewer-host: reloading for new doc-dir");
-        host_->reload();
+        if (host_) host_->reload();
         return;
     }
     pending_load_ = std::move(request);   // latest-wins
@@ -189,24 +189,6 @@ void ViewerHost::close() {
     if (host_) host_->close();
 }
 
-void ViewerHost::on_host_created_(HRESULT hr) {
-    if (FAILED(hr)) {
-        state_ = State::Failed;
-        debug_log::log(L"viewer-host: init failed, hr=0x{:08X}",
-                       static_cast<uint32_t>(hr));
-        if (on_event_) {
-            on_event_(LifecycleEvent{
-                LifecycleEvent::Kind::InitFailed, hr, 0});
-        }
-        return;
-    }
-    state_          = State::Navigated;
-    t_host_created_ = std::chrono::steady_clock::now();
-    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        *t_host_created_ - t_start_).count();
-    debug_log::log(L"viewer-host: navigated t={}ms", ms);
-}
-
 void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
     auto msg = decode_renderer_message(json);
     if (!msg) {
@@ -226,13 +208,10 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
                 *t_renderer_ready_ - t_start_).count();
         debug_log::log(L"viewer-host: renderer ready t={}ms", ready_ms);
 
-        // Reveal the controller. It's been hidden through the
-        // navigation transition (which paints white regardless of
-        // DefaultBackgroundColor). By now JS has applied data-theme
-        // synchronously in applyInitialTheme, so the first visible
-        // frame is dark. The brief gap until loadDocument arrives
-        // (~tens of ms) shows an empty dark body — no flicker.
-        if (host_) host_->show();
+        // M6: adopt() already set put_IsVisible(TRUE); no show() call
+        // here. The controller's first visible frame is the post-adopt
+        // reparented surface, which is dark-themed via the controller
+        // default bg path.
 
         // Snapshot pending_load_ BEFORE firing the event. The user
         // callback may run for a long time and may itself call
