@@ -19,28 +19,33 @@ void precache_manager::set_host_factory_for_test(HostFactory factory) {
 }
 
 void precache_manager::ensure_started() noexcept {
-    std::call_once(started_flag_, [this]() {
-        // Pin the DLL so the WebView2 COM objects we own keep their
-        // backing code alive. GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
-        // with our own function pointer resolves to the WLX module.
-        HMODULE pinned = nullptr;
-        ::GetModuleHandleExW(
-            GET_MODULE_HANDLE_EX_FLAG_PIN |
-                GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-            reinterpret_cast<LPCWSTR>(&precache_manager::instance),
-            &pinned);
-        debug_log::log(L"precache: ensure_started begin pin=0x{:x}",
-                       reinterpret_cast<uintptr_t>(pinned));
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        if (started_) return;
+        started_ = true;
+    }
 
-        start_build_();
-    });
+    // Pin the DLL so the WebView2 COM objects we own keep their
+    // backing code alive. GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+    // with our own function pointer resolves to the WLX module.
+    HMODULE pinned = nullptr;
+    ::GetModuleHandleExW(
+        GET_MODULE_HANDLE_EX_FLAG_PIN |
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+        reinterpret_cast<LPCWSTR>(&precache_manager::instance),
+        &pinned);
+    debug_log::log(L"precache: ensure_started begin pin=0x{:x}",
+                   reinterpret_cast<uintptr_t>(pinned));
+
+    start_build_();
 }
 
 void precache_manager::start_build_() {
-    // Real host creation lands in Task 4 (WebView2Host::create_under_
-    // message_only) and Task 5 (modal pump in acquire()). For Task 3
-    // we only exercise state transitions and the test-factory path.
     std::lock_guard<std::mutex> lk(mu_);
+    start_build_locked_();
+}
+
+void precache_manager::start_build_locked_() {
     if (state_ == State::Building || state_ == State::Parked) return;
     state_ = State::Building;
     debug_log::log(L"precache: state Empty -> Building");
@@ -82,25 +87,66 @@ void precache_manager::on_precache_process_failed_(int kind) {
 
 precache_manager::AcquireResult precache_manager::acquire(
     HWND lister_hwnd, Theme theme, float raster_scale) noexcept {
-    (void)lister_hwnd;
-    (void)theme;
-    (void)raster_scale;
 
-    // Skeleton: the full modal pump (wait until Parked/EnvFailed)
-    // arrives in Task 5. For now we just inspect the current state.
-    std::lock_guard<std::mutex> lk(mu_);
-    if (state_ == State::EnvFailed) {
-        return InitFailedToken{env_failed_hr_};
+    debug_log::log(
+        L"precache: acquire begin lister=0x{:x} theme={} scale={:.3f}",
+        reinterpret_cast<uintptr_t>(lister_hwnd),
+        theme == Theme::Dark ? L"dark" : L"light",
+        raster_scale);
+
+    // If we somehow arrived in Empty (e.g. retry path between F3s),
+    // kick a build before we start pumping.
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        if (state_ == State::Empty) {
+            start_build_locked_();
+        }
     }
-    if (state_ != State::Parked || !pending_host_) {
-        return InitFailedToken{E_PENDING};  // until Task 5
+
+    // Modal pump until state leaves Building. Same pattern modal
+    // dialogs use: we run a local GetMessage loop on the caller's
+    // thread so the WebView2 callbacks driving the state machine get
+    // a chance to fire.
+    while (true) {
+        {
+            std::lock_guard<std::mutex> lk(mu_);
+            if (state_ != State::Building) break;
+        }
+        MSG msg;
+        BOOL r = ::GetMessageW(&msg, nullptr, 0, 0);
+        if (r <= 0) {
+            debug_log::log(
+                L"precache: acquire pump exit GetMessage={}", r);
+            return InitFailedToken{E_ABORT};
+        }
+        ::TranslateMessage(&msg);
+        ::DispatchMessageW(&msg);
     }
-    auto host = std::move(pending_host_);
-    state_    = State::Empty;
-    process_failed_retries_ = 0;
-    debug_log::log(L"precache: state Parked -> Empty (adopted)");
-    // host->adopt(lister_hwnd, theme, raster_scale) lands in Task 4
-    // once IWebView2Host grows the precache-shape methods.
+
+    std::unique_ptr<IWebView2Host> host;
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        if (state_ == State::EnvFailed) {
+            return InitFailedToken{env_failed_hr_};
+        }
+        if (state_ != State::Parked || !pending_host_) {
+            return InitFailedToken{E_UNEXPECTED};
+        }
+        host = std::move(pending_host_);
+        state_ = State::Empty;
+        process_failed_retries_ = 0;
+        debug_log::log(L"precache: state Parked -> Empty (adopted)");
+    }
+
+    // Reparent the host onto the real Lister. Callbacks are wired by
+    // the caller via host->rebind_callbacks() after this returns.
+    RECT bounds{};
+    ::GetClientRect(lister_hwnd, &bounds);
+    host->adopt(lister_hwnd, bounds, theme, raster_scale);
+
+    // Kick off the next precache build for the next F3.
+    start_build_();
+
     return host;
 }
 
@@ -112,6 +158,26 @@ HWND precache_manager::create_message_only_parent_() noexcept {
 LRESULT CALLBACK precache_manager::msg_only_proc_(
     HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
     return ::DefWindowProcW(hwnd, msg, w, l);
+}
+
+namespace detail {
+void reset_precache_manager_for_test(precache_manager& m) noexcept {
+    std::lock_guard<std::mutex> lk(m.mu_);
+    m.started_                = false;
+    m.state_                  = precache_manager::State::Empty;
+    m.env_failed_hr_          = S_OK;
+    m.process_failed_retries_ = 0;
+    m.pending_host_.reset();
+    m.hwnd_message_parent_    = nullptr;
+    m.test_host_factory_      = {};
+}
+
+void force_env_failed_for_test(precache_manager& m, HRESULT hr) noexcept {
+    std::lock_guard<std::mutex> lk(m.mu_);
+    m.state_         = precache_manager::State::EnvFailed;
+    m.env_failed_hr_ = hr;
+    m.pending_host_.reset();
+}
 }
 
 }

@@ -46,12 +46,14 @@ public:
         std::function<void()> on_ready,
         ProcessFailedCallback on_process_failed) noexcept;
 
-    void adopt(HWND                  new_parent,
-               RECT                  new_bounds,
-               Theme                 theme,
-               float                 raster_scale,
-               MessageCallback       on_renderer_message,
-               ProcessFailedCallback on_process_failed) noexcept override;
+    void adopt(HWND  new_parent,
+               RECT  new_bounds,
+               Theme theme,
+               float raster_scale) noexcept override;
+
+    void rebind_callbacks(
+        MessageCallback       on_renderer_message,
+        ProcessFailedCallback on_process_failed) noexcept override;
 
     void set_rasterization_scale(float scale) noexcept override;
 

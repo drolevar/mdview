@@ -149,12 +149,10 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
         });
 }
 
-void WebView2Host::adopt(HWND                  new_parent,
-                         RECT                  new_bounds,
-                         Theme                 theme,
-                         float                 raster_scale,
-                         MessageCallback       on_renderer_message,
-                         ProcessFailedCallback on_process_failed) noexcept {
+void WebView2Host::adopt(HWND  new_parent,
+                         RECT  new_bounds,
+                         Theme theme,
+                         float raster_scale) noexcept {
     if (phase_ != Phase::Parked || !controller_) {
         debug_log::log(
             L"webview2-host: adopt called in phase={} controller={} - aborted",
@@ -182,16 +180,27 @@ void WebView2Host::adopt(HWND                  new_parent,
     LOG_IF_FAILED(controller_->put_IsVisible(TRUE));
     LOG_IF_FAILED(controller_->NotifyParentWindowPositionChanged());
 
-    on_renderer_message_ = std::move(on_renderer_message);
-    on_process_failed_   = std::move(on_process_failed);
-    precache_on_ready_          = nullptr;
-    precache_on_process_failed_ = nullptr;
     phase_ = Phase::Adopted;
 
     debug_log::log(
         L"webview2-host: adopt to lister=0x{:x} scale={:.3f} theme={}",
         reinterpret_cast<uintptr_t>(new_parent), raster_scale,
         to_wire(theme));
+}
+
+void WebView2Host::rebind_callbacks(
+        MessageCallback       on_renderer_message,
+        ProcessFailedCallback on_process_failed) noexcept {
+    if (phase_ != Phase::Adopted) {
+        debug_log::log(
+            L"webview2-host: rebind_callbacks called in phase={} - aborted",
+            static_cast<int>(phase_));
+        return;
+    }
+    on_renderer_message_ = std::move(on_renderer_message);
+    on_process_failed_   = std::move(on_process_failed);
+    precache_on_ready_          = nullptr;
+    precache_on_process_failed_ = nullptr;
 }
 
 void WebView2Host::set_rasterization_scale(float scale) noexcept {

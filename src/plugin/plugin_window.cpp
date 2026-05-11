@@ -362,12 +362,15 @@ void PluginWindow::finish_create_after_precache_() {
     ::GetClientRect(hwnd_, &rc);
     const Theme theme = is_dark_ ? Theme::Dark : Theme::Light;
 
-    // Order is load-bearing: adopt() must install on_renderer_message_
-    // before viewer_->create() runs, so the synthetic-ready dispatch
-    // below (and any real message that follows) routes to the viewer.
+    // Order is load-bearing: rebind_callbacks() must install
+    // on_renderer_message_ before viewer_->create() runs, so the
+    // synthetic-ready dispatch below (and any real message that
+    // follows) routes to the viewer. adopt() does the reparent; the
+    // callbacks are wired through the separate v-table method that
+    // replaces the manager-owned precache callbacks.
     PluginWindow* pw = this;
-    pending_host_->adopt(
-        hwnd_, rc, theme, /*raster_scale=*/1.0f,
+    pending_host_->adopt(hwnd_, rc, theme, /*raster_scale=*/1.0f);
+    pending_host_->rebind_callbacks(
         [pw](std::wstring_view json) noexcept {
             pw->on_renderer_message(json);
         },

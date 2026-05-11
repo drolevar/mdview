@@ -34,17 +34,19 @@ public:
     MessageCallback                       last_on_message;
     ProcessFailedCallback                 last_on_process_failed;
 
-    void adopt(HWND                  new_parent,
-               RECT                  new_bounds,
-               mdview::Theme         theme,
-               float                 raster_scale,
-               MessageCallback       on_renderer_message,
-               ProcessFailedCallback on_process_failed) noexcept override {
-        adopt_called           = true;
-        last_adopt_parent      = new_parent;
-        last_adopt_bounds      = new_bounds;
-        last_adopt_theme       = theme;
-        last_raster_scale      = raster_scale;
+    void adopt(HWND          new_parent,
+               RECT          new_bounds,
+               mdview::Theme theme,
+               float         raster_scale) noexcept override {
+        adopt_called      = true;
+        last_adopt_parent = new_parent;
+        last_adopt_bounds = new_bounds;
+        last_adopt_theme  = theme;
+        last_raster_scale = raster_scale;
+    }
+    void rebind_callbacks(
+            MessageCallback       on_renderer_message,
+            ProcessFailedCallback on_process_failed) noexcept override {
         last_on_message        = std::move(on_renderer_message);
         last_on_process_failed = std::move(on_process_failed);
     }
@@ -74,9 +76,8 @@ public:
     // Sensible defaults for tests that don't care about reparent details.
     void simulate_adopt() {
         adopt(reinterpret_cast<HWND>(1), RECT{0, 0, 800, 600},
-              mdview::Theme::System, /*raster_scale=*/1.0f,
-              [](std::wstring_view) {},
-              [](int) {});
+              mdview::Theme::System, /*raster_scale=*/1.0f);
+        rebind_callbacks([](std::wstring_view) {}, [](int) {});
     }
 
     // Parses the last posted JSON and returns its "id" field, or -1.
