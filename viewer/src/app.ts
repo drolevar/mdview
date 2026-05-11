@@ -15,6 +15,7 @@ let lastMermaidPass: MermaidPassData = {
 
 let lastMathPass: MathPassData = {
     chunkLoaded: false, chunkLoadMs: null,
+    placeholdersSeen: { inline: 0, display: 0 },
     inline:  { rendered: 0, failed: 0 },
     display: { rendered: 0, failed: 0 },
     errors:  [],
@@ -133,9 +134,14 @@ function run(): void {
             '.mdview-math-inline');
         const displayEls = container!.querySelectorAll<HTMLElement>(
             '.mdview-math-display');
+        const placeholdersSeen = {
+            inline:  inlineEls.length,
+            display: displayEls.length,
+        };
         if (inlineEls.length === 0 && displayEls.length === 0) {
             return {
                 chunkLoaded: false, chunkLoadMs: null,
+                placeholdersSeen,
                 inline:  { rendered: 0, failed: 0 },
                 display: { rendered: 0, failed: 0 },
                 errors:  [],
@@ -146,7 +152,11 @@ function run(): void {
             const mod = await import('./math-chunk.js');
             const chunkLoadMs = Math.round(performance.now() - t0);
             const { pass } = mod.renderAll(inlineEls, displayEls);
-            return { chunkLoaded: true, chunkLoadMs, ...pass };
+            return {
+                chunkLoaded: true, chunkLoadMs,
+                placeholdersSeen,
+                ...pass,
+            };
         } catch (err) {
             // Chunk-load failure (asset 404, network error). KaTeX
             // parse errors are caught inside the chunk and never
@@ -155,16 +165,22 @@ function run(): void {
             const msg = err instanceof Error
                 ? err.message
                 : String(err ?? '');
+            // Truncate so a long KaTeX/network error doesn't produce
+            // an absurd hover tooltip on every placeholder.
+            const tip = msg.length > 200
+                ? msg.slice(0, 200) + '…'
+                : msg;
             for (const el of Array.from(inlineEls)) {
                 el.classList.add('mdview-math-failed');
-                el.title = msg;
+                el.title = tip;
             }
             for (const el of Array.from(displayEls)) {
                 el.classList.add('mdview-math-failed');
-                el.title = msg;
+                el.title = tip;
             }
             return {
                 chunkLoaded: false, chunkLoadMs: null,
+                placeholdersSeen,
                 inline:  { rendered: 0, failed: 0 },
                 display: { rendered: 0, failed: 0 },
                 errors:  [],
