@@ -7,13 +7,15 @@
 #include <wil/resource.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace mdview {
 
 class PluginWindow {
 public:
-    static std::unique_ptr<PluginWindow> create(HWND parent, std::wstring file_to_load);
+    static std::unique_ptr<PluginWindow> create(
+        HWND parent, std::wstring file_to_load, int show_flags);
 
     PluginWindow(HWND hwnd, std::wstring file_to_load);
     ~PluginWindow();
@@ -27,10 +29,15 @@ public:
     void set_status_text(std::wstring text);
 
     // Reads `file_to_load` via DocumentLoader and dispatches to the
-    // viewer. Returns true on success; on read/decode failure, paints
-    // a status message and returns false. Used by both the first load
-    // (from PluginWindow::create) and ListLoadNextW.
-    bool load_next(std::wstring file_to_load) noexcept;
+    // viewer. `show_flags`, when present, carries TC's current
+    // dark-mode bits per the ListLoadW/ListLoadNextW ShowFlags
+    // contract; applied before the load so the first paint reflects
+    // TC's theme. The internal ThemeChanged re-render path passes
+    // nullopt because the theme is already current — re-applying a
+    // stale ShowFlags would silently revert. Returns true on success;
+    // on read/decode failure, paints a status message and returns false.
+    bool load_next(std::wstring file_to_load,
+                   std::optional<int> show_flags = std::nullopt) noexcept;
 
     // Routed from the WLX ListSendCommand export. Returns true iff the
     // command was understood and applied (or harmlessly ignored).

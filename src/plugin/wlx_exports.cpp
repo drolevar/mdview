@@ -44,12 +44,14 @@ void __stdcall ListGetDetectString(char* DetectString, int maxlen) {
     mdview::write_detect_string(DetectString, maxlen);
 }
 
-HWND __stdcall ListLoadW(HWND ParentWin, WCHAR* FileToLoad, int /*ShowFlags*/) {
-    mdview::debug_log::log(L"wlx: ListLoadW file={}",
-        FileToLoad != nullptr ? FileToLoad : L"(null)");
+HWND __stdcall ListLoadW(HWND ParentWin, WCHAR* FileToLoad, int ShowFlags) {
+    mdview::debug_log::log(L"wlx: ListLoadW file={} flags=0x{:x}",
+        FileToLoad != nullptr ? FileToLoad : L"(null)",
+        static_cast<uint32_t>(ShowFlags));
     try {
         std::wstring path = (FileToLoad != nullptr) ? std::wstring(FileToLoad) : std::wstring();
-        auto window = mdview::PluginWindow::create(ParentWin, std::move(path));
+        auto window = mdview::PluginWindow::create(
+            ParentWin, std::move(path), ShowFlags);
         HWND hwnd = window->handle();
 
         std::lock_guard<std::mutex> lock(g_windows_mutex);
@@ -93,14 +95,15 @@ int __stdcall ListLoadNextW(
         HWND /*parent_win*/,
         HWND list_win,
         wchar_t* file_to_load,
-        int /*show_flags*/) {
-    mdview::debug_log::log(L"wlx: ListLoadNextW file={}",
-        file_to_load != nullptr ? file_to_load : L"(null)");
+        int show_flags) {
+    mdview::debug_log::log(L"wlx: ListLoadNextW file={} flags=0x{:x}",
+        file_to_load != nullptr ? file_to_load : L"(null)",
+        static_cast<uint32_t>(show_flags));
     try {
         auto* pw = mdview::get_window_self_ptr<mdview::PluginWindow>(list_win);
         if (pw == nullptr) return LISTPLUGIN_ERROR;
         if (file_to_load == nullptr) return LISTPLUGIN_ERROR;
-        return pw->load_next(std::wstring{file_to_load})
+        return pw->load_next(std::wstring{file_to_load}, show_flags)
             ? LISTPLUGIN_OK
             : LISTPLUGIN_ERROR;
     } catch (...) {

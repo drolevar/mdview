@@ -129,6 +129,14 @@ void ViewerHost::apply_theme(Theme theme) {
         return;
     }
 
+    // Idempotent on rendered states: a redundant apply (e.g. ListLoadNextW
+    // re-passing the same ShowFlags every navigation) must not trigger
+    // post_set_theme_ or the mermaid re-render branch below.
+    if ((state_ == State::RendererReady || state_ == State::Loaded)
+        && theme == current_theme_) {
+        return;
+    }
+
     current_theme_ = theme;
 
     // Before the renderer is ready, stash; the first loadDocument that

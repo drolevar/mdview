@@ -18,10 +18,19 @@ namespace mdview {
 
 namespace {
 constexpr const wchar_t* kClassName = L"mdview_plugin_window";
+
+// Translate TC's ShowFlags bitmask into our Theme. The same bits flow
+// in via ListSendCommand(lc_newparams, parameter); the documented
+// values (lcp_darkmode=128, lcp_darkmodenative=256) live in listplug.h.
+constexpr Theme theme_from_show_flags(int show_flags) noexcept {
+    return ((show_flags & lcp_darkmode) != 0
+         || (show_flags & lcp_darkmodenative) != 0)
+        ? Theme::Dark : Theme::Light;
+}
 }
 
 std::unique_ptr<PluginWindow>
-PluginWindow::create(HWND parent, std::wstring file_to_load) {
+PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags) {
     HMODULE module = globals().module_handle();
     HINSTANCE inst = reinterpret_cast<HINSTANCE>(module);
 
@@ -70,7 +79,7 @@ PluginWindow::create(HWND parent, std::wstring file_to_load) {
     // through DocumentLoader and load_document. A failure here paints
     // a status message via load_next; we still return the window so
     // TC has a Lister to host until the user closes it.
-    pw->load_next(window->file_to_load_);
+    pw->load_next(window->file_to_load_, show_flags);
 
     return window;
 }
@@ -94,9 +103,22 @@ void PluginWindow::set_status_text(std::wstring text) {
     }
 }
 
-bool PluginWindow::load_next(std::wstring file_to_load) noexcept {
+bool PluginWindow::load_next(std::wstring file_to_load,
+                              std::optional<int> show_flags) noexcept {
     try {
         file_to_load_ = file_to_load;
+
+        // Apply TC's current theme bits BEFORE load_document on the WLX
+        // entry path (caller passes show_flags). Before the renderer is
+        // ready, apply_theme just stashes pending_theme_ and
+        // load_document picks it up via request.theme. After ready, the
+        // call is a no-op when the theme is unchanged (idempotency guard
+        // in ViewerHost), so it's safe to call on every ListLoadNextW.
+        // ThemeChanged-driven re-renders skip this — theme is already
+        // current there.
+        if (show_flags && viewer_) {
+            viewer_->apply_theme(theme_from_show_flags(*show_flags));
+        }
 
         // Integration harness opt-in: when MDVIEW_REQUEST_SUMMARY=1,
         // ask the renderer to emit a structured summary on the
