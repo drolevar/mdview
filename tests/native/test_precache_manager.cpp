@@ -31,7 +31,10 @@ public:
         if (on_process_failed) on_process_failed(kind);
     }
 
-    void create(HWND, std::function<void(HRESULT)>) override {}
+    void adopt(HWND, RECT, Theme, float,
+               MessageCallback,
+               ProcessFailedCallback) noexcept override {}
+    void set_rasterization_scale(float) noexcept override {}
     void resize(RECT) noexcept override {}
     void focus() noexcept override {}
     void close() noexcept override {}
@@ -42,7 +45,6 @@ public:
     }
     void reload() noexcept override {}
     void set_color_scheme(Theme) noexcept override {}
-    void show() noexcept override {}
 };
 
 }

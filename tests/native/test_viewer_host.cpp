@@ -16,7 +16,6 @@ namespace {
 
 class MockHost : public mdview::IWebView2Host {
 public:
-    std::function<void(HRESULT)>          last_create_cb;
     std::vector<std::wstring>             posted;
     std::filesystem::path                 last_remap_dir;
     int                                   remap_count  = 0;
@@ -27,10 +26,30 @@ public:
     int                                   focus_count  = 0;
     std::optional<mdview::Theme>          last_color_scheme;
     int                                   color_scheme_count = 0;
-    int                                   show_count   = 0;
+    bool                                  adopt_called = false;
+    HWND                                  last_adopt_parent = nullptr;
+    RECT                                  last_adopt_bounds{};
+    mdview::Theme                         last_adopt_theme = mdview::Theme::System;
+    float                                 last_raster_scale = 0.0f;
+    MessageCallback                       last_on_message;
+    ProcessFailedCallback                 last_on_process_failed;
 
-    void create(HWND, std::function<void(HRESULT)> on_created) override {
-        last_create_cb = std::move(on_created);
+    void adopt(HWND                  new_parent,
+               RECT                  new_bounds,
+               mdview::Theme         theme,
+               float                 raster_scale,
+               MessageCallback       on_renderer_message,
+               ProcessFailedCallback on_process_failed) noexcept override {
+        adopt_called           = true;
+        last_adopt_parent      = new_parent;
+        last_adopt_bounds      = new_bounds;
+        last_adopt_theme       = theme;
+        last_raster_scale      = raster_scale;
+        last_on_message        = std::move(on_renderer_message);
+        last_on_process_failed = std::move(on_process_failed);
+    }
+    void set_rasterization_scale(float scale) noexcept override {
+        last_raster_scale = scale;
     }
     void resize(RECT) noexcept override { ++resize_count; }
     void focus() noexcept override { ++focus_count; }
@@ -49,7 +68,16 @@ public:
         last_color_scheme = theme;
         ++color_scheme_count;
     }
-    void show() noexcept override { ++show_count; }
+
+    // Convenience: call adopt with default bounds/theme/scale so the
+    // mock records "post-adopt" state before being handed to ViewerHost.
+    // Sensible defaults for tests that don't care about reparent details.
+    void simulate_adopt() {
+        adopt(reinterpret_cast<HWND>(1), RECT{0, 0, 800, 600},
+              mdview::Theme::System, /*raster_scale=*/1.0f,
+              [](std::wstring_view) {},
+              [](int) {});
+    }
 
     // Parses the last posted JSON and returns its "id" field, or -1.
     int last_posted_doc_id() const {
@@ -73,11 +101,12 @@ TEST_CASE("ViewerHost queues load_document before ready and drains on ready",
           "[viewer_host]") {
     auto mock = std::make_unique<MockHost>();
     auto* mock_ptr = mock.get();
+    mock->simulate_adopt();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
 
     int ready_count = 0;
-    vh.create((HWND)1, [&](mdview::LifecycleEvent e) {
+    vh.create(std::move(mock), [&](mdview::LifecycleEvent e) {
         if (e.kind == mdview::LifecycleEvent::Kind::RendererReady)
             ++ready_count;
     });
@@ -94,7 +123,6 @@ TEST_CASE("ViewerHost queues load_document before ready and drains on ready",
 
     REQUIRE(mock_ptr->posted.empty());
 
-    mock_ptr->last_create_cb(S_OK);
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     REQUIRE(ready_count == 1);
@@ -108,9 +136,9 @@ TEST_CASE("ViewerHost reloads when a new load_document arrives after ready, "
     auto mock = std::make_unique<MockHost>();
     auto* mock_ptr = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
-    vh.create((HWND)1, [](mdview::LifecycleEvent){});
-    mock_ptr->last_create_cb(S_OK);
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
+    vh.create(std::move(mock), [](mdview::LifecycleEvent){});
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     mdview::DocumentRequest c;
@@ -130,34 +158,20 @@ TEST_CASE("ViewerHost reloads when a new load_document arrives after ready, "
     REQUIRE(mock_ptr->posted[0].find(L"c.md") != std::wstring::npos);
 }
 
-TEST_CASE("ViewerHost reports init failed on env failure", "[viewer_host]") {
-    auto mock = std::make_unique<MockHost>();
-    auto* mock_ptr = mock.get();
-
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
-
-    HRESULT seen_hr = S_OK;
-    int     init_failed_count = 0;
-    vh.create((HWND)1, [&](mdview::LifecycleEvent e) {
-        if (e.kind == mdview::LifecycleEvent::Kind::InitFailed) {
-            ++init_failed_count;
-            seen_hr = e.hr;
-        }
-    });
-
-    mock_ptr->last_create_cb(HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND));
-
-    REQUIRE(init_failed_count == 1);
-    REQUIRE(seen_hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND));
-}
+// "reports init failed on env failure" was removed: env/controller
+// failures no longer surface through ViewerHost — the host arrives
+// pre-built and pre-adopted from precache_manager, which now owns
+// the InitFailed signal at the PluginWindow level. The
+// LifecycleEvent::Kind::InitFailed enum value is retained for binary
+// compatibility with the few call sites that pattern-match on it.
 
 TEST_CASE("ViewerHost drops load_document after close", "[viewer_host]") {
     auto mock = std::make_unique<MockHost>();
     auto* mock_ptr = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
-    vh.create((HWND)1, [](mdview::LifecycleEvent){});
-    mock_ptr->last_create_cb(S_OK);
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
+    vh.create(std::move(mock), [](mdview::LifecycleEvent){});
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
     vh.close();
 
@@ -175,20 +189,22 @@ TEST_CASE("ViewerHost::dispatch_process_failed after close does not "
     auto mock = std::make_unique<MockHost>();
     auto* mock_ptr = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
 
     bool crashed = false;
-    vh.create((HWND)1, [&](mdview::LifecycleEvent e) {
+    vh.create(std::move(mock), [&](mdview::LifecycleEvent e) {
         if (e.kind == mdview::LifecycleEvent::Kind::RendererCrashed) {
             crashed = true;
         }
     });
 
-    mock_ptr->last_create_cb(S_OK);
     vh.close();
     vh.dispatch_process_failed(0);  // BROWSER_PROCESS_EXITED
 
     REQUIRE_FALSE(crashed);
+    // Mock owned by viewer at this point; silence unused warning.
+    (void)mock_ptr;
 }
 
 TEST_CASE("ViewerHost assigns monotonic doc ids and remaps doc dirs",
@@ -196,9 +212,9 @@ TEST_CASE("ViewerHost assigns monotonic doc ids and remaps doc dirs",
     auto mock = std::make_unique<MockHost>();
     auto* mp = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
-    vh.create((HWND)1, [](mdview::LifecycleEvent){});
-    mp->last_create_cb(S_OK);
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
+    vh.create(std::move(mock), [](mdview::LifecycleEvent){});
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     mdview::DocumentRequest a;
@@ -236,9 +252,9 @@ TEST_CASE("ViewerHost skips remap when doc_dir is empty",
     auto mock = std::make_unique<MockHost>();
     auto* mp = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
-    vh.create((HWND)1, [](mdview::LifecycleEvent){});
-    mp->last_create_cb(S_OK);
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
+    vh.create(std::move(mock), [](mdview::LifecycleEvent){});
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     mdview::DocumentRequest req;
@@ -265,9 +281,9 @@ TEST_CASE("ViewerHost clears base_uri when remap_doc_dir fails",
     auto* mp  = mock.get();
     mp->remap_result = E_FAIL;
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
-    vh.create((HWND)1, [](mdview::LifecycleEvent){});
-    mp->last_create_cb(S_OK);
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
+    vh.create(std::move(mock), [](mdview::LifecycleEvent){});
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     mdview::DocumentRequest req;
@@ -303,9 +319,9 @@ TEST_CASE("ViewerHost posts directly without reload when doc_dir is unchanged",
     auto mock = std::make_unique<MockHost>();
     auto* mp = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
-    vh.create((HWND)1, [](mdview::LifecycleEvent){});
-    mp->last_create_cb(S_OK);
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
+    vh.create(std::move(mock), [](mdview::LifecycleEvent){});
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     // First file in dir D: triggers reload+drain to bind the mapping.
@@ -348,10 +364,11 @@ TEST_CASE("ViewerHost re-entry safe when RendererReady handler "
     auto mock = std::make_unique<MockHost>();
     auto* mock_ptr = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
 
     bool reentered = false;
-    vh.create((HWND)1,
+    vh.create(std::move(mock),
         [&](mdview::LifecycleEvent e) {
             if (e.kind == mdview::LifecycleEvent::Kind::RendererReady
                 && !reentered) {
@@ -368,7 +385,6 @@ TEST_CASE("ViewerHost re-entry safe when RendererReady handler "
     req1.display_name = L"first.md";
     vh.load_document(std::move(req1));
 
-    mock_ptr->last_create_cb(S_OK);
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     // Inside the ready handler:
@@ -394,9 +410,9 @@ TEST_CASE("ViewerHost retries remap at drain and posts without reload "
     auto mock = std::make_unique<MockHost>();
     auto* mp = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
-    vh.create((HWND)1, [](mdview::LifecycleEvent){});
-    mp->last_create_cb(S_OK);
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
+    vh.create(std::move(mock), [](mdview::LifecycleEvent){});
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     // First remap fails (simulates the controller-not-ready race).
@@ -437,9 +453,10 @@ TEST_CASE("ViewerHost::apply_theme stashes when not yet ready",
     auto mock = std::make_unique<MockHost>();
     auto* mp = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
-    vh.create((HWND)1, [](mdview::LifecycleEvent){});
-    // Don't call last_create_cb yet; state stays at EnvPending.
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
+    vh.create(std::move(mock), [](mdview::LifecycleEvent){});
+    // Don't dispatch the renderer-ready message; state stays at Navigated.
 
     vh.apply_theme(mdview::Theme::Dark);
 
@@ -451,9 +468,9 @@ TEST_CASE("ViewerHost::apply_theme posts setTheme when renderer ready",
     auto mock = std::make_unique<MockHost>();
     auto* mp = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
-    vh.create((HWND)1, [](mdview::LifecycleEvent){});
-    mp->last_create_cb(S_OK);
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
+    vh.create(std::move(mock), [](mdview::LifecycleEvent){});
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     vh.apply_theme(mdview::Theme::Dark);
@@ -471,15 +488,15 @@ TEST_CASE("ViewerHost::apply_theme fires ThemeChanged event when "
     auto mock = std::make_unique<MockHost>();
     auto* mp = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
 
     int theme_changed_count = 0;
-    vh.create((HWND)1, [&](mdview::LifecycleEvent e) {
+    vh.create(std::move(mock), [&](mdview::LifecycleEvent e) {
         if (e.kind == mdview::LifecycleEvent::Kind::ThemeChanged) {
             ++theme_changed_count;
         }
     });
-    mp->last_create_cb(S_OK);
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     // Load a document so state becomes Loaded.
@@ -511,15 +528,15 @@ TEST_CASE("ViewerHost::apply_theme skips ThemeChanged when last render "
     auto mock = std::make_unique<MockHost>();
     auto* mp = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
 
     int theme_changed_count = 0;
-    vh.create((HWND)1, [&](mdview::LifecycleEvent e) {
+    vh.create(std::move(mock), [&](mdview::LifecycleEvent e) {
         if (e.kind == mdview::LifecycleEvent::Kind::ThemeChanged) {
             ++theme_changed_count;
         }
     });
-    mp->last_create_cb(S_OK);
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     mdview::DocumentRequest req;
@@ -554,15 +571,15 @@ TEST_CASE("ViewerHost::apply_theme fires ThemeChanged when last render "
     auto mock = std::make_unique<MockHost>();
     auto* mp = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
 
     int theme_changed_count = 0;
-    vh.create((HWND)1, [&](mdview::LifecycleEvent e) {
+    vh.create(std::move(mock), [&](mdview::LifecycleEvent e) {
         if (e.kind == mdview::LifecycleEvent::Kind::ThemeChanged) {
             ++theme_changed_count;
         }
     });
-    mp->last_create_cb(S_OK);
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     mdview::DocumentRequest req;
@@ -589,17 +606,16 @@ TEST_CASE("ViewerHost: load_document resets theme-rerender flag",
     // change between load_document and the new doc's first
     // `rendered` ack still re-renders (safe fallback for the race).
     auto mock = std::make_unique<MockHost>();
-    auto* mp = mock.get();
 
-    mdview::ViewerHost vh(mdview::ViewerOptions{}, std::move(mock));
+    mock->simulate_adopt();
+    mdview::ViewerHost vh(mdview::ViewerOptions{});
 
     int theme_changed_count = 0;
-    vh.create((HWND)1, [&](mdview::LifecycleEvent e) {
+    vh.create(std::move(mock), [&](mdview::LifecycleEvent e) {
         if (e.kind == mdview::LifecycleEvent::Kind::ThemeChanged) {
             ++theme_changed_count;
         }
     });
-    mp->last_create_cb(S_OK);
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
 
     // Doc 1: no theme-baked output. After the rendered ack the gate

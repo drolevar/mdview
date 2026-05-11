@@ -11,6 +11,7 @@
 #include <wil/result_macros.h>
 #include <wrl.h>
 
+#include <cstdint>
 #include <string_view>
 #include <utility>
 
@@ -22,11 +23,8 @@ constexpr const wchar_t* kAppNavigateTo = L"https://mdview-app.example/index.htm
 
 }
 
-WebView2Host::WebView2Host(MessageCallback on_renderer_message,
-                           ProcessFailedCallback on_process_failed)
-    : on_renderer_message_(std::move(on_renderer_message))
-    , on_process_failed_(std::move(on_process_failed))
-    , alive_token_(std::make_shared<bool>(true)) {
+WebView2Host::WebView2Host()
+    : alive_token_(std::make_shared<bool>(true)) {
 }
 
 WebView2Host::~WebView2Host() {
@@ -34,30 +32,58 @@ WebView2Host::~WebView2Host() {
     close();
 }
 
-void WebView2Host::create(HWND parent_hwnd,
-                          std::function<void(HRESULT)> on_created) {
-    parent_hwnd_ = parent_hwnd;
+std::unique_ptr<WebView2Host> WebView2Host::create_under_message_only(
+    HWND                  hwnd_message_parent,
+    std::function<void()> on_ready,
+    ProcessFailedCallback on_process_failed) noexcept {
+
+    auto host = std::unique_ptr<WebView2Host>(new WebView2Host());
+    host->precache_on_ready_          = std::move(on_ready);
+    host->precache_on_process_failed_ = std::move(on_process_failed);
+    host->phase_                      = Phase::Building;
+    host->parent_hwnd_                = hwnd_message_parent;
+
+    host->start_build_(hwnd_message_parent);
+    return host;
+}
+
+void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
     std::weak_ptr<bool> wp = alive_token_;
 
     WebView2Environment::instance().ensure_initialized(
-        [this, wp, parent_hwnd, cb = std::move(on_created)]
+        [this, wp, hwnd_message_parent]
         (HRESULT hr, ICoreWebView2Environment* env) mutable {
             auto alive = wp.lock();
             if (!alive) return;
             if (FAILED(hr) || env == nullptr) {
-                if (cb) cb(FAILED(hr) ? hr : E_FAIL);
+                debug_log::log(
+                    L"webview2-host: env init failed hr=0x{:08x}",
+                    static_cast<uint32_t>(FAILED(hr) ? hr : E_FAIL));
+                if (precache_on_process_failed_) {
+                    // Surface env-init failure through the same channel
+                    // as ProcessFailed so the manager's retry path
+                    // covers both. Use a sentinel kind that's outside
+                    // the documented COREWEBVIEW2_PROCESS_FAILED_KIND
+                    // enum range.
+                    precache_on_process_failed_(-1);
+                }
                 return;
             }
 
             auto handler = Microsoft::WRL::Callback<
                 ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
-                [this, wp, cb_inner = std::move(cb)]
+                [this, wp]
                 (HRESULT hr2, ICoreWebView2Controller* ctrl) mutable noexcept
                     -> HRESULT {
                     auto alive2 = wp.lock();
                     if (!alive2) return S_OK;
                     if (FAILED(hr2) || ctrl == nullptr) {
-                        if (cb_inner) cb_inner(FAILED(hr2) ? hr2 : E_FAIL);
+                        debug_log::log(
+                            L"webview2-host: controller create failed hr=0x{:08x}",
+                            static_cast<uint32_t>(FAILED(hr2) ? hr2 : E_FAIL));
+                        if (precache_on_process_failed_) {
+                            precache_on_process_failed_(-1);
+                        }
                         return S_OK;
                     }
                     try {
@@ -68,8 +94,6 @@ void WebView2Host::create(HWND parent_hwnd,
                         install_handlers_();
 
                         auto root = resolve_viewer_root();
-                        // SetVirtualHostNameToFolderMapping lives on
-                        // ICoreWebView2_3 (not on the environment).
                         if (auto wv3 =
                                 webview_.try_query<ICoreWebView2_3>()) {
                             THROW_IF_FAILED(
@@ -77,9 +101,6 @@ void WebView2Host::create(HWND parent_hwnd,
                                     kAppHostName,
                                     root.c_str(),
                                     COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS));
-                            // Pre-register the doc host with a placeholder
-                            // folder; remapped per loadDocument once we know
-                            // the document directory.
                             THROW_IF_FAILED(
                                 wv3->SetVirtualHostNameToFolderMapping(
                                     kDocHostName,
@@ -91,38 +112,105 @@ void WebView2Host::create(HWND parent_hwnd,
                                 L"virtual host mapping skipped");
                         }
 
-                        // Apply TC's theme to the controller before the
-                        // first Navigate. (Note: empirically not enough
-                        // on its own — see apply_color_scheme_to_controller_.)
+                        // Apply default-bg/preferred-color-scheme so the
+                        // pre-CSS paint background already matches TC's
+                        // theme by the time we adopt. pending_color_scheme_
+                        // may still be System at this point; adopt() will
+                        // push the real theme.
                         apply_color_scheme_to_controller_();
 
-                        RECT rc{};
-                        ::GetClientRect(parent_hwnd_, &rc);
-                        THROW_IF_FAILED(controller_->put_Bounds(rc));
-                        // Keep the controller hidden through the
-                        // navigation transition (WebView2 shows white
-                        // here regardless of DefaultBackgroundColor).
-                        // ViewerHost calls show() once RendererReady
-                        // arrives, by which point JS has already toggled
-                        // data-theme and the page is dark.
+                        // The controller is parked under HWND_MESSAGE:
+                        // keep it hidden and zero-sized until adopt
+                        // reparents to the real Lister.
+                        RECT zero{};
+                        THROW_IF_FAILED(controller_->put_Bounds(zero));
                         THROW_IF_FAILED(controller_->put_IsVisible(FALSE));
                         THROW_IF_FAILED(webview_->Navigate(kAppNavigateTo));
 
-                        if (cb_inner) cb_inner(S_OK);
+                        debug_log::log(L"webview2-host: navigated under msg-only parent");
                     } catch (...) {
-                        if (cb_inner) cb_inner(wil::ResultFromCaughtException());
+                        const HRESULT chr = wil::ResultFromCaughtException();
+                        debug_log::log(
+                            L"webview2-host: post-controller setup threw hr=0x{:08x}",
+                            static_cast<uint32_t>(chr));
+                        if (precache_on_process_failed_) {
+                            precache_on_process_failed_(-1);
+                        }
                     }
                     return S_OK;
                 });
 
-            debug_log::log(L"viewer-host: controller-pending");
+            debug_log::log(L"webview2-host: controller-pending (precache)");
             HRESULT chr = env->CreateCoreWebView2Controller(
-                parent_hwnd, handler.Get());
+                hwnd_message_parent, handler.Get());
             if (FAILED(chr)) {
-                // Synthesize a synchronous failure for the controller path.
                 handler.Get()->Invoke(chr, nullptr);
             }
         });
+}
+
+void WebView2Host::adopt(HWND                  new_parent,
+                         RECT                  new_bounds,
+                         Theme                 theme,
+                         float                 raster_scale,
+                         MessageCallback       on_renderer_message,
+                         ProcessFailedCallback on_process_failed) noexcept {
+    if (phase_ != Phase::Parked || !controller_) {
+        debug_log::log(
+            L"webview2-host: adopt called in phase={} controller={} - aborted",
+            static_cast<int>(phase_),
+            controller_ ? L"non-null" : L"null");
+        return;
+    }
+
+    parent_hwnd_           = new_parent;
+    pending_color_scheme_  = theme;
+
+    LOG_IF_FAILED(controller_->put_ParentWindow(new_parent));
+    LOG_IF_FAILED(controller_->put_Bounds(new_bounds));
+    apply_color_scheme_to_controller_();
+    if (auto c3 = controller_.try_query<ICoreWebView2Controller3>()) {
+        const HRESULT hr = c3->put_RasterizationScale(raster_scale);
+        debug_log::log(
+            L"webview2-host: put_RasterizationScale scale={:.3f} hr=0x{:08x}",
+            raster_scale, static_cast<uint32_t>(hr));
+    } else {
+        debug_log::log(
+            L"webview2-host: ICoreWebView2Controller3 unavailable; "
+            L"RasterizationScale skipped");
+    }
+    LOG_IF_FAILED(controller_->put_IsVisible(TRUE));
+    LOG_IF_FAILED(controller_->NotifyParentWindowPositionChanged());
+
+    on_renderer_message_ = std::move(on_renderer_message);
+    on_process_failed_   = std::move(on_process_failed);
+    precache_on_ready_          = nullptr;
+    precache_on_process_failed_ = nullptr;
+    phase_ = Phase::Adopted;
+
+    debug_log::log(
+        L"webview2-host: adopt to lister=0x{:x} scale={:.3f} theme={}",
+        reinterpret_cast<uintptr_t>(new_parent), raster_scale,
+        to_wire(theme));
+}
+
+void WebView2Host::set_rasterization_scale(float scale) noexcept {
+    if (!controller_) {
+        debug_log::log(
+            L"webview2-host: set_rasterization_scale before controller "
+            L"ready (scale={:.3f})", scale);
+        return;
+    }
+    if (auto c3 = controller_.try_query<ICoreWebView2Controller3>()) {
+        const HRESULT hr = c3->put_RasterizationScale(scale);
+        debug_log::log(
+            L"webview2-host: set_rasterization_scale scale={:.3f} hr=0x{:08x}",
+            scale, static_cast<uint32_t>(hr));
+    } else {
+        debug_log::log(
+            L"webview2-host: ICoreWebView2Controller3 unavailable; "
+            L"set_rasterization_scale skipped");
+    }
 }
 
 void WebView2Host::resize(RECT bounds) noexcept {
@@ -160,10 +248,6 @@ HRESULT WebView2Host::remap_doc_dir(
     auto wv3 = webview_.try_query<ICoreWebView2_3>();
     if (!wv3) return E_NOINTERFACE;
 
-    // Clear before Set so the mapping table itself is in a clean state.
-    // The bigger issue (mapping changes don't propagate to the current
-    // page's resource loaders) is solved by ViewerHost calling reload()
-    // after remap; see comment on IWebView2Host::reload.
     LOG_IF_FAILED(wv3->ClearVirtualHostNameToFolderMapping(kDocHostName));
 
     return wv3->SetVirtualHostNameToFolderMapping(
@@ -178,68 +262,45 @@ void WebView2Host::reload() noexcept {
     }
 }
 
-void WebView2Host::show() noexcept {
-    if (!controller_) {
-        debug_log::log(L"viewer-host: show requested before controller ready");
-        return;
-    }
-    debug_log::log(L"viewer-host: controller put_IsVisible(TRUE)");
-    LOG_IF_FAILED(controller_->put_IsVisible(TRUE));
-}
-
 void WebView2Host::set_color_scheme(Theme theme) noexcept {
     pending_color_scheme_ = theme;
     if (controller_) {
         apply_color_scheme_to_controller_();
     }
-    // Otherwise the controller-ready callback (in create()) will apply
-    // pending_color_scheme_ before the first Navigate, so the very first
-    // frame WebView2 paints already uses TC's theme.
 }
 
 void WebView2Host::apply_color_scheme_to_controller_() noexcept {
     if (!controller_) return;
 
-    debug_log::log(L"viewer-host: apply_color_scheme scheme={}",
+    debug_log::log(L"webview2-host: apply_color_scheme scheme={}",
                    to_wire(pending_color_scheme_));
 
-    // Controller default background paints before any page CSS loads.
-    // Without this, the user sees a white flash between WebView2's
-    // built-in white pre-page bg and our :root[data-theme="dark"] rule
-    // kicking in once JS runs.
     if (auto c2 = controller_.try_query<ICoreWebView2Controller2>()) {
         COREWEBVIEW2_COLOR color{};
         color.A = 0xFF;
         if (pending_color_scheme_ == Theme::Dark) {
-            // Matches styles.css --bg dark: #1c1c1e. Note: empirically
-            // (magenta diagnostic, 2026-05-11) this is NOT honored
-            // during the navigation transition — WebView2 shows white
-            // until the page renders. The controller stays hidden via
-            // put_IsVisible(FALSE) until ViewerHost gets RendererReady.
             color.R = 0x1C; color.G = 0x1C; color.B = 0x1E;
         } else {
             color.R = 0xFF; color.G = 0xFF; color.B = 0xFF;
         }
         HRESULT hr = c2->put_DefaultBackgroundColor(color);
         debug_log::log(
-            L"viewer-host: put_DefaultBackgroundColor "
+            L"webview2-host: put_DefaultBackgroundColor "
             L"rgba=#{:02x}{:02x}{:02x}{:02x} hr=0x{:08x}",
             color.R, color.G, color.B, color.A,
             static_cast<uint32_t>(hr));
     } else {
         debug_log::log(
-            L"viewer-host: ICoreWebView2Controller2 not available - "
+            L"webview2-host: ICoreWebView2Controller2 not available - "
             L"DefaultBackgroundColor skipped");
     }
 
-    // Profile.PreferredColorScheme drives prefers-color-scheme CSS
-    // matching, dark scrollbars, and native form-control coloring.
     if (webview_) {
         if (auto wv13 = webview_.try_query<ICoreWebView2_13>()) {
             wil::com_ptr<ICoreWebView2Profile> profile;
             HRESULT hr1 = wv13->get_Profile(&profile);
             debug_log::log(
-                L"viewer-host: get_Profile hr=0x{:08x}",
+                L"webview2-host: get_Profile hr=0x{:08x}",
                 static_cast<uint32_t>(hr1));
             if (SUCCEEDED(hr1) && profile) {
                 COREWEBVIEW2_PREFERRED_COLOR_SCHEME scheme =
@@ -251,13 +312,13 @@ void WebView2Host::apply_color_scheme_to_controller_() noexcept {
                 }
                 HRESULT hr2 = profile->put_PreferredColorScheme(scheme);
                 debug_log::log(
-                    L"viewer-host: put_PreferredColorScheme value={} hr=0x{:08x}",
+                    L"webview2-host: put_PreferredColorScheme value={} hr=0x{:08x}",
                     static_cast<int>(scheme),
                     static_cast<uint32_t>(hr2));
             }
         } else {
             debug_log::log(
-                L"viewer-host: ICoreWebView2_13 not available - "
+                L"webview2-host: ICoreWebView2_13 not available - "
                 L"PreferredColorScheme skipped");
         }
     }
@@ -293,9 +354,11 @@ void WebView2Host::install_handlers_() {
     ICoreWebView2*           wv   = webview_.get();
     ICoreWebView2Controller* ctrl = controller_.get();
 
-    // Build all eight WRL callbacks up front. None of these touch
-    // the host yet -- they're just heap-allocated objects.
-
+    // WebMessageReceived: dispatches differently depending on phase.
+    //   Building: substring-match on "\"type\":\"ready\"" to detect
+    //   renderer-ready; on match, fire precache_on_ready_ once and
+    //   advance to Parked. Other messages during Building are dropped.
+    //   Adopted: forward raw JSON to on_renderer_message_.
     auto msg_cb = Microsoft::WRL::Callback<
         ICoreWebView2WebMessageReceivedEventHandler>(
         [this, wp](ICoreWebView2*,
@@ -306,8 +369,23 @@ void WebView2Host::install_handlers_() {
             try {
                 wil::unique_cotaskmem_string raw;
                 THROW_IF_FAILED(args->get_WebMessageAsJson(&raw));
-                if (on_renderer_message_) {
-                    on_renderer_message_(std::wstring_view(raw.get()));
+                std::wstring_view body(raw.get());
+                if (phase_ == Phase::Building) {
+                    // Cheap substring sniff against the fixed protocol.
+                    if (body.find(L"\"type\":\"ready\"") !=
+                        std::wstring_view::npos) {
+                        phase_ = Phase::Parked;
+                        debug_log::log(
+                            L"webview2-host: precache renderer ready "
+                            L"-> Parked");
+                        if (precache_on_ready_) {
+                            auto cb = std::move(precache_on_ready_);
+                            precache_on_ready_ = nullptr;
+                            cb();
+                        }
+                    }
+                } else if (on_renderer_message_) {
+                    on_renderer_message_(body);
                 }
             } catch (...) {
                 return wil::ResultFromCaughtException();
@@ -326,14 +404,16 @@ void WebView2Host::install_handlers_() {
             LOG_IF_FAILED(args->get_ProcessFailedKind(&kind));
             debug_log::log(L"renderer process failed: kind={}",
                            static_cast<int>(kind));
-            if (on_process_failed_) {
+            if (phase_ != Phase::Adopted) {
+                if (precache_on_process_failed_) {
+                    precache_on_process_failed_(static_cast<int>(kind));
+                }
+            } else if (on_process_failed_) {
                 on_process_failed_(static_cast<int>(kind));
             }
             return S_OK;
         });
 
-    // NavigationStarting: allow in-app and in-doc origins; cancel
-    // anything else and shell-open it in the user's default browser.
     auto nav_cb = Microsoft::WRL::Callback<
         ICoreWebView2NavigationStartingEventHandler>(
         [wp](ICoreWebView2*,
@@ -353,8 +433,6 @@ void WebView2Host::install_handlers_() {
             return S_OK;
         });
 
-    // NewWindowRequested: target="_blank" / window.open. Cancel and
-    // shell-open externally, mirroring NavigationStarting.
     auto win_cb = Microsoft::WRL::Callback<
         ICoreWebView2NewWindowRequestedEventHandler>(
         [wp](ICoreWebView2*,
@@ -368,13 +446,12 @@ void WebView2Host::install_handlers_() {
             if (!uri) return S_OK;
             debug_log::log(L"new-window requested: {}", uri.get());
             if (detail::is_internal_uri(std::wstring_view{uri.get()})) {
-                return S_OK;  // odd, but defer to default
+                return S_OK;
             }
             detail::externalize_uri(uri.get());
             return S_OK;
         });
 
-    // NavigationCompleted: log success/failure + WebErrorStatus per nav id.
     auto nav_done_cb = Microsoft::WRL::Callback<
         ICoreWebView2NavigationCompletedEventHandler>(
         [wp](ICoreWebView2*,
@@ -394,8 +471,6 @@ void WebView2Host::install_handlers_() {
             return S_OK;
         });
 
-    // DOMContentLoaded: log each DOM-ready boundary so we can tell
-    // a fresh document load from a same-page mutation.
     auto dom_cb = Microsoft::WRL::Callback<
         ICoreWebView2DOMContentLoadedEventHandler>(
         [wp](ICoreWebView2*,
@@ -409,10 +484,6 @@ void WebView2Host::install_handlers_() {
             return S_OK;
         });
 
-    // AcceleratorKeyPressed: forward Esc / Alt / F-keys to the Lister
-    // ancestor so TC's accelerator processing (Esc-to-close, Alt-menu)
-    // still works while the WebView has focus. F12 is left alone so
-    // the default DevTools shortcut keeps working.
     auto accel_cb = Microsoft::WRL::Callback<
         ICoreWebView2AcceleratorKeyPressedEventHandler>(
         [this, wp](ICoreWebView2Controller*,
@@ -433,11 +504,9 @@ void WebView2Host::install_handlers_() {
 
             const bool is_f_key = (vk >= VK_F1 && vk <= VK_F24);
             const bool forward  = (vk == VK_ESCAPE) ||
-                                  (vk == VK_MENU)   ||  // Alt
+                                  (vk == VK_MENU)   ||
                                   is_f_key;
             if (!forward) return S_OK;
-
-            // Don't intercept F12 -- leave DevTools default behavior.
             if (vk == VK_F12) return S_OK;
 
             LOG_IF_FAILED(args->put_Handled(TRUE));
@@ -449,9 +518,6 @@ void WebView2Host::install_handlers_() {
             return S_OK;
         });
 
-    // GotFocus: notify TC's Lister-pane that our plugin gained focus,
-    // so Quick View pane updates its header color. See
-    // tc_lister_constants.hpp for the changelog citation.
     auto focus_cb = Microsoft::WRL::Callback<
         ICoreWebView2FocusChangedEventHandler>(
         [this, wp](ICoreWebView2Controller*, IUnknown*) noexcept
@@ -467,14 +533,6 @@ void WebView2Host::install_handlers_() {
             }
             return S_OK;
         });
-
-    // Register all eight. Each registration is paired with an
-    // in-scope scope_exit guard so that if any later add_* call
-    // throws, the partial registrations from earlier calls are
-    // revoked during stack unwinding before the exception
-    // propagates. After the final add_* succeeds, the tokens are
-    // emplaced into revokers_ and the guards are dismissed via
-    // release().
 
     EventRegistrationToken msg_tok{};
     THROW_IF_FAILED(webview_->add_WebMessageReceived(msg_cb.Get(), &msg_tok));
@@ -530,12 +588,6 @@ void WebView2Host::install_handlers_() {
         if (wv2) wv2->remove_DOMContentLoaded(dom_tok);
     });
 
-    // All eight add_* succeeded (msg / proc / nav / win / accel /
-    // focus / nav_done / dom). Hand ownership to revokers_ and dismiss the
-    // scope guards. emplace_back can throw on allocation failure; if
-    // that happens before all eight revokers are emplaced, the guards
-    // for the not-yet-transferred registrations still run during
-    // unwinding and clean up the surplus.
     revokers_.emplace_back(msg_tok,
         [wv](EventRegistrationToken t) { wv->remove_WebMessageReceived(t); });
     revoke_msg.release();
