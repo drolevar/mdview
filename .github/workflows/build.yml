@@ -110,6 +110,10 @@ jobs:
               Write-Error "mermaid chunk exceeds 3 MB sanity cap ($ckb KB)"
               exit 1
             }
+            if ($c.Name -match "math-chunk" -and $c.Length -gt 1 * 1024 * 1024) {
+              Write-Error "math chunk exceeds 1 MB sanity cap ($ckb KB)"
+              exit 1
+            }
           }
 
       - name: Upload plugin artifact
