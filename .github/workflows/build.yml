@@ -62,7 +62,7 @@ jobs:
         env:
           MDVIEW_HARNESS_HIDDEN: '1'
           MDVIEW_SMOKE_DIR: ${{ github.workspace }}/tests/smoke
-        run: ctest --preset windows-msvc-x64-debug --label-include integration --output-on-failure
+        run: ctest --preset windows-msvc-x64-debug --label-regex "^integration$" --output-on-failure
 
       - name: Upload integration logs on failure
         if: failure()
