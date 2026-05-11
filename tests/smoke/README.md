@@ -12,6 +12,7 @@ Numbering convention:
 - `11`: highlight.js (M4).
 - `12`–`13`: Theme (M4).
 - `14`: Focus signal (M4 audit item 8).
+- `15`–`17`: Math (M5).
 
 The integration harness reads the directory at `MDVIEW_SMOKE_DIR`,
 defaulting to `<repo>/src/tests/smoke` (this directory).
