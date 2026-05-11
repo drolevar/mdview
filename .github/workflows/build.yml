@@ -10,16 +10,18 @@ permissions:
   contents: read
 
 env:
-  # Opt JS-based actions into Node.js 24 ahead of GitHub's
-  # 2026-06-02 forced upgrade (Node 20 deprecation).
+  # Opt JS-based actions into Node.js 24 ahead of GitHub's Node 20
+  # deprecation. Only ilammy/msvc-dev-cmd@v1 still ships Node 20 in
+  # its action.yml; the actions/* steps below are pinned to versions
+  # that natively target Node 24.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   windows-x64-debug:
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -29,7 +31,7 @@ jobs:
           arch: x64
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
@@ -44,7 +46,7 @@ jobs:
         run: .\external\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
       - name: Cache vcpkg installed
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/build/windows-msvc-x64-debug/vcpkg_installed
           key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
@@ -66,12 +68,12 @@ jobs:
 
       - name: Upload integration logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-logs
           path: |
             build/windows-msvc-x64-debug/tests/integration/screenshots/
-            build/windows-msvc-x64-debug/tests/integration/Testing/
+            build/windows-msvc-x64-debug/Testing/
 
       - name: Build production viewer bundle
         working-directory: viewer
@@ -105,7 +107,7 @@ jobs:
           }
 
       - name: Upload plugin artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mdview-wlx64-debug
           path: |
