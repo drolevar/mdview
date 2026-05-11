@@ -57,7 +57,8 @@ void precache_manager::start_build_locked_() {
         pending_host_        = test_host_factory_(
             hwnd_message_parent_,
             [this]() { on_precache_ready_(); },
-            [this](int kind) { on_precache_process_failed_(kind); });
+            [this](int kind) { on_precache_process_failed_(kind); },
+            [this](HRESULT hr) { on_env_init_failed_(hr); });
     }
     // Production path is wired in Task 4 via
     // WebView2Host::create_under_message_only().
@@ -83,6 +84,16 @@ void precache_manager::on_precache_process_failed_(int kind) {
     }
     state_ = State::Empty;
     start_build_locked_();
+}
+
+void precache_manager::on_env_init_failed_(HRESULT hr) {
+    std::lock_guard<std::mutex> lk(mu_);
+    state_ = State::EnvFailed;
+    env_failed_hr_ = hr;
+    pending_host_.reset();
+    debug_log::log(
+        L"precache: env init failed hr=0x{:08x} (terminal)",
+        static_cast<uint32_t>(hr));
 }
 
 precache_manager::AcquireResult precache_manager::acquire(

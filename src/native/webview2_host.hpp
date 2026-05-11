@@ -42,9 +42,10 @@ public:
     // log output rather than a null return; the precache_manager
     // handles those paths.
     static std::unique_ptr<WebView2Host> create_under_message_only(
-        HWND                  hwnd_message_parent,
-        std::function<void()> on_ready,
-        ProcessFailedCallback on_process_failed) noexcept;
+        HWND                          hwnd_message_parent,
+        std::function<void()>          on_ready,
+        ProcessFailedCallback          on_process_failed,
+        std::function<void(HRESULT)>   on_env_failed) noexcept;
 
     void adopt(HWND  new_parent,
                RECT  new_bounds,
@@ -77,6 +78,7 @@ private:
     // Pre-adopt phase callbacks, owned by precache_manager.
     std::function<void()>                      precache_on_ready_;
     ProcessFailedCallback                      precache_on_process_failed_;
+    std::function<void(HRESULT)>               precache_on_env_failed_;
 
     // Post-adopt phase callbacks, owned by the host's eventual caller
     // (PluginWindow).

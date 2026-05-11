@@ -111,6 +111,12 @@ PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags) {
         },
         [pw](int kind) noexcept {
             pw->on_renderer_crash(kind);
+        },
+        [pw](HRESULT hr) noexcept {
+            // Task 9 wires the full precache_manager path. For now,
+            // surface env-init failure as a status text so the splash
+            // shows the install URL message instead of "Loading…".
+            pw->on_init_failed(hr);
         });
 
     // Unify the first-load path with the ListLoadNextW path: both run
@@ -397,6 +403,10 @@ void PluginWindow::on_renderer_message(std::wstring_view json) {
 
 void PluginWindow::on_renderer_crash(int process_failed_kind) {
     if (viewer_) viewer_->dispatch_process_failed(process_failed_kind);
+}
+
+void PluginWindow::on_init_failed(HRESULT hr) noexcept {
+    set_status_text(format_init_error(hr));
 }
 
 void PluginWindow::on_lifecycle_event(const LifecycleEvent& event) {
