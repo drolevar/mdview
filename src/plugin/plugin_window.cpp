@@ -2,8 +2,10 @@
 
 #include "native/debug_log.hpp"
 #include "native/document_loader.hpp"
+#include "native/i_webview2_host.hpp"
 #include "native/init_error.hpp"
 #include "native/plugin_globals.hpp"
+#include "native/precache_manager.hpp"
 #include "native/theme.hpp"
 #include "platform/win32_window.hpp"
 
@@ -82,48 +84,75 @@ PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags) {
     }
 
     // Mark the window invalid so WM_PAINT fires as soon as TC pumps
-    // messages after ListLoadW returns. Without this, no paint happens
-    // until something else invalidates (set_status_text on
-    // RendererReady, ~1.5s later) and the "Loading…" splash never
-    // shows. There's still a brief uninitialized-surface flash on
-    // cold F3 before WM_PAINT — M6 Architecture A precache addresses
-    // that by keeping a hidden WebView2 controller pre-composited.
+    // messages after ListLoadW returns; the splash paints on the
+    // theme-aware class brush before WebView2 reveals.
     ::InvalidateRect(hwnd, nullptr, TRUE);
+
+    // Acquire a pre-adopted host from the precache manager. The call
+    // runs a modal message pump until the precache reaches Parked
+    // (host is hidden under HWND_MESSAGE, navigated to the app, and
+    // the renderer's `ready` message was consumed) or EnvFailed. On
+    // success, acquire() also drives put_ParentWindow + theme + raster
+    // scale onto the real Lister HWND before returning. Callbacks are
+    // not yet wired — that's our job below via rebind_callbacks.
+    const Theme theme = theme_from_show_flags(show_flags);
+    const float scale =
+        static_cast<float>(::GetDpiForWindow(hwnd)) / 96.0f;
+
+    auto acquire_result =
+        precache_manager::instance().acquire(hwnd, theme, scale);
+
+    if (std::holds_alternative<precache_manager::InitFailedToken>(
+            acquire_result)) {
+        const HRESULT hr = std::get<precache_manager::InitFailedToken>(
+            acquire_result).hr;
+        debug_log::log(
+            L"plugin_window: precache acquire failed hr=0x{:08x}",
+            static_cast<uint32_t>(hr));
+        window->set_status_text(format_init_error(hr));
+        return window;
+    }
+
+    auto host = std::move(std::get<std::unique_ptr<IWebView2Host>>(
+        acquire_result));
 
     PluginWindow* pw = window.get();
     // pw is captured raw in the closures below. Lifetime is safe
-    // because PluginWindow owns both pending_host_ (pre-adopt) and
-    // viewer_ (post-adopt). The destruction chain unwinds with
-    // callbacks held inside those objects, so a callback cannot fire
-    // on a dangling pw — by the time pw is gone, the closures are
-    // gone too.
-    //
-    // Interim path until Task 9 wires precache_manager: build the
-    // host under the real Lister HWND (no message-only parent yet),
-    // navigate, and on renderer 'ready' adopt + install viewer_. The
-    // adoption is no-op-y for parent (already the lister), but
-    // theme/scale/visibility/callbacks all flip.
-    window->viewer_ = std::make_unique<ViewerHost>(ViewerOptions{});
-    window->pending_host_ = WebView2Host::create_under_message_only(
-        hwnd,
-        [pw]() noexcept {
-            pw->finish_create_after_precache_();
+    // because the host (and hence its retained callbacks) lives inside
+    // viewer_, which is owned by *pw. The destruction chain unwinds
+    // with callbacks held inside those objects, so a callback cannot
+    // fire on a dangling pw.
+    host->rebind_callbacks(
+        [pw](std::wstring_view json) noexcept {
+            pw->on_renderer_message(json);
         },
         [pw](int kind) noexcept {
             pw->on_renderer_crash(kind);
-        },
-        [pw](HRESULT hr) noexcept {
-            // Task 9 wires the full precache_manager path. For now,
-            // surface env-init failure as a status text so the splash
-            // shows the install URL message instead of "Loading…".
-            pw->on_init_failed(hr);
         });
 
-    // Unify the first-load path with the ListLoadNextW path: both run
-    // through DocumentLoader and load_document. A failure here paints
-    // a status message via load_next; we still return the window so
-    // TC has a Lister to host until the user closes it.
+    window->viewer_ = std::make_unique<ViewerHost>(ViewerOptions{});
+    window->viewer_->create(std::move(host),
+        [pw](LifecycleEvent e) {
+            pw->on_lifecycle_event(e);
+        });
+
+    // Queue the first load BEFORE the synthetic-ready dispatch. With
+    // viewer state == Navigated, load_document parks the request in
+    // pending_load_; the synthetic ready that follows drains it via
+    // post_pending_directly_, avoiding the late-remap reload path
+    // (M4 audit). If we instead dispatched ready first, the viewer
+    // would already be in RendererReady when load_document arrives,
+    // and a new doc-dir would force host_->reload() — costing ~37 ms
+    // and surfacing two `ready` events through the message handler.
     pw->load_next(window->file_to_load_, show_flags);
+
+    // The renderer's real `ready` message was consumed during the
+    // precache build (it's how the manager learned the host had
+    // reached Parked). After adopt + rebind, no further `ready` ever
+    // arrives, so synthesize one here so ViewerHost advances out of
+    // Navigated and drains the load queued just above.
+    window->viewer_->dispatch_renderer_message(
+        std::wstring_view{LR"({"type":"ready","version":1})"});
 
     return window;
 }
@@ -354,59 +383,12 @@ void PluginWindow::update_theme_(bool dark) noexcept {
     }
 }
 
-void PluginWindow::finish_create_after_precache_() {
-    if (!pending_host_ || !viewer_) {
-        debug_log::log(
-            L"plugin_window: finish_create_after_precache_ called with "
-            L"pending_host={} viewer={}",
-            pending_host_ ? L"non-null" : L"null",
-            viewer_ ? L"non-null" : L"null");
-        return;
-    }
-
-    RECT rc{};
-    ::GetClientRect(hwnd_, &rc);
-    const Theme theme = is_dark_ ? Theme::Dark : Theme::Light;
-
-    // Order is load-bearing: rebind_callbacks() must install
-    // on_renderer_message_ before viewer_->create() runs, so the
-    // synthetic-ready dispatch below (and any real message that
-    // follows) routes to the viewer. adopt() does the reparent; the
-    // callbacks are wired through the separate v-table method that
-    // replaces the manager-owned precache callbacks.
-    PluginWindow* pw = this;
-    pending_host_->adopt(hwnd_, rc, theme, /*raster_scale=*/1.0f);
-    pending_host_->rebind_callbacks(
-        [pw](std::wstring_view json) noexcept {
-            pw->on_renderer_message(json);
-        },
-        [pw](int kind) noexcept {
-            pw->on_renderer_crash(kind);
-        });
-
-    auto host = std::move(pending_host_);
-    viewer_->create(std::move(host),
-        [pw](LifecycleEvent e) {
-            pw->on_lifecycle_event(e);
-        });
-
-    // The renderer's `ready` message was consumed by the precache
-    // phase. Synthesize one for ViewerHost so it advances to
-    // RendererReady and drains any queued load_document.
-    viewer_->dispatch_renderer_message(
-        std::wstring_view{LR"({"type":"ready","version":1})"});
-}
-
 void PluginWindow::on_renderer_message(std::wstring_view json) {
     if (viewer_) viewer_->dispatch_renderer_message(json);
 }
 
 void PluginWindow::on_renderer_crash(int process_failed_kind) {
     if (viewer_) viewer_->dispatch_process_failed(process_failed_kind);
-}
-
-void PluginWindow::on_init_failed(HRESULT hr) noexcept {
-    set_status_text(format_init_error(hr));
 }
 
 void PluginWindow::on_lifecycle_event(const LifecycleEvent& event) {

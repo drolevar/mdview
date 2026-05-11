@@ -1,6 +1,8 @@
 #include "native/precache_manager.hpp"
 
 #include "native/debug_log.hpp"
+#include "native/plugin_globals.hpp"
+#include "native/webview2_host.hpp"
 
 #include <cstdint>
 
@@ -51,17 +53,41 @@ void precache_manager::start_build_locked_() {
     debug_log::log(L"precache: state Empty -> Building");
 
     if (test_host_factory_) {
-        // HWND_MESSAGE sentinel until Task 4 creates a real
-        // message-only child window.
-        hwnd_message_parent_ = HWND_MESSAGE;
-        pending_host_        = test_host_factory_(
+        // HWND_MESSAGE sentinel for the test-factory path; tests don't
+        // need a real message-only window.
+        if (hwnd_message_parent_ == nullptr) {
+            hwnd_message_parent_ = HWND_MESSAGE;
+        }
+        pending_host_ = test_host_factory_(
             hwnd_message_parent_,
             [this]() { on_precache_ready_(); },
             [this](int kind) { on_precache_process_failed_(kind); },
             [this](HRESULT hr) { on_env_init_failed_(hr); });
+        return;
     }
-    // Production path is wired in Task 4 via
-    // WebView2Host::create_under_message_only().
+
+    // Production path: create a real HWND_MESSAGE-parented window
+    // once per manager lifetime, then build a WebView2Host under it.
+    if (hwnd_message_parent_ == nullptr) {
+        hwnd_message_parent_ = create_message_only_parent_();
+        if (hwnd_message_parent_ == nullptr) {
+            // Couldn't create the parent. Surface as env failure so
+            // acquire() returns InitFailedToken on the caller side.
+            const HRESULT hr = HRESULT_FROM_WIN32(::GetLastError());
+            state_         = State::EnvFailed;
+            env_failed_hr_ = FAILED(hr) ? hr : E_FAIL;
+            debug_log::log(
+                L"precache: failed to create msg-only parent hr=0x{:08x}",
+                static_cast<uint32_t>(env_failed_hr_));
+            return;
+        }
+    }
+
+    pending_host_ = WebView2Host::create_under_message_only(
+        hwnd_message_parent_,
+        [this]() { on_precache_ready_(); },
+        [this](int kind) { on_precache_process_failed_(kind); },
+        [this](HRESULT hr) { on_env_init_failed_(hr); });
 }
 
 void precache_manager::on_precache_ready_() {
@@ -162,8 +188,46 @@ precache_manager::AcquireResult precache_manager::acquire(
 }
 
 HWND precache_manager::create_message_only_parent_() noexcept {
-    // Real message-only parent HWND is created in Task 4.
-    return HWND_MESSAGE;
+    constexpr const wchar_t* kClassName = L"mdview_precache_msg_only";
+    HMODULE module = globals().module_handle();
+    HINSTANCE inst = reinterpret_cast<HINSTANCE>(module);
+
+    // Idempotent class registration. We don't go through the shared
+    // ensure_window_class_registered helper because the message-only
+    // window doesn't paint and doesn't want a background brush.
+    static bool class_registered = false;
+    if (!class_registered) {
+        WNDCLASSEXW wc{};
+        wc.cbSize        = sizeof(wc);
+        wc.lpfnWndProc   = &precache_manager::msg_only_proc_;
+        wc.hInstance     = inst;
+        wc.lpszClassName = kClassName;
+        const ATOM atom = ::RegisterClassExW(&wc);
+        if (atom == 0) {
+            const DWORD err = ::GetLastError();
+            // ERROR_CLASS_ALREADY_EXISTS is fine — another DllMain
+            // path may have already registered.
+            if (err != ERROR_CLASS_ALREADY_EXISTS) {
+                debug_log::log(
+                    L"precache: RegisterClassExW failed err=0x{:08x}",
+                    static_cast<uint32_t>(err));
+                return nullptr;
+            }
+        }
+        class_registered = true;
+    }
+
+    HWND hwnd = ::CreateWindowExW(
+        0, kClassName, L"",
+        0,
+        0, 0, 0, 0,
+        HWND_MESSAGE, nullptr, inst, nullptr);
+    if (hwnd == nullptr) {
+        debug_log::log(
+            L"precache: CreateWindowExW(HWND_MESSAGE) failed err=0x{:08x}",
+            static_cast<uint32_t>(::GetLastError()));
+    }
+    return hwnd;
 }
 
 LRESULT CALLBACK precache_manager::msg_only_proc_(
