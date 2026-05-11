@@ -120,18 +120,60 @@ TEST_CASE("precache_manager acquire pumps until ready",
     CHECK(host_create_count == 2);
 }
 
-TEST_CASE("acquire returns InitFailedToken when env failed",
+TEST_CASE("precache rebuilds on ProcessFailed (within budget)",
           "[precache_manager]") {
-    // Force EnvFailed directly via the test seam. Driving it through
-    // simulate_process_failed() three times has a re-entrancy problem
-    // (the host owns the callback that destroys it on retry) which
-    // Task 6's rebuild logic resolves cleanly; for Task 5 we only
-    // need to validate acquire's EnvFailed branch.
-    auto& m = fresh_manager();
-    detail::force_env_failed_for_test(m, E_FAIL);
+    int host_create_count = 0;
+    std::vector<TestHost*> created;
+    auto factory = [&](HWND, std::function<void()> on_ready,
+                       std::function<void(int)> on_pf)
+        -> std::unique_ptr<IWebView2Host> {
+        ++host_create_count;
+        auto h = std::make_unique<TestHost>();
+        h->on_ready = std::move(on_ready);
+        h->on_process_failed = std::move(on_pf);
+        created.push_back(h.get());
+        return h;
+    };
 
-    auto result = m.acquire(HWND_MESSAGE, Theme::Light, 1.0f);
+    auto& m = fresh_manager();
+    m.set_host_factory_for_test(factory);
+    m.ensure_started();
+    REQUIRE(host_create_count == 1);
+
+    // Simulating ProcessFailed on the first host triggers a rebuild.
+    // Note: simulate_process_failed calls on_process_failed which calls
+    // pending_host_.reset() — destroying this TestHost from within its
+    // own callback. On MSVC, std::function::operator() reads the target
+    // once at entry; the call is complete before storage is released.
+    created[0]->simulate_process_failed(1);
+    CHECK(host_create_count == 2);
+
+    created[1]->simulate_ready();
+    auto result = m.acquire(HWND_MESSAGE, Theme::Dark, 1.0f);
+    REQUIRE(std::holds_alternative<std::unique_ptr<IWebView2Host>>(result));
+}
+
+TEST_CASE("precache exhausts retry budget -> EnvFailed",
+          "[precache_manager]") {
+    int host_create_count = 0;
+    std::function<void(int)> last_pf;
+    auto factory = [&](HWND, std::function<void()>,
+                       std::function<void(int)> on_pf)
+        -> std::unique_ptr<IWebView2Host> {
+        ++host_create_count;
+        last_pf = on_pf;
+        return std::make_unique<TestHost>();
+    };
+
+    auto& m = fresh_manager();
+    m.set_host_factory_for_test(factory);
+    m.ensure_started();
+
+    // kMaxProcessFailedRetries == 2, so three failures exhaust the budget.
+    last_pf(1);
+    last_pf(1);
+    last_pf(1);
+
+    auto result = m.acquire(HWND_MESSAGE, Theme::Dark, 1.0f);
     REQUIRE(std::holds_alternative<precache_manager::InitFailedToken>(result));
-    auto tok = std::get<precache_manager::InitFailedToken>(result);
-    CHECK(tok.hr == E_FAIL);
 }
