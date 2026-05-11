@@ -15,6 +15,7 @@ add_library(mdview_core STATIC
     native/encoding.cpp
     native/event_revoker.cpp
     native/init_error.cpp
+    native/precache_manager.cpp
     native/renderer_protocol.cpp
     native/viewer_host.cpp
     native/viewer_paths.cpp
