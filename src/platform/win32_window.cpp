@@ -23,7 +23,8 @@ std::unordered_map<std::wstring, RegistrationEntry> g_classes;
 void ensure_window_class_registered(
     HINSTANCE module_instance,
     const wchar_t* class_name,
-    WNDPROC window_proc) {
+    WNDPROC window_proc,
+    HBRUSH hbr_background) {
 
     std::lock_guard<std::mutex> lock(g_mutex);
 
@@ -38,7 +39,7 @@ void ensure_window_class_registered(
     wc.lpfnWndProc   = window_proc;
     wc.hInstance     = module_instance;
     wc.hCursor       = ::LoadCursorW(nullptr, IDC_ARROW);
-    wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    wc.hbrBackground = hbr_background;
     wc.lpszClassName = class_name;
 
     const ATOM atom = ::RegisterClassExW(&wc);

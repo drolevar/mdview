@@ -27,6 +27,7 @@ public:
     int                                   focus_count  = 0;
     std::optional<mdview::Theme>          last_color_scheme;
     int                                   color_scheme_count = 0;
+    int                                   show_count   = 0;
 
     void create(HWND, std::function<void(HRESULT)> on_created) override {
         last_create_cb = std::move(on_created);
@@ -48,6 +49,7 @@ public:
         last_color_scheme = theme;
         ++color_scheme_count;
     }
+    void show() noexcept override { ++show_count; }
 
     // Parses the last posted JSON and returns its "id" field, or -1.
     int last_posted_doc_id() const {

@@ -55,6 +55,13 @@ public:
     // call before controller-ready — implementations stash the latest
     // value and apply once the controller exists.
     virtual void set_color_scheme(Theme theme) noexcept = 0;
+
+    // Make the controller visible. WebView2Host starts hidden so the
+    // navigation transition (which paints white regardless of
+    // DefaultBackgroundColor) doesn't flicker through. Called by
+    // ViewerHost when the renderer signals ready — by then JS has
+    // already applied data-theme and the page is dark.
+    virtual void show() noexcept = 0;
 };
 
 }

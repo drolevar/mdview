@@ -91,17 +91,21 @@ void WebView2Host::create(HWND parent_hwnd,
                                 L"virtual host mapping skipped");
                         }
 
-                        // Apply TC's theme to the controller BEFORE the
-                        // first Navigate so the initial frame WebView2
-                        // paints uses the right background — eliminates
-                        // the white-flash-to-dark transition users see
-                        // when TC is in dark mode at plugin-load time.
+                        // Apply TC's theme to the controller before the
+                        // first Navigate. (Note: empirically not enough
+                        // on its own — see apply_color_scheme_to_controller_.)
                         apply_color_scheme_to_controller_();
 
                         RECT rc{};
                         ::GetClientRect(parent_hwnd_, &rc);
                         THROW_IF_FAILED(controller_->put_Bounds(rc));
-                        THROW_IF_FAILED(controller_->put_IsVisible(TRUE));
+                        // Keep the controller hidden through the
+                        // navigation transition (WebView2 shows white
+                        // here regardless of DefaultBackgroundColor).
+                        // ViewerHost calls show() once RendererReady
+                        // arrives, by which point JS has already toggled
+                        // data-theme and the page is dark.
+                        THROW_IF_FAILED(controller_->put_IsVisible(FALSE));
                         THROW_IF_FAILED(webview_->Navigate(kAppNavigateTo));
 
                         if (cb_inner) cb_inner(S_OK);
@@ -174,6 +178,15 @@ void WebView2Host::reload() noexcept {
     }
 }
 
+void WebView2Host::show() noexcept {
+    if (!controller_) {
+        debug_log::log(L"viewer-host: show requested before controller ready");
+        return;
+    }
+    debug_log::log(L"viewer-host: controller put_IsVisible(TRUE)");
+    LOG_IF_FAILED(controller_->put_IsVisible(TRUE));
+}
+
 void WebView2Host::set_color_scheme(Theme theme) noexcept {
     pending_color_scheme_ = theme;
     if (controller_) {
@@ -187,6 +200,9 @@ void WebView2Host::set_color_scheme(Theme theme) noexcept {
 void WebView2Host::apply_color_scheme_to_controller_() noexcept {
     if (!controller_) return;
 
+    debug_log::log(L"viewer-host: apply_color_scheme scheme={}",
+                   to_wire(pending_color_scheme_));
+
     // Controller default background paints before any page CSS loads.
     // Without this, the user sees a white flash between WebView2's
     // built-in white pre-page bg and our :root[data-theme="dark"] rule
@@ -195,12 +211,25 @@ void WebView2Host::apply_color_scheme_to_controller_() noexcept {
         COREWEBVIEW2_COLOR color{};
         color.A = 0xFF;
         if (pending_color_scheme_ == Theme::Dark) {
-            // Matches styles.css --bg dark: #1c1c1e.
+            // Matches styles.css --bg dark: #1c1c1e. Note: empirically
+            // (magenta diagnostic, 2026-05-11) this is NOT honored
+            // during the navigation transition — WebView2 shows white
+            // until the page renders. The controller stays hidden via
+            // put_IsVisible(FALSE) until ViewerHost gets RendererReady.
             color.R = 0x1C; color.G = 0x1C; color.B = 0x1E;
         } else {
             color.R = 0xFF; color.G = 0xFF; color.B = 0xFF;
         }
-        LOG_IF_FAILED(c2->put_DefaultBackgroundColor(color));
+        HRESULT hr = c2->put_DefaultBackgroundColor(color);
+        debug_log::log(
+            L"viewer-host: put_DefaultBackgroundColor "
+            L"rgba=#{:02x}{:02x}{:02x}{:02x} hr=0x{:08x}",
+            color.R, color.G, color.B, color.A,
+            static_cast<uint32_t>(hr));
+    } else {
+        debug_log::log(
+            L"viewer-host: ICoreWebView2Controller2 not available - "
+            L"DefaultBackgroundColor skipped");
     }
 
     // Profile.PreferredColorScheme drives prefers-color-scheme CSS
@@ -208,7 +237,11 @@ void WebView2Host::apply_color_scheme_to_controller_() noexcept {
     if (webview_) {
         if (auto wv13 = webview_.try_query<ICoreWebView2_13>()) {
             wil::com_ptr<ICoreWebView2Profile> profile;
-            if (SUCCEEDED(wv13->get_Profile(&profile)) && profile) {
+            HRESULT hr1 = wv13->get_Profile(&profile);
+            debug_log::log(
+                L"viewer-host: get_Profile hr=0x{:08x}",
+                static_cast<uint32_t>(hr1));
+            if (SUCCEEDED(hr1) && profile) {
                 COREWEBVIEW2_PREFERRED_COLOR_SCHEME scheme =
                     COREWEBVIEW2_PREFERRED_COLOR_SCHEME_AUTO;
                 if (pending_color_scheme_ == Theme::Dark) {
@@ -216,8 +249,16 @@ void WebView2Host::apply_color_scheme_to_controller_() noexcept {
                 } else if (pending_color_scheme_ == Theme::Light) {
                     scheme = COREWEBVIEW2_PREFERRED_COLOR_SCHEME_LIGHT;
                 }
-                LOG_IF_FAILED(profile->put_PreferredColorScheme(scheme));
+                HRESULT hr2 = profile->put_PreferredColorScheme(scheme);
+                debug_log::log(
+                    L"viewer-host: put_PreferredColorScheme value={} hr=0x{:08x}",
+                    static_cast<int>(scheme),
+                    static_cast<uint32_t>(hr2));
             }
+        } else {
+            debug_log::log(
+                L"viewer-host: ICoreWebView2_13 not available - "
+                L"PreferredColorScheme skipped");
         }
     }
 }
