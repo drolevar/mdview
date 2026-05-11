@@ -1,0 +1,33 @@
+/* mdview KaTeX overrides. KaTeX's stock CSS uses fixed color choices
+   that ignore the document theme; tint the rendered glyphs via
+   currentColor so they inherit main#document's color and follow
+   light/dark switches without re-rendering. */
+
+.katex {
+    color: inherit;
+}
+
+/* Display math: KaTeX wraps in .katex-display; we wrap that in
+   .mdview-math-display. Allow horizontal scroll so wide formulas
+   don't break the column layout. */
+main#document .mdview-math-display {
+    margin: 0.8em 0;
+    overflow-x: auto;
+}
+
+main#document .mdview-math-display .katex-display {
+    margin: 0;
+}
+
+/* Inline error frame written by math-chunk.ts on parse failure. The
+   source TeX stays visible; hover gives the KaTeX message. */
+main#document .mdview-math-error {
+    color: #c0392b;
+    border-bottom: 1px dotted #c0392b;
+    cursor: help;
+}
+
+:root[data-theme="dark"] main#document .mdview-math-error {
+    color: #ff8a80;
+    border-bottom-color: #ff8a80;
+}

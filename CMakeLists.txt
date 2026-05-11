@@ -38,6 +38,9 @@ add_custom_command(
         ${VIEWER_DIR}/src/theme.ts
         ${VIEWER_DIR}/src/highlight.ts
         ${VIEWER_DIR}/src/mermaid-chunk.ts
+        ${VIEWER_DIR}/src/math-rules.ts
+        ${VIEWER_DIR}/src/math-chunk.ts
+        ${VIEWER_DIR}/styles/katex-overrides.css
         ${VIEWER_DIR}/src/summary.ts
         ${VIEWER_DIR}/src/declarations.d.ts
         ${VIEWER_DIR}/package-lock.json
