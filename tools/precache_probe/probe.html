@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>WebView2 Precache Probe</title>
+<style>
+    html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        font-family: "Segoe UI", "Calibri", sans-serif;
+        background: #0a4d8c;
+        color: #fff;
+    }
+    body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px;
+        box-sizing: border-box;
+    }
+    h1 {
+        font-size: 48px;
+        margin: 0 0 16px;
+        color: #fff200;
+    }
+    p {
+        font-size: 20px;
+        margin: 4px 0;
+    }
+    code {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: Consolas, monospace;
+    }
+    #status {
+        margin-top: 24px;
+        font-size: 18px;
+        color: #b8ffb8;
+    }
+</style>
+</head>
+<body>
+    <h1>PROBE OK - content visible</h1>
+    <p>If you can read this text in a normal window with chrome,</p>
+    <p>the WebView2 controller successfully reparented from
+       <code>HWND_MESSAGE</code> to a visible top-level window
+       without requiring a <code>Reload()</code>.</p>
+    <p id="status">JS booted; waiting for native ping.</p>
+<script>
+(function () {
+    "use strict";
+    var status = document.getElementById("status");
+
+    function send(obj) {
+        try {
+            window.chrome.webview.postMessage(JSON.stringify(obj));
+        } catch (e) {
+            // Surface the error visually so a missing post path is obvious.
+            status.textContent = "postMessage failed: " + e;
+        }
+    }
+
+    function onMessage(ev) {
+        var msg;
+        try {
+            msg = (typeof ev.data === "string")
+                ? JSON.parse(ev.data) : ev.data;
+        } catch (e) {
+            status.textContent = "bad host message: " + ev.data;
+            return;
+        }
+        if (msg && msg.type === "ping") {
+            status.textContent = "Received ping, sending pong.";
+            send({ type: "pong" });
+        }
+    }
+
+    window.chrome.webview.addEventListener("message", onMessage);
+
+    function announce() {
+        status.textContent = "DOM ready; announcing.";
+        send({ type: "ready" });
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", announce);
+    } else {
+        announce();
+    }
+})();
+</script>
+</body>
+</html>
