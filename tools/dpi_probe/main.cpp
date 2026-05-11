@@ -672,6 +672,14 @@ private:
 }  // namespace
 
 int wmain(int /*argc*/, wchar_t** /*argv*/) {
+    // Declare per-monitor v2 DPI awareness so GetDpiForWindow reports
+    // the actual monitor DPI instead of the virtualized 96. Without
+    // this, a standalone exe gets the legacy DPI-unaware behavior
+    // (Windows lies + bitmap-scales). The mdview WLX inherits TC's
+    // DPI awareness in production, so this only matters for the probe.
+    ::SetProcessDpiAwarenessContext(
+        DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
     HRESULT co_hr = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(co_hr) && co_hr != RPC_E_CHANGED_MODE) {
         std::wcerr << L"CoInitializeEx failed: " << hr_hex(co_hr) << L"\n";
