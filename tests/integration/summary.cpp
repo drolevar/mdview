@@ -74,6 +74,47 @@ parse_summary_json(const std::wstring& payload) {
             }
         }
 
+        // Schema v2: optional math field. Tolerates three shapes —
+        // missing (v1), explicit null (v2 with no math), and fully
+        // populated object.
+        if (auto math_it = j.find("math");
+            math_it != j.end() && !math_it->is_null()
+            && math_it->is_object()) {
+            MathSummary m;
+            m.chunk_loaded = math_it->value("chunkLoaded", false);
+            if (auto cm = math_it->find("chunkLoadMs");
+                cm != math_it->end() && !cm->is_null()
+                && cm->is_number()) {
+                m.chunk_load_ms = cm->get<int>();
+            }
+            if (auto ps = math_it->find("placeholdersSeen");
+                ps != math_it->end() && ps->is_object()) {
+                m.placeholders_seen.inline_count  = ps->value("inline",  0);
+                m.placeholders_seen.display_count = ps->value("display", 0);
+            }
+            if (auto in = math_it->find("inline");
+                in != math_it->end() && in->is_object()) {
+                m.inline_rendered = in->value("rendered", 0);
+                m.inline_failed   = in->value("failed",   0);
+            }
+            if (auto dis = math_it->find("display");
+                dis != math_it->end() && dis->is_object()) {
+                m.display_rendered = dis->value("rendered", 0);
+                m.display_failed   = dis->value("failed",   0);
+            }
+            if (auto errs = math_it->find("errors");
+                errs != math_it->end() && errs->is_array()) {
+                for (const auto& e : *errs) {
+                    MathErrorRecord r;
+                    r.id      = e.value("id",      std::string{});
+                    r.tex     = e.value("tex",     std::string{});
+                    r.message = e.value("message", std::string{});
+                    m.errors.push_back(std::move(r));
+                }
+            }
+            s.math = std::move(m);
+        }
+
         if (j.contains("imageRequests") && j["imageRequests"].is_array()) {
             for (auto& ir : j["imageRequests"]) {
                 s.image_requests.emplace_back(
