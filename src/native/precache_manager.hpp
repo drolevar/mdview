@@ -10,6 +10,20 @@
 #include <mutex>
 #include <variant>
 
+namespace mdview { class precache_manager; }
+namespace mdview::detail {
+// Test seam: resets a singleton's state so each TEST_CASE starts from
+// a fresh Empty state. Declared here so tests can include the header
+// and call it without touching unrelated translation units.
+void reset_precache_manager_for_test(precache_manager&) noexcept;
+
+// Test seam: directly forces the singleton into EnvFailed with the
+// given HRESULT. Lets tests exercise the acquire-EnvFailed branch
+// without driving the retry counter through self-destructing host
+// callbacks (which require Task 6's rebuild logic to be sound).
+void force_env_failed_for_test(precache_manager&, HRESULT hr) noexcept;
+}
+
 namespace mdview {
 
 // Process-lifetime singleton that owns a hidden, pre-warmed WebView2
@@ -69,6 +83,7 @@ private:
     };
 
     void start_build_();
+    void start_build_locked_();
     void on_precache_ready_();
     void on_precache_process_failed_(int kind);
 
@@ -76,8 +91,8 @@ private:
 
     static LRESULT CALLBACK msg_only_proc_(HWND, UINT, WPARAM, LPARAM);
 
-    std::once_flag         started_flag_;
     std::mutex             mu_;
+    bool                   started_               = false;
     State                  state_                 = State::Empty;
     HRESULT                env_failed_hr_         = S_OK;
     int                    process_failed_retries_ = 0;
@@ -87,6 +102,11 @@ private:
     std::unique_ptr<IWebView2Host>  pending_host_;
 
     HostFactory                     test_host_factory_;
+
+    friend void detail::reset_precache_manager_for_test(
+        precache_manager&) noexcept;
+    friend void detail::force_env_failed_for_test(
+        precache_manager&, HRESULT) noexcept;
 };
 
 }

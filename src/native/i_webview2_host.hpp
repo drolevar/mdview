@@ -13,15 +13,16 @@ namespace mdview {
 // Abstraction over WebView2 controller lifecycle for testability.
 // Production: WebView2Host. Tests: a mock implementing this interface.
 //
-// M6: the create/show pair was replaced by a two-phase build:
+// M6: the create/show pair was replaced by a three-phase build:
 //   1. WebView2Host::create_under_message_only() (static factory) —
 //      builds env + controller under an HWND_MESSAGE parent, navigates
 //      to the app, waits for renderer 'ready'. Owned by precache_manager
 //      during this phase; the host is hidden the whole time.
 //   2. adopt() — reparent the controller to the real Lister HWND, push
-//      theme + raster scale, make visible, and rebind the renderer-
-//      message + process-failed callbacks from the manager-owned
-//      precache phase to the caller's (PluginWindow's).
+//      theme + raster scale, make visible. Pure reparent: no callbacks.
+//   3. rebind_callbacks() — replace the manager-owned precache
+//      callbacks with the caller's (PluginWindow / ViewerHost). Called
+//      after adopt completes.
 class IWebView2Host {
 public:
     using MessageCallback       = std::function<void(std::wstring_view json)>;
@@ -30,16 +31,22 @@ public:
     virtual ~IWebView2Host() = default;
 
     // Reparent the controller to `new_parent`, apply theme + raster
-    // scale, make visible, and rebind callbacks. Must be called once
-    // on a host that has reached the Parked phase (post-renderer-ready
-    // under the message-only parent). Multiple adopt() calls or adopt()
-    // on a non-Parked host log and abort.
-    virtual void adopt(HWND                  new_parent,
-                       RECT                  new_bounds,
-                       Theme                 theme,
-                       float                 raster_scale,
-                       MessageCallback       on_renderer_message,
-                       ProcessFailedCallback on_process_failed) noexcept = 0;
+    // scale, and make visible. Must be called once on a host that has
+    // reached the Parked phase (post-renderer-ready under the
+    // message-only parent). Multiple adopt() calls or adopt() on a
+    // non-Parked host log and abort. Does not wire callbacks — caller
+    // chains rebind_callbacks() once adopt returns.
+    virtual void adopt(HWND  new_parent,
+                       RECT  new_bounds,
+                       Theme theme,
+                       float raster_scale) noexcept = 0;
+
+    // Replace the renderer-message and process-failed callbacks. Valid
+    // only after adopt() has transitioned the host to the Adopted
+    // phase; the precache-phase callbacks are cleared.
+    virtual void rebind_callbacks(
+        MessageCallback       on_renderer_message,
+        ProcessFailedCallback on_process_failed) noexcept = 0;
 
     // Push a fresh rasterization scale to ICoreWebView2Controller3.
     // Called from PluginWindow on WM_DPICHANGED. Safe to call before
