@@ -114,6 +114,10 @@ jobs:
               Write-Error "math chunk exceeds 1 MB sanity cap ($ckb KB)"
               exit 1
             }
+            if ($c.Name -match "^chunk-" -and $c.Length -gt 1536 * 1024) {
+              Write-Error "shared chunk exceeds 1.5 MB sanity cap ($ckb KB)"
+              exit 1
+            }
           }
 
       - name: Upload plugin artifact
