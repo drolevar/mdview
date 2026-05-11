@@ -46,11 +46,6 @@ LRESULT CALLBACK probe_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
 
 TEST_CASE("itm_focus: WM_COMMAND posted to parent on WebView2 focus gain",
           "[integration][audit][focus]") {
-    if (Session::hidden) {
-        SKIP("itm_focus requires a foreground-visible parent; "
-             "headless CI mode cannot grant SetForegroundWindow. "
-             "Run locally without --hidden to exercise this path.");
-    }
     static bool registered = false;
     if (!registered) {
         WNDCLASSEXW wc{};
@@ -69,7 +64,6 @@ TEST_CASE("itm_focus: WM_COMMAND posted to parent on WebView2 focus gain",
         CW_USEDEFAULT, CW_USEDEFAULT, 1024, 768,
         nullptr, nullptr, ::GetModuleHandleW(nullptr), nullptr);
     REQUIRE(probe.hwnd != nullptr);
-    if (!Session::hidden) ::ShowWindow(probe.hwnd, SW_SHOW);
 
     auto dll_path = Session::resolve_wlx_path();
     REQUIRE_FALSE(dll_path.empty());
@@ -101,18 +95,20 @@ TEST_CASE("itm_focus: WM_COMMAND posted to parent on WebView2 focus gain",
     REQUIRE(plugin != nullptr);
 
     // WebView2's controller is created asynchronously after ListLoadW
-    // returns. SetFocus before the controller exists is a no-op (the
-    // plugin's WM_SETFOCUS handler calls MoveFocus on a null
-    // controller, then never re-fires). Wait for the "renderer ready"
-    // log line so SetFocus lands on a live WebView2 and the GotFocus
-    // event can fire.
+    // returns. Sending WM_SETFOCUS before the controller exists results
+    // in a MoveFocus call on a null controller, which is a no-op. Wait
+    // for the "renderer ready" log line so MoveFocus lands on a live
+    // WebView2 and the GotFocus event can fire.
     bool ready = pump_until(
         [&]() { return g_renderer_ready.load(std::memory_order_acquire); },
         std::chrono::milliseconds{10000});
     REQUIRE(ready);
 
-    ::SetForegroundWindow(probe.hwnd);
-    ::SetFocus(plugin);
+    // Dispatch focus via WM_SETFOCUS directly — this exercises the same
+    // production code path (PluginWindow::window_proc → viewer_->focus()
+    // → MoveFocus(PROGRAMMATIC) → GotFocus event → PostMessage ITM_FOCUS)
+    // without requiring OS focus grant or SetForegroundWindow.
+    ::SendMessage(plugin, WM_SETFOCUS, 0, 0);
 
     bool got_focus = pump_until(
         [&]() { return probe.itm_focus_count.load() > 0; },
