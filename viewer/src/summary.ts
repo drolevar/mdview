@@ -43,14 +43,14 @@ export function buildSummary(
         });
 
     // Treat the document as math-bearing if any placeholder was
-    // discovered (counts non-zero) or the chunk loaded successfully.
-    // chunkLoaded alone covers the case where the chunk loaded but
-    // every render failed; the counts alone cover chunk-load failure
-    // with placeholders still in the DOM.
+    // discovered or the chunk loaded successfully. placeholdersSeen
+    // is populated in all three return paths of runMathPass, so it
+    // also catches the chunk-load-failure case where rendered+failed
+    // counts are zero but the document did contain math.
     const hasMath =
-        mathPass.inline.rendered  + mathPass.inline.failed  > 0 ||
-        mathPass.display.rendered + mathPass.display.failed > 0 ||
-        mathPass.chunkLoaded;
+        mathPass.placeholdersSeen.inline
+        + mathPass.placeholdersSeen.display > 0
+        || mathPass.chunkLoaded;
 
     return {
         summarySchema: 2,
@@ -64,11 +64,12 @@ export function buildSummary(
             diagrams:     mermaidPass.diagrams,
         },
         math: hasMath ? {
-            chunkLoaded: mathPass.chunkLoaded,
-            chunkLoadMs: mathPass.chunkLoadMs,
-            inline:      mathPass.inline,
-            display:     mathPass.display,
-            errors:      mathPass.errors,
+            chunkLoaded:      mathPass.chunkLoaded,
+            chunkLoadMs:      mathPass.chunkLoadMs,
+            placeholdersSeen: mathPass.placeholdersSeen,
+            inline:           mathPass.inline,
+            display:          mathPass.display,
+            errors:           mathPass.errors,
         } : null,
         imageRequests,
     };

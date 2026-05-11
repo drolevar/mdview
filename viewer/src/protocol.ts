@@ -79,8 +79,12 @@ export interface RenderedSummary {
     // null when the document contained no math (chunk not loaded
     // AND no inline/display placeholders were found).
     math: {
-        chunkLoaded: boolean;
-        chunkLoadMs: number | null;
+        chunkLoaded:      boolean;
+        chunkLoadMs:      number | null;
+        // Placeholder counts discovered in the DOM. Non-zero even
+        // when chunk-load failed, so the harness can tell "no math"
+        // from "math present but chunk failed".
+        placeholdersSeen: { inline: number; display: number };
         inline:  { rendered: number; failed: number };
         display: { rendered: number; failed: number };
         errors: Array<{

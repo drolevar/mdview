@@ -12,6 +12,12 @@ export interface MathOutcome {
 export interface MathPassData {
     chunkLoaded: boolean;
     chunkLoadMs: number | null;
+    // Counts of placeholders found in the DOM before render was
+    // attempted. Populated unconditionally by app.ts in all three
+    // return paths (early-return, success, chunk-load failure) so
+    // the summary can tell "doc had no math" from "doc had math
+    // but the chunk failed to load".
+    placeholdersSeen: { inline: number; display: number };
     inline:  { rendered: number; failed: number };
     display: { rendered: number; failed: number };
     errors:  { id: string; tex: string; message: string }[];
@@ -94,7 +100,10 @@ export function renderAll(
     displayEls: NodeListOf<HTMLElement>,
 ): {
     outcomes: MathOutcome[];
-    pass:     Omit<MathPassData, 'chunkLoaded' | 'chunkLoadMs'>;
+    // chunkLoaded / chunkLoadMs / placeholdersSeen are populated by
+    // app.ts; here we report only the render-pass results.
+    pass: Omit<MathPassData,
+               'chunkLoaded' | 'chunkLoadMs' | 'placeholdersSeen'>;
 } {
     const state: RenderState = {
         outcomes:  [],

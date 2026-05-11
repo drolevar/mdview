@@ -34,3 +34,32 @@ main#document .mdview-math-error {
     color: #ff8a80;
     border-bottom-color: #ff8a80;
 }
+
+/* Whole-chunk failure (asset 404, network error) — applied by
+   app.ts to every math placeholder when the dynamic import throws.
+   The class lands on the original placeholder (span for inline, div
+   for display) which still carries its source TeX in data-tex, so
+   we wrap the existing content in a visible error frame via padding
+   + a dashed border + a left bar. Per-element parse error uses a
+   dotted border in the same colour family; the dashed border + bar
+   here read as "more severe" because every placeholder in the doc
+   carries it at once. */
+main#document .mdview-math-failed {
+    color: #c0392b;
+    border: 1px dashed #c0392b;
+    border-left-width: 4px;
+    padding: 0 0.3em;
+    cursor: help;
+}
+
+main#document div.mdview-math-failed {
+    /* Display-mode placeholders are <div> blocks; give them a touch
+       more padding so the frame doesn't crowd the source TeX. */
+    padding: 0.2em 0.4em;
+    margin: 0.8em 0;
+}
+
+:root[data-theme="dark"] main#document .mdview-math-failed {
+    color: #ff8a80;
+    border-color: #ff8a80;
+}
