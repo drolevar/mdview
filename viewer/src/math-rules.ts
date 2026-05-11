@@ -13,7 +13,11 @@
 // code spans / fenced code blocks never reaches inline rules.
 
 import type MarkdownIt from 'markdown-it';
-import type { StateInline, StateBlock } from 'markdown-it/index.js';
+// State types live on sub-modules; import them by their concrete ESM paths
+// so resolution doesn't depend on the CJS-shim namespace fallback in
+// @types/markdown-it (which doesn't surface under moduleResolution=Bundler).
+import type StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs';
+import type StateBlock  from 'markdown-it/lib/rules_block/state_block.mjs';
 
 const CC_DOLLAR    = 0x24; // $
 const CC_BACKSLASH = 0x5C; // \
@@ -58,6 +62,9 @@ function mathInline(state: StateInline, silent: boolean): boolean {
         token.markup  = '$';
         token.content = src.slice(pos + 1, found);
     }
+    // Intentional: advance state.pos in both silent and non-silent modes,
+    // matching markdown-it's built-in `escape` rule. Silent-mode callers
+    // expect the rule to consume the token if it would succeed.
     state.pos = found + 1;
     return true;
 }
@@ -75,14 +82,18 @@ function mathBlock(
     if (state.src.charCodeAt(startPos)     !== CC_DOLLAR) return false;
     if (state.src.charCodeAt(startPos + 1) !== CC_DOLLAR) return false;
 
-    if (silent) return true;
-
+    // The close-finding scan must run BEFORE the silent-mode short-circuit.
+    // Markdown-it's paragraph rule calls block rules with silent=true to
+    // probe for a terminator; returning true after only matching the opening
+    // `$$` would split the paragraph even when no valid close exists. Same
+    // pattern as the built-in `fence` rule.
     const firstLine = state.src.slice(startPos + 2, maxPos);
 
     // Single-line form: `$$...$$` on one line.
     const inlineClose = firstLine.indexOf('$$');
     if (inlineClose !== -1) {
         if (firstLine.slice(inlineClose + 2).trim().length > 0) return false;
+        if (silent) return true;
         return emit(state, startLine, startLine + 1,
                     firstLine.slice(0, inlineClose));
     }
@@ -95,6 +106,7 @@ function mathBlock(
         const idx = lineText.indexOf('$$');
         if (idx === -1) continue;
         if (lineText.slice(idx + 2).trim().length > 0) return false;
+        if (silent) return true;
 
         const middle = next > startLine + 1
             ? state.getLines(startLine + 1, next, 0, false)
