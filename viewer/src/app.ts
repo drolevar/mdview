@@ -8,6 +8,7 @@ import {
 import type { MermaidPassData }               from './mermaid-chunk.js';
 import type { MathPassData }                  from './math-chunk.js';
 import { buildSummary }                       from './summary.js';
+import 'katex/dist/katex.min.css';
 
 let lastMermaidPass: MermaidPassData = {
     chunkLoaded: false, chunkLoadMs: null, diagrams: [],
