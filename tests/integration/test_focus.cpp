@@ -2,12 +2,14 @@
 #include "pump.hpp"
 
 #include "plugin/tc_lister_constants.hpp"  // ITM_FOCUS
+#include "native/debug_log.hpp"            // LogSink
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <string_view>
 
 using namespace mdview::integration;
 
@@ -20,6 +22,14 @@ struct ParentMsgWindow {
 };
 
 ParentMsgWindow* g_probe = nullptr;
+std::atomic<bool> g_renderer_ready{false};
+
+void on_log_line(const wchar_t* line, size_t len) noexcept {
+    std::wstring_view sv(line, len);
+    if (sv.find(L"renderer ready") != std::wstring_view::npos) {
+        g_renderer_ready.store(true, std::memory_order_release);
+    }
+}
 
 LRESULT CALLBACK probe_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
     if (m == WM_COMMAND && g_probe) {
@@ -61,7 +71,9 @@ TEST_CASE("itm_focus: WM_COMMAND posted to parent on WebView2 focus gain",
     REQUIRE(probe.hwnd != nullptr);
     if (!Session::hidden) ::ShowWindow(probe.hwnd, SW_SHOW);
 
-    HMODULE dll = ::LoadLibraryW(L"mdview.wlx64");
+    auto dll_path = Session::resolve_wlx_path();
+    REQUIRE_FALSE(dll_path.empty());
+    HMODULE dll = ::LoadLibraryW(dll_path.c_str());
     REQUIRE(dll != nullptr);
     auto load = reinterpret_cast<HWND(__stdcall*)(HWND, wchar_t*, int)>(
         ::GetProcAddress(dll, "ListLoadW"));
@@ -69,17 +81,35 @@ TEST_CASE("itm_focus: WM_COMMAND posted to parent on WebView2 focus gain",
         ::GetProcAddress(dll, "ListCloseWindow"));
     auto set_params = reinterpret_cast<void(__stdcall*)(void*)>(
         ::GetProcAddress(dll, "ListSetDefaultParams"));
+    using Fn_SetLogSink = void(*)(mdview::debug_log::LogSink) noexcept;
+    auto set_log_sink = reinterpret_cast<Fn_SetLogSink>(
+        ::GetProcAddress(dll, "MdviewTest_SetLogSink"));
     REQUIRE(load);
     REQUIRE(close_fn);
     REQUIRE(set_params);
+    REQUIRE(set_log_sink);
 
     struct DPS { int s; DWORD lo; DWORD hi; char ini[260]; } dps{};
     dps.s = sizeof(dps); dps.hi = 2; dps.lo = 12;
     set_params(&dps);
 
+    g_renderer_ready.store(false, std::memory_order_release);
+    set_log_sink(&on_log_line);
+
     auto path = (Session::smoke_dir / L"14_focus_signal.md").wstring();
     HWND plugin = load(probe.hwnd, path.data(), 0);
     REQUIRE(plugin != nullptr);
+
+    // WebView2's controller is created asynchronously after ListLoadW
+    // returns. SetFocus before the controller exists is a no-op (the
+    // plugin's WM_SETFOCUS handler calls MoveFocus on a null
+    // controller, then never re-fires). Wait for the "renderer ready"
+    // log line so SetFocus lands on a live WebView2 and the GotFocus
+    // event can fire.
+    bool ready = pump_until(
+        [&]() { return g_renderer_ready.load(std::memory_order_acquire); },
+        std::chrono::milliseconds{10000});
+    REQUIRE(ready);
 
     ::SetForegroundWindow(probe.hwnd);
     ::SetFocus(plugin);
@@ -93,6 +123,7 @@ TEST_CASE("itm_focus: WM_COMMAND posted to parent on WebView2 focus gain",
         CHECK(probe.last_lparam == plugin);
     }
 
+    set_log_sink(nullptr);
     close_fn(plugin);
     ::DestroyWindow(probe.hwnd);
     ::FreeLibrary(dll);

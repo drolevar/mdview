@@ -120,21 +120,29 @@ void Session::create_parent_window_() {
     }
 }
 
-void Session::load_dll_() {
+std::filesystem::path Session::resolve_wlx_path() {
     wchar_t exe_path[MAX_PATH];
     ::GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
     std::filesystem::path exe_dir =
         std::filesystem::path{exe_path}.parent_path();
-    // Try a few candidate locations: same dir as the test exe (used
-    // when the DLL is staged next to it), and `<build>/src/` for the
-    // standard layout where exe lives at `<build>/tests/integration/`.
+    // Same dir as the test exe (DLL staged next to it), or
+    // `<build>/src/` for the standard layout where exe lives at
+    // `<build>/tests/integration/`.
     std::filesystem::path candidates[] = {
         exe_dir / L"mdview.wlx64",
         exe_dir.parent_path().parent_path() / L"src" / L"mdview.wlx64",
     };
     for (auto& c : candidates) {
-        dll_ = ::LoadLibraryW(c.c_str());
-        if (dll_) break;
+        std::error_code ec;
+        if (std::filesystem::exists(c, ec)) return c;
+    }
+    return {};
+}
+
+void Session::load_dll_() {
+    const auto dll_path = resolve_wlx_path();
+    if (!dll_path.empty()) {
+        dll_ = ::LoadLibraryW(dll_path.c_str());
     }
     if (!dll_) {
         throw std::runtime_error("LoadLibrary mdview.wlx64 failed");

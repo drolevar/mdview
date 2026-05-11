@@ -80,6 +80,12 @@ private:
 public:
     static bool                hidden;
     static std::filesystem::path smoke_dir;
+
+    // Resolve the mdview.wlx64 path using the same candidate set
+    // `load_dll_` uses, so tests that need raw `LoadLibraryW` access
+    // (e.g. test_focus) don't have to rely on DLL search order.
+    // Returns an empty path if no candidate exists.
+    static std::filesystem::path resolve_wlx_path();
 };
 
 }
