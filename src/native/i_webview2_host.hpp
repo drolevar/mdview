@@ -1,5 +1,7 @@
 #pragma once
 
+#include "native/theme.hpp"
+
 #include <windows.h>
 
 #include <filesystem>
@@ -44,6 +46,15 @@ public:
     // a fresh navigation. See WebView2Feedback #2456 and the
     // SetVirtualHostNameToFolderMapping docs.
     virtual void reload() noexcept = 0;
+
+    // Pushes TC's theme to WebView2 itself (Controller default
+    // background + Profile preferred color scheme). Affects pre-CSS
+    // paint background, scrollbar coloring, native form controls, and
+    // what `prefers-color-scheme` matches in CSS. Independent of the
+    // renderer-side data-theme attribute the JS app toggles. Safe to
+    // call before controller-ready — implementations stash the latest
+    // value and apply once the controller exists.
+    virtual void set_color_scheme(Theme theme) noexcept = 0;
 };
 
 }

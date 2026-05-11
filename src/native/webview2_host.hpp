@@ -35,10 +35,12 @@ public:
     HRESULT remap_doc_dir(
         const std::filesystem::path& doc_dir) noexcept override;
     void reload() noexcept override;
+    void set_color_scheme(Theme theme) noexcept override;
 
 private:
     void apply_settings_();
     void install_handlers_();
+    void apply_color_scheme_to_controller_() noexcept;
 
     MessageCallback                            on_renderer_message_;
     ProcessFailedCallback                      on_process_failed_;
@@ -48,6 +50,7 @@ private:
     wil::com_ptr<ICoreWebView2Settings>        settings_;
     std::vector<EventRevoker>                  revokers_;
     std::shared_ptr<bool>                      alive_token_;
+    Theme                                      pending_color_scheme_ = Theme::System;
 };
 
 }

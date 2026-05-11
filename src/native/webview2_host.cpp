@@ -91,6 +91,13 @@ void WebView2Host::create(HWND parent_hwnd,
                                 L"virtual host mapping skipped");
                         }
 
+                        // Apply TC's theme to the controller BEFORE the
+                        // first Navigate so the initial frame WebView2
+                        // paints uses the right background — eliminates
+                        // the white-flash-to-dark transition users see
+                        // when TC is in dark mode at plugin-load time.
+                        apply_color_scheme_to_controller_();
+
                         RECT rc{};
                         ::GetClientRect(parent_hwnd_, &rc);
                         THROW_IF_FAILED(controller_->put_Bounds(rc));
@@ -164,6 +171,54 @@ HRESULT WebView2Host::remap_doc_dir(
 void WebView2Host::reload() noexcept {
     if (webview_) {
         LOG_IF_FAILED(webview_->Reload());
+    }
+}
+
+void WebView2Host::set_color_scheme(Theme theme) noexcept {
+    pending_color_scheme_ = theme;
+    if (controller_) {
+        apply_color_scheme_to_controller_();
+    }
+    // Otherwise the controller-ready callback (in create()) will apply
+    // pending_color_scheme_ before the first Navigate, so the very first
+    // frame WebView2 paints already uses TC's theme.
+}
+
+void WebView2Host::apply_color_scheme_to_controller_() noexcept {
+    if (!controller_) return;
+
+    // Controller default background paints before any page CSS loads.
+    // Without this, the user sees a white flash between WebView2's
+    // built-in white pre-page bg and our :root[data-theme="dark"] rule
+    // kicking in once JS runs.
+    if (auto c2 = controller_.try_query<ICoreWebView2Controller2>()) {
+        COREWEBVIEW2_COLOR color{};
+        color.A = 0xFF;
+        if (pending_color_scheme_ == Theme::Dark) {
+            // Matches styles.css --bg dark: #1c1c1e.
+            color.R = 0x1C; color.G = 0x1C; color.B = 0x1E;
+        } else {
+            color.R = 0xFF; color.G = 0xFF; color.B = 0xFF;
+        }
+        LOG_IF_FAILED(c2->put_DefaultBackgroundColor(color));
+    }
+
+    // Profile.PreferredColorScheme drives prefers-color-scheme CSS
+    // matching, dark scrollbars, and native form-control coloring.
+    if (webview_) {
+        if (auto wv13 = webview_.try_query<ICoreWebView2_13>()) {
+            wil::com_ptr<ICoreWebView2Profile> profile;
+            if (SUCCEEDED(wv13->get_Profile(&profile)) && profile) {
+                COREWEBVIEW2_PREFERRED_COLOR_SCHEME scheme =
+                    COREWEBVIEW2_PREFERRED_COLOR_SCHEME_AUTO;
+                if (pending_color_scheme_ == Theme::Dark) {
+                    scheme = COREWEBVIEW2_PREFERRED_COLOR_SCHEME_DARK;
+                } else if (pending_color_scheme_ == Theme::Light) {
+                    scheme = COREWEBVIEW2_PREFERRED_COLOR_SCHEME_LIGHT;
+                }
+                LOG_IF_FAILED(profile->put_PreferredColorScheme(scheme));
+            }
+        }
     }
 }
 
