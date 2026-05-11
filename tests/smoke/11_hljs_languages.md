@@ -35,7 +35,7 @@ plugins:
 
 Shell:
 
-```sh
+```bash
 ls -la /tmp
 ```
 

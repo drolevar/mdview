@@ -6,13 +6,18 @@
 
 using namespace mdview::integration;
 
-TEST_CASE("theme: ListSendCommand before load delivers dark on first paint",
+TEST_CASE("theme: ListSendCommand right after load delivers dark on first paint",
           "[integration][theme]") {
     Session s;
-    // Send theme BEFORE load; should be picked up by the first
-    // loadDocument's theme field via ViewerHost::pending_theme_.
-    s.send_command(lc_newparams, lcp_darkmode);
     REQUIRE(s.load(L"12_theme_dark.md"));
+    // Send dark theme between ListLoadW returning and WebView2 reaching
+    // RendererReady; ViewerHost stashes it in pending_theme_ and the
+    // first loadDocument message carries theme: 'dark'. (The pre-load
+    // pending_theme_ path itself is unit-tested in test_viewer_host;
+    // delivering it via Session before load is not supported because
+    // Session::send_command needs a plugin_hwnd, which only exists
+    // after ListLoadW.)
+    s.send_command(lc_newparams, lcp_darkmode);
     auto sum = s.wait_for_summary();
     REQUIRE(sum.has_value());
     CHECK(sum->theme == "dark");

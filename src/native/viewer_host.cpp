@@ -278,6 +278,15 @@ void ViewerHost::post_pending_directly_() {
     DocumentRequest req = std::move(*pending_load_);
     pending_load_.reset();
 
+    // If a theme change arrived between the original load_document
+    // call (which froze req.theme from current_theme_ at that earlier
+    // moment) and now, pending_theme_ holds the newer value. Apply
+    // it so the first paint reflects the latest TC signal.
+    if (pending_theme_) {
+        req.theme = *pending_theme_;
+        pending_theme_.reset();
+    }
+
     // Retry remap_doc_dir if the original attempt in load_document
     // ran before the host's WebView2 was ready (E_UNEXPECTED, leaves
     // base_uri empty). When this retry succeeds it means the current

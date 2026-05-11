@@ -36,6 +36,11 @@ LRESULT CALLBACK probe_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
 
 TEST_CASE("itm_focus: WM_COMMAND posted to parent on WebView2 focus gain",
           "[integration][audit][focus]") {
+    if (Session::hidden) {
+        SKIP("itm_focus requires a foreground-visible parent; "
+             "headless CI mode cannot grant SetForegroundWindow. "
+             "Run locally without --hidden to exercise this path.");
+    }
     static bool registered = false;
     if (!registered) {
         WNDCLASSEXW wc{};
