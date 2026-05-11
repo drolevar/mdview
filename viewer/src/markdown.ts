@@ -5,7 +5,8 @@ import deflist      from 'markdown-it-deflist';
 import attrs        from 'markdown-it-attrs';
 import anchor       from 'markdown-it-anchor';
 
-import { highlight } from './highlight.js';
+import { highlight }         from './highlight.js';
+import { registerMathRules } from './math-rules.js';
 
 export interface FenceRecord {
     language:    string | null;
@@ -27,6 +28,7 @@ md.use(footnote);
 md.use(deflist);
 md.use(attrs);
 md.use(anchor, { permalink: false });
+registerMathRules(md);
 
 const defaultValidate = md.validateLink.bind(md);
 md.validateLink = (url: string): boolean => {
@@ -36,7 +38,9 @@ md.validateLink = (url: string): boolean => {
     return defaultValidate(url);
 };
 
-let mermaidCounter = 0;
+let mermaidCounter      = 0;
+let mathInlineCounter   = 0;
+let mathDisplayCounter  = 0;
 
 function escapeHtml(s: string): string {
     return s
@@ -72,8 +76,31 @@ md.renderer.rules.fence = function(tokens, idx, _options, _env, _self) {
     return `<pre><code class="${cls}">${result.html}</code></pre>\n`;
 };
 
+// Math placeholder renderers. math-rules.ts emits the tokens; the inner
+// `mdview-math-source` element shows the raw TeX as fallback content
+// until math-chunk.ts replaces it with KaTeX output.
+md.renderer.rules.math_inline = (tokens, idx) => {
+    const tex = tokens[idx]!.content;
+    const id  = `mi-${++mathInlineCounter}`;
+    return `<span class="mdview-math-inline" data-math-id="${id}" ` +
+             `data-tex="${escapeHtml(tex)}">` +
+             `<span class="mdview-math-source">${escapeHtml(tex)}</span>` +
+           `</span>`;
+};
+
+md.renderer.rules.math_block = (tokens, idx) => {
+    const tex = tokens[idx]!.content;
+    const id  = `md-${++mathDisplayCounter}`;
+    return `<div class="mdview-math-display" data-math-id="${id}" ` +
+             `data-tex="${escapeHtml(tex)}">` +
+             `<pre class="mdview-math-source">${escapeHtml(tex)}</pre>` +
+           `</div>\n`;
+};
+
 export function render(content: string): string {
     fenceRecords.length = 0;
-    mermaidCounter = 0;
+    mermaidCounter      = 0;
+    mathInlineCounter   = 0;
+    mathDisplayCounter  = 0;
     return md.render(content);
 }
