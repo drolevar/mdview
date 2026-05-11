@@ -12,8 +12,6 @@ permissions:
 jobs:
   windows-x64-debug:
     runs-on: windows-2025-vs2026
-    env:
-      VCPKG_ROOT: C:\vcpkg
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -39,11 +37,25 @@ jobs:
         working-directory: viewer
         run: npm ci
 
+      # Fingerprint vcpkg.exe so a runner-image bump that changes the
+      # bundled vcpkg tool invalidates the cache key. Without this the
+      # key only encodes the manifest; a tool change makes the cached
+      # ABI hashes stale, vcpkg discards the restored tree and rebuilds
+      # from source, and actions/cache refuses to overwrite the existing
+      # key on save — so the freshly-built contents are dropped and the
+      # next run repeats the same waste indefinitely.
+      - name: Fingerprint vcpkg tool
+        id: vcpkg
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash "$env:VCPKG_ROOT\vcpkg.exe" -Algorithm SHA256).Hash.Substring(0, 16)
+          "fingerprint=$h" >> $env:GITHUB_OUTPUT
+
       - name: Cache vcpkg installed
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/build/windows-msvc-x64-debug/vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          key: vcpkg-${{ runner.os }}-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
 
       - name: Configure
         run: cmake --preset windows-msvc-x64-debug
