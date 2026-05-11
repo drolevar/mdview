@@ -17,7 +17,14 @@ add_executable(mdview_tests
     native/test_document_loader.cpp
     native/test_externalize.cpp
     native/test_theme.cpp
-    native/test_plugin_window_commands.cpp)
+    native/test_plugin_window_commands.cpp
+    native/test_summary_v2.cpp
+    # Compiled into the unit-test exe too so test_summary_v2 can
+    # exercise the parser without spinning up an integration session.
+    integration/summary.cpp)
+
+target_include_directories(mdview_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(mdview_tests PRIVATE
     mdview_core

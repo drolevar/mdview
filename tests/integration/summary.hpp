@@ -20,6 +20,29 @@ struct DiagramRecord {
     int         render_ms = 0;
 };
 
+struct MathErrorRecord {
+    std::string id;
+    std::string tex;
+    std::string message;
+};
+
+// Mirrors the schema v2 `math` field in viewer/src/protocol.ts. The
+// `inline` and `display` JS names collide with C++ keywords / could
+// be confusing, so we suffix-disambiguate on the C++ side.
+struct MathSummary {
+    bool chunk_loaded   = false;
+    int  chunk_load_ms  = -1;   // -1 sentinel = JSON null / absent
+    struct {
+        int inline_count  = 0;
+        int display_count = 0;
+    } placeholders_seen;
+    int  inline_rendered  = 0;
+    int  inline_failed    = 0;
+    int  display_rendered = 0;
+    int  display_failed   = 0;
+    std::vector<MathErrorRecord> errors;
+};
+
 struct RenderedSummary {
     int    summary_schema = 0;
     int    duration_ms    = 0;
@@ -33,6 +56,10 @@ struct RenderedSummary {
     bool   mermaid_chunk_loaded = false;
     int    mermaid_chunk_load_ms = -1;
     std::vector<DiagramRecord>   mermaid_diagrams;
+
+    // nullopt in schema v1 payloads and in v2 payloads where the doc
+    // contained no math (wire shape: `"math": null`).
+    std::optional<MathSummary> math;
 
     std::vector<std::pair<std::string, bool>> image_requests;
 };
