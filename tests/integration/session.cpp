@@ -255,9 +255,13 @@ Session::wait_for_summary(std::chrono::milliseconds timeout) {
         },
         timeout, sink_event_);
 
-    if (!got) return std::nullopt;
-
+    // Snapshot regardless of timeout outcome — tests that exercise the
+    // env-failed / fast-failure paths intentionally wait for no
+    // summary but still need captured_log() to see the lines that
+    // *did* fire.
     captured_log_ = local_snapshot();
+
+    if (!got) return std::nullopt;
 
     std::wregex single_re(L"viewer: rendered id=\\d+ summary=(\\{.*\\})");
     std::wregex chunk_re(

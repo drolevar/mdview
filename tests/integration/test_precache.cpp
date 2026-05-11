@@ -93,9 +93,50 @@ TEST_CASE("subsequent F3 reuses env, fresh controller is recycled",
                        L"webview2-host: adopt to lister="));
 }
 
-// Env-failed graceful path (install URL surfaced via format_init_error)
-// is intentionally not covered here: the harness has no
-// force_env_failure option. Implementing failure injection requires
-// either a host_factory test seam exposed through the WLX surface or
-// an env-var-driven failure mode in precache_manager. Recorded as a
-// follow-up for the M7 audit.
+namespace {
+
+// RAII wrapper for setting/clearing an environment variable for the
+// duration of a test case. The WLX DLL reads MDVIEW_FORCE_ENV_FAILURE
+// in PluginWindow::create, so the variable must be set before the
+// fn_load_() call and cleared after so it doesn't leak into other
+// tests in the same process.
+struct ScopedEnvVar {
+    const wchar_t* name;
+    explicit ScopedEnvVar(const wchar_t* n, const wchar_t* value)
+        : name(n) {
+        ::SetEnvironmentVariableW(name, value);
+    }
+    ~ScopedEnvVar() {
+        ::SetEnvironmentVariableW(name, nullptr);
+    }
+};
+
+}
+
+TEST_CASE("env init failure shows install URL via format_init_error",
+          "[integration][precache][env_failed]") {
+    ScopedEnvVar guard{L"MDVIEW_FORCE_ENV_FAILURE", L"1"};
+
+    Session s;
+    s.reset_log();
+
+    // PluginWindow::create sees the env var, paints the install-URL
+    // status text via format_init_error, and returns the window
+    // without going through precache_manager. fn_load_ still returns
+    // a non-null HWND so TC has a Lister to host.
+    REQUIRE(s.load(L"05_first.md"));
+
+    // The renderer never starts, so no summary will ever arrive.
+    // Use a short timeout so the test doesn't burn the default 10 s.
+    auto sum = s.wait_for_summary(std::chrono::milliseconds{500});
+    REQUIRE_FALSE(sum.has_value());
+
+    // The injection log line proves the short-circuit fired.
+    CHECK(log_contains(s.captured_log(),
+                       L"plugin_window: MDVIEW_FORCE_ENV_FAILURE=1"));
+
+    // adopt() must NOT have run — the whole point of the env-failed
+    // path is that precache_manager::acquire was never called.
+    CHECK_FALSE(log_contains(s.captured_log(),
+                             L"webview2-host: adopt to lister="));
+}
