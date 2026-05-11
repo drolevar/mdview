@@ -1,5 +1,6 @@
 import type { RenderedSummary }   from './protocol.js';
 import type { MermaidPassData }   from './mermaid-chunk.js';
+import type { MathPassData }      from './math-chunk.js';
 import { fenceRecords }           from './markdown.js';
 
 export function buildSummary(
@@ -7,6 +8,7 @@ export function buildSummary(
     durationMs: number,
     theme: 'light' | 'dark',
     mermaidPass: MermaidPassData,
+    mathPass: MathPassData,
     docBaseUri: string,
 ): RenderedSummary {
     const blockCount = {
@@ -40,8 +42,18 @@ export function buildSummary(
             };
         });
 
+    // Treat the document as math-bearing if any placeholder was
+    // discovered (counts non-zero) or the chunk loaded successfully.
+    // chunkLoaded alone covers the case where the chunk loaded but
+    // every render failed; the counts alone cover chunk-load failure
+    // with placeholders still in the DOM.
+    const hasMath =
+        mathPass.inline.rendered  + mathPass.inline.failed  > 0 ||
+        mathPass.display.rendered + mathPass.display.failed > 0 ||
+        mathPass.chunkLoaded;
+
     return {
-        summarySchema: 1,
+        summarySchema: 2,
         durationMs,
         theme,
         blockCount,
@@ -51,6 +63,13 @@ export function buildSummary(
             chunkLoadMs:  mermaidPass.chunkLoadMs,
             diagrams:     mermaidPass.diagrams,
         },
+        math: hasMath ? {
+            chunkLoaded: mathPass.chunkLoaded,
+            chunkLoadMs: mathPass.chunkLoadMs,
+            inline:      mathPass.inline,
+            display:     mathPass.display,
+            errors:      mathPass.errors,
+        } : null,
         imageRequests,
     };
 }
