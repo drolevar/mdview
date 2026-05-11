@@ -12,6 +12,8 @@ permissions:
 jobs:
   windows-x64-debug:
     runs-on: windows-2025-vs2026
+    env:
+      VCPKG_ROOT: C:\vcpkg
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -36,10 +38,6 @@ jobs:
       - name: Install renderer deps
         working-directory: viewer
         run: npm ci
-
-      - name: Bootstrap vcpkg
-        shell: pwsh
-        run: .\external\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
       - name: Cache vcpkg installed
         uses: actions/cache@v5
