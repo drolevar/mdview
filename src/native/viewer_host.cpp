@@ -226,6 +226,14 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
                 *t_renderer_ready_ - t_start_).count();
         debug_log::log(L"viewer-host: renderer ready t={}ms", ready_ms);
 
+        // Reveal the controller. It's been hidden through the
+        // navigation transition (which paints white regardless of
+        // DefaultBackgroundColor). By now JS has applied data-theme
+        // synchronously in applyInitialTheme, so the first visible
+        // frame is dark. The brief gap until loadDocument arrives
+        // (~tens of ms) shows an empty dark body — no flicker.
+        if (host_) host_->show();
+
         // Snapshot pending_load_ BEFORE firing the event. The user
         // callback may run for a long time and may itself call
         // load_document, close(), etc.; reading pending_load_ after

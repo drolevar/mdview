@@ -58,11 +58,22 @@ private:
 
     void on_paint();
 
+    void update_theme_(bool dark) noexcept;
+
     HWND hwnd_ = nullptr;
     std::wstring file_to_load_;
     std::wstring status_text_;
     wil::unique_hfont cached_font_;
     std::unique_ptr<ViewerHost> viewer_;
+
+    // Tracks TC's reported dark-mode state (lcp_darkmode /
+    // lcp_darkmodenative bits, delivered via ShowFlags on load and via
+    // lc_newparams on runtime toggle). Distinct from any OS dark-mode
+    // setting: TC and Windows are independent — a user may run TC in
+    // dark mode under a light-mode Win11. on_paint reads this to keep
+    // the "Loading…" splash from flashing system-white before WebView2
+    // becomes visible.
+    bool is_dark_ = false;
 };
 
 }

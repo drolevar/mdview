@@ -36,6 +36,7 @@ public:
         const std::filesystem::path& doc_dir) noexcept override;
     void reload() noexcept override;
     void set_color_scheme(Theme theme) noexcept override;
+    void show() noexcept override;
 
 private:
     void apply_settings_();

@@ -8,10 +8,17 @@ namespace mdview {
 
 // Registers a window class once per process. Idempotent and thread-safe.
 // Throws std::runtime_error if registration fails on the first call.
+// `hbr_background` is the brush the OS fills with on initial show
+// (before any WM_PAINT runs). Pass nullptr if the window paints its
+// own background in WM_PAINT and you want no auto-fill — the typical
+// COLOR_WINDOW+1 default would otherwise flash light against a
+// dark-mode parent.
 void ensure_window_class_registered(
     HINSTANCE module_instance,
     const wchar_t* class_name,
-    WNDPROC window_proc);
+    WNDPROC window_proc,
+    HBRUSH hbr_background =
+        reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1));
 
 // Creates an HFONT sized to the window's effective DPI, using the user's
 // preferred UI font (NONCLIENTMETRICSW.lfMessageFont, typically Segoe UI).
