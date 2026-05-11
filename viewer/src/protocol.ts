@@ -46,7 +46,7 @@ export interface SetThemeMessage {
 }
 
 export interface RenderedSummary {
-    summarySchema: 1;
+    summarySchema: 2;
     durationMs:    number;
     theme:         'light' | 'dark';
     blockCount: {
@@ -76,6 +76,19 @@ export interface RenderedSummary {
             renderMs:     number;
         }>;
     };
+    // null when the document contained no math (chunk not loaded
+    // AND no inline/display placeholders were found).
+    math: {
+        chunkLoaded: boolean;
+        chunkLoadMs: number | null;
+        inline:  { rendered: number; failed: number };
+        display: { rendered: number; failed: number };
+        errors: Array<{
+            id:      string;
+            tex:     string;
+            message: string;
+        }>;
+    } | null;
     imageRequests: Array<{
         url:           string;
         inDocBaseUri:  boolean;

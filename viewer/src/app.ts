@@ -6,10 +6,18 @@ import {
     postReady, postRendered, postRenderError,
 } from './protocol.js';
 import type { MermaidPassData }               from './mermaid-chunk.js';
+import type { MathPassData }                  from './math-chunk.js';
 import { buildSummary }                       from './summary.js';
 
 let lastMermaidPass: MermaidPassData = {
     chunkLoaded: false, chunkLoadMs: null, diagrams: [],
+};
+
+let lastMathPass: MathPassData = {
+    chunkLoaded: false, chunkLoadMs: null,
+    inline:  { rendered: 0, failed: 0 },
+    display: { rendered: 0, failed: 0 },
+    errors:  [],
 };
 
 function run(): void {
@@ -58,6 +66,7 @@ function run(): void {
                         // chunk only if any are present.
                         lastMermaidPass = await runMermaidPass(
                             getResolvedTheme());
+                        lastMathPass = await runMathPass();
                         const elapsed = Math.round(
                             performance.now() - start);
                         if (summaryAtStart) {
@@ -66,6 +75,7 @@ function run(): void {
                                 elapsed,
                                 getResolvedTheme(),
                                 lastMermaidPass,
+                                lastMathPass,
                                 baseUriAtStart,
                             );
                             postRendered(idAtStart, elapsed, summary);
@@ -115,6 +125,50 @@ function run(): void {
                 el.appendChild(errBlock);
             }
             return { chunkLoaded: false, chunkLoadMs: null, diagrams: [] };
+        }
+    }
+
+    async function runMathPass(): Promise<MathPassData> {
+        const inlineEls = container!.querySelectorAll<HTMLElement>(
+            '.mdview-math-inline');
+        const displayEls = container!.querySelectorAll<HTMLElement>(
+            '.mdview-math-display');
+        if (inlineEls.length === 0 && displayEls.length === 0) {
+            return {
+                chunkLoaded: false, chunkLoadMs: null,
+                inline:  { rendered: 0, failed: 0 },
+                display: { rendered: 0, failed: 0 },
+                errors:  [],
+            };
+        }
+        const t0 = performance.now();
+        try {
+            const mod = await import('./math-chunk.js');
+            const chunkLoadMs = Math.round(performance.now() - t0);
+            const { pass } = mod.renderAll(inlineEls, displayEls);
+            return { chunkLoaded: true, chunkLoadMs, ...pass };
+        } catch (err) {
+            // Chunk-load failure (asset 404, network error). KaTeX
+            // parse errors are caught inside the chunk and never
+            // bubble here. Mark placeholders so the failure is
+            // visible; counts stay zero because no render happened.
+            const msg = err instanceof Error
+                ? err.message
+                : String(err ?? '');
+            for (const el of Array.from(inlineEls)) {
+                el.classList.add('mdview-math-failed');
+                el.title = msg;
+            }
+            for (const el of Array.from(displayEls)) {
+                el.classList.add('mdview-math-failed');
+                el.title = msg;
+            }
+            return {
+                chunkLoaded: false, chunkLoadMs: null,
+                inline:  { rendered: 0, failed: 0 },
+                display: { rendered: 0, failed: 0 },
+                errors:  [],
+            };
         }
     }
 
@@ -170,6 +224,10 @@ function run(): void {
 
 export function getLastMermaidPass(): MermaidPassData {
     return lastMermaidPass;
+}
+
+export function getLastMathPass(): MathPassData {
+    return lastMathPass;
 }
 
 run();
