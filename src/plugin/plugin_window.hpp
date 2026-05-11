@@ -1,7 +1,6 @@
 #pragma once
 
 #include "native/viewer_host.hpp"
-#include "native/webview2_host.hpp"
 
 #include <windows.h>
 #include <wil/resource.h>
@@ -49,9 +48,6 @@ public:
     // Routed from WebView2Host's on_process_failed_ callback.
     void on_renderer_crash(int process_failed_kind);
 
-    // Routed from WebView2Host's on_env_failed_ callback (env-init failure).
-    void on_init_failed(HRESULT hr) noexcept;
-
     // Receives lifecycle events from ViewerHost.
     void on_lifecycle_event(const LifecycleEvent& event);
 
@@ -63,23 +59,11 @@ private:
 
     void update_theme_(bool dark) noexcept;
 
-    // Called once when the precache-built WebView2Host reports the
-    // renderer is ready under its message-only parent: adopt to the
-    // real Lister, install instance callbacks, hand the host to
-    // viewer_, and drive a synthetic 'ready' so any queued
-    // load_document drains. Interim path until Task 9 wires the
-    // precache_manager.
-    void finish_create_after_precache_();
-
     HWND hwnd_ = nullptr;
     std::wstring file_to_load_;
     std::wstring status_text_;
     wil::unique_hfont cached_font_;
     std::unique_ptr<ViewerHost> viewer_;
-
-    // Held only between the create_under_message_only call and the
-    // precache 'ready' callback; moved into viewer_ at adopt time.
-    std::unique_ptr<WebView2Host> pending_host_;
 
     // Tracks TC's reported dark-mode state (lcp_darkmode /
     // lcp_darkmodenative bits, delivered via ShowFlags on load and via

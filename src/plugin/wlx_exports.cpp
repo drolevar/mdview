@@ -1,6 +1,7 @@
 #include "native/debug_log.hpp"
 #include "native/detect_string.hpp"
 #include "native/plugin_globals.hpp"
+#include "native/precache_manager.hpp"
 #include "platform/win32_window.hpp"
 #include "plugin/fallback_window.hpp"
 #include "plugin/plugin_window.hpp"
@@ -26,6 +27,7 @@ std::unordered_map<HWND, std::unique_ptr<mdview::PluginWindow>> g_windows;
 }  // namespace
 
 void __stdcall ListSetDefaultParams(ListDefaultParamStruct* dps) {
+    mdview::precache_manager::instance().ensure_started();
     if (dps == nullptr) {
         return;
     }
@@ -41,10 +43,12 @@ void __stdcall ListSetDefaultParams(ListDefaultParamStruct* dps) {
 }
 
 void __stdcall ListGetDetectString(char* DetectString, int maxlen) {
+    mdview::precache_manager::instance().ensure_started();
     mdview::write_detect_string(DetectString, maxlen);
 }
 
 HWND __stdcall ListLoadW(HWND ParentWin, WCHAR* FileToLoad, int ShowFlags) {
+    mdview::precache_manager::instance().ensure_started();
     mdview::debug_log::log(L"wlx: ListLoadW file={} flags=0x{:x}",
         FileToLoad != nullptr ? FileToLoad : L"(null)",
         static_cast<uint32_t>(ShowFlags));
@@ -65,6 +69,7 @@ HWND __stdcall ListLoadW(HWND ParentWin, WCHAR* FileToLoad, int ShowFlags) {
 }
 
 void __stdcall ListCloseWindow(HWND ListWin) {
+    mdview::precache_manager::instance().ensure_started();
     mdview::debug_log::log(L"wlx: ListCloseWindow hwnd=0x{:p}",
                            static_cast<void*>(ListWin));
     try {
@@ -96,6 +101,7 @@ int __stdcall ListLoadNextW(
         HWND list_win,
         wchar_t* file_to_load,
         int show_flags) {
+    mdview::precache_manager::instance().ensure_started();
     mdview::debug_log::log(L"wlx: ListLoadNextW file={} flags=0x{:x}",
         file_to_load != nullptr ? file_to_load : L"(null)",
         static_cast<uint32_t>(show_flags));
@@ -117,6 +123,7 @@ int __stdcall ListLoadNextW(
 // TC delivers theme changes via this entry point. Command codes and
 // parameter bitmask are listplug.h's lc_* / lcp_* constants.
 int __stdcall ListSendCommand(HWND list_win, int command, int parameter) {
+    mdview::precache_manager::instance().ensure_started();
     mdview::debug_log::log(
         L"wlx: ListSendCommand cmd={} param=0x{:x}",
         command, static_cast<uint32_t>(parameter));
