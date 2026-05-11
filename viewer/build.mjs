@@ -16,6 +16,11 @@ await esbuild.build({
     outdir:      'dist',
     entryNames:  '[name]',
     chunkNames:  'chunks/[name]-[hash]',
+    loader: {
+        '.woff2': 'file',
+        '.css':   'css',
+    },
+    assetNames:  'assets/[name]-[hash]',
     sourcemap:   isProd ? 'linked' : 'inline',
     minify:      isProd,
     logLevel:    'info',
