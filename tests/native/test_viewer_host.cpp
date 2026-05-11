@@ -379,8 +379,8 @@ TEST_CASE("ViewerHost re-entry safe when RendererReady handler "
     REQUIRE(mock_ptr->posted[0].find(L"second.md") != std::wstring::npos);
 }
 
-TEST_CASE("ViewerHost retries remap at drain and reloads when "
-          "first remap failed",
+TEST_CASE("ViewerHost retries remap at drain and posts without reload "
+          "when first remap failed",
           "[viewer_host]") {
     auto mock = std::make_unique<MockHost>();
     auto* mp = mock.get();
@@ -399,8 +399,9 @@ TEST_CASE("ViewerHost retries remap at drain and reloads when "
     req.doc_dir      = LR"(D:\d)";
     vh.load_document(std::move(req));
 
-    // First load_document path: remap fails (count 1), state goes to
-    // Navigated, reload count 1; nothing posted yet.
+    // First load_document path: remap fails (count 1), state is
+    // RendererReady so the new-doc-dir reload branch fires (count 1);
+    // nothing posted yet.
     REQUIRE(mp->remap_count  == 1);
     REQUIRE(mp->reload_count == 1);
     REQUIRE(mp->posted.empty());
@@ -409,16 +410,14 @@ TEST_CASE("ViewerHost retries remap at drain and reloads when "
     mp->remap_result = S_OK;
 
     // Post-reload ready: drain fires post_pending_directly_, which
-    // re-runs remap (count 2, succeeds), queues the request again,
-    // and triggers a SECOND reload.
+    // re-runs remap (count 2, succeeds) and posts immediately. The
+    // renderer hasn't issued any cross-origin requests against the
+    // doc host yet — its first paint only happens after consuming
+    // the loadDocument message we just posted — so no second reload
+    // is needed.
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
     REQUIRE(mp->remap_count  == 2);
-    REQUIRE(mp->reload_count == 2);
-    REQUIRE(mp->posted.empty());
-
-    // The second post-reload ready posts the document, this time with
-    // a populated base_uri (because the drain-time remap succeeded).
-    vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
+    REQUIRE(mp->reload_count == 1);
     REQUIRE(mp->posted.size() == 1);
     REQUIRE(mp->posted[0].find(L"https://mdview-doc.example/")
             != std::wstring::npos);

@@ -289,30 +289,23 @@ void ViewerHost::post_pending_directly_() {
 
     // Retry remap_doc_dir if the original attempt in load_document
     // ran before the host's WebView2 was ready (E_UNEXPECTED, leaves
-    // base_uri empty). When this retry succeeds it means the current
-    // page navigated with a stale (placeholder) doc-mapping; the
-    // page's resource loaders are bound to the wrong folder. Reload
-    // so the post-reload navigation picks up the just-set mapping;
-    // the second drain finds base_uri non-empty and posts directly.
-    bool remapped_at_drain = false;
+    // base_uri empty). At this point the only navigation so far is
+    // the bootstrap to mdview-app.example/index.html, which doesn't
+    // touch the doc-host mapping. The renderer's first resource
+    // fetches against mdview-doc.example happen only after we post
+    // the loadDocument message below and the renderer renders its
+    // markdown — by then the mapping is live. No reload needed.
     if (!req.doc_dir.empty() && req.base_uri.empty()) {
         const HRESULT hr = host_->remap_doc_dir(req.doc_dir);
         if (FAILED(hr)) {
             debug_log::log(
                 L"viewer-host: remap (drain) failed hr=0x{:08X}",
                 static_cast<uint32_t>(hr));
+            // Leave base_uri empty; cross-origin resources for this
+            // doc will 404. The failure has been logged.
         } else {
-            req.base_uri      = kDocBaseUri;
-            remapped_at_drain = true;
+            req.base_uri = kDocBaseUri;
         }
-    }
-
-    if (remapped_at_drain) {
-        debug_log::log(L"viewer-host: reloading after late remap");
-        pending_load_ = std::move(req);
-        state_        = State::Navigated;
-        host_->reload();
-        return;
     }
 
     post_request_(std::move(req));
