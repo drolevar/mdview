@@ -1,5 +1,6 @@
 #include "native/webview2_host.hpp"
 
+#include "native/asset_router.hpp"
 #include "native/debug_log.hpp"
 #include "native/host_names.hpp"
 #include "native/viewer_paths.hpp"
@@ -12,7 +13,9 @@
 #include <wrl.h>
 
 #include <cstdint>
+#include <filesystem>
 #include <string_view>
+#include <system_error>
 #include <utility>
 
 namespace mdview {
@@ -20,6 +23,21 @@ namespace mdview {
 namespace {
 
 constexpr const wchar_t* kAppNavigateTo = L"https://mdview-app.example/index.html";
+
+// MDVIEW_VIEWER_DEV_DIR override (hot-edit during development): when
+// set to an existing directory, the app-host falls back to the legacy
+// SetVirtualHostNameToFolderMapping path. Otherwise embedded assets
+// are served through WebResourceRequested.
+std::filesystem::path get_viewer_dev_dir_() noexcept {
+    wchar_t buf[MAX_PATH] = {};
+    DWORD n = ::GetEnvironmentVariableW(
+        L"MDVIEW_VIEWER_DEV_DIR", buf, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH) return {};
+    std::filesystem::path p(buf);
+    std::error_code ec;
+    if (!std::filesystem::is_directory(p, ec)) return {};
+    return p;
+}
 
 }
 
@@ -74,7 +92,7 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
 
             auto handler = Microsoft::WRL::Callback<
                 ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
-                [this, wp]
+                [this, wp, env]
                 (HRESULT hr2, ICoreWebView2Controller* ctrl) mutable noexcept
                     -> HRESULT {
                     auto alive2 = wp.lock();
@@ -95,14 +113,67 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                         apply_settings_();
                         install_handlers_();
 
-                        auto root = resolve_viewer_root();
+                        // App host: embedded asset router OR dev-override
+                        // mapping. The router serves bytes from RCDATA via
+                        // WebResourceRequested; the dev override falls
+                        // back to the legacy filesystem mapping for
+                        // hot-edit during development.
+                        const auto dev_dir = get_viewer_dev_dir_();
+                        if (!dev_dir.empty()) {
+                            if (auto wv3 =
+                                    webview_.try_query<ICoreWebView2_3>()) {
+                                THROW_IF_FAILED(
+                                    wv3->SetVirtualHostNameToFolderMapping(
+                                        kAppHostName,
+                                        dev_dir.c_str(),
+                                        COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS));
+                                debug_log::log(
+                                    L"wlx: asset-router dev-mode dir={}",
+                                    dev_dir.c_str());
+                            } else {
+                                debug_log::log(
+                                    L"ICoreWebView2_3 unavailable; "
+                                    L"dev-mode app-host mapping skipped");
+                            }
+                        } else {
+                            const std::wstring filter =
+                                std::wstring(L"https://") +
+                                kAppHostName + L"/*";
+                            THROW_IF_FAILED(
+                                webview_->AddWebResourceRequestedFilter(
+                                    filter.c_str(),
+                                    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL));
+                            auto res_handler = Microsoft::WRL::Callback<
+                                ICoreWebView2WebResourceRequestedEventHandler>(
+                                [env, wp]
+                                (ICoreWebView2*,
+                                 ICoreWebView2WebResourceRequestedEventArgs* args)
+                                    noexcept -> HRESULT {
+                                    auto a = wp.lock();
+                                    if (!a) {
+                                        return respond_unavailable(args, env);
+                                    }
+                                    return handle_app_request(args, env);
+                                });
+                            EventRegistrationToken res_tok{};
+                            THROW_IF_FAILED(
+                                webview_->add_WebResourceRequested(
+                                    res_handler.Get(), &res_tok));
+                            ICoreWebView2* wv = webview_.get();
+                            revokers_.emplace_back(
+                                res_tok,
+                                [wv](EventRegistrationToken t) {
+                                    wv->remove_WebResourceRequested(t);
+                                });
+                            debug_log::log(
+                                L"wlx: asset-router filter installed origin={}",
+                                kAppHostName);
+                        }
+
+                        // Doc host: kept pre-mapped until Task 7 lands.
                         if (auto wv3 =
                                 webview_.try_query<ICoreWebView2_3>()) {
-                            THROW_IF_FAILED(
-                                wv3->SetVirtualHostNameToFolderMapping(
-                                    kAppHostName,
-                                    root.c_str(),
-                                    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS));
+                            auto root = resolve_viewer_root();
                             THROW_IF_FAILED(
                                 wv3->SetVirtualHostNameToFolderMapping(
                                     kDocHostName,
@@ -111,7 +182,7 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                         } else {
                             debug_log::log(
                                 L"ICoreWebView2_3 unavailable; "
-                                L"virtual host mapping skipped");
+                                L"doc-host mapping skipped");
                         }
 
                         // Apply controller-local default-bg always.
