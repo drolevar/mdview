@@ -18,6 +18,7 @@ add_executable(mdview_tests
     native/test_encoding.cpp
     native/test_document_loader.cpp
     native/test_embedded_assets.cpp
+    native/test_embedded_resource_stream.cpp
     native/test_externalize.cpp
     native/test_theme.cpp
     native/test_plugin_window_commands.cpp
