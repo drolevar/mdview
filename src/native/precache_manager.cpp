@@ -8,6 +8,16 @@
 
 namespace mdview {
 
+namespace {
+// Custom message to the message-only window: clears any deferred
+// host destructions queued in doomed_hosts_. The point: when a
+// host's process-failed callback fires on our stack and we want to
+// destroy that host, we cannot do it inline (would free the
+// std::function whose operator() is still executing). PostMessage
+// lets the destructor run after the stack unwinds.
+constexpr UINT kMsgDestroyDoomed = WM_USER + 0;
+}
+
 precache_manager& precache_manager::instance() noexcept {
     static precache_manager singleton;
     return singleton;
@@ -117,7 +127,15 @@ void precache_manager::on_precache_process_failed_(int kind) {
     debug_log::log(L"precache: ProcessFailed kind={} retry {}/{}",
                    kind, process_failed_retries_ + 1,
                    kMaxProcessFailedRetries);
-    pending_host_.reset();
+    // The pending host's own std::function is invoking us. Move it
+    // to the doomed queue and schedule destruction on a clean stack.
+    if (pending_host_) {
+        doomed_hosts_.push_back(std::move(pending_host_));
+        if (hwnd_message_parent_ != nullptr
+                && hwnd_message_parent_ != HWND_MESSAGE) {
+            ::PostMessageW(hwnd_message_parent_, kMsgDestroyDoomed, 0, 0);
+        }
+    }
     if (++process_failed_retries_ > kMaxProcessFailedRetries) {
         state_         = State::EnvFailed;
         env_failed_hr_ = E_FAIL;
@@ -132,7 +150,13 @@ void precache_manager::on_env_init_failed_(HRESULT hr) {
     std::lock_guard<std::mutex> lk(mu_);
     state_ = State::EnvFailed;
     env_failed_hr_ = hr;
-    pending_host_.reset();
+    if (pending_host_) {
+        doomed_hosts_.push_back(std::move(pending_host_));
+        if (hwnd_message_parent_ != nullptr
+                && hwnd_message_parent_ != HWND_MESSAGE) {
+            ::PostMessageW(hwnd_message_parent_, kMsgDestroyDoomed, 0, 0);
+        }
+    }
     debug_log::log(
         L"precache: env init failed hr=0x{:08x} (terminal)",
         static_cast<uint32_t>(hr));
@@ -248,6 +272,18 @@ HWND precache_manager::create_message_only_parent_() noexcept {
 
 LRESULT CALLBACK precache_manager::msg_only_proc_(
     HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
+    if (msg == kMsgDestroyDoomed) {
+        auto& m = instance();
+        std::vector<std::unique_ptr<IWebView2Host>> victims;
+        {
+            std::lock_guard<std::mutex> lk(m.mu_);
+            victims.swap(m.doomed_hosts_);
+        }
+        // Run destructors outside the lock; a host's close path can
+        // pump messages and might re-enter the manager.
+        victims.clear();
+        return 0;
+    }
     return ::DefWindowProcW(hwnd, msg, w, l);
 }
 
@@ -262,6 +298,7 @@ void reset_precache_manager_for_test(precache_manager& m) noexcept {
     m.hwnd_message_parent_    = nullptr;
     m.last_theme_             = Theme::System;
     m.cold_start_done_        = false;
+    m.doomed_hosts_.clear();
     m.test_host_factory_      = {};
 }
 
