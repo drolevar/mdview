@@ -34,6 +34,8 @@ WebView2Host::~WebView2Host() {
 
 std::unique_ptr<WebView2Host> WebView2Host::create_under_message_only(
     HWND                          hwnd_message_parent,
+    Theme                          initial_theme,
+    bool                           cold_start,
     std::function<void()>          on_ready,
     ProcessFailedCallback          on_process_failed,
     std::function<void(HRESULT)>   on_env_failed) noexcept {
@@ -44,6 +46,8 @@ std::unique_ptr<WebView2Host> WebView2Host::create_under_message_only(
     host->precache_on_env_failed_     = std::move(on_env_failed);
     host->phase_                      = Phase::Building;
     host->parent_hwnd_                = hwnd_message_parent;
+    host->pending_color_scheme_       = initial_theme;
+    host->cold_start_profile_safe_    = cold_start;
 
     host->start_build_(hwnd_message_parent);
     return host;
@@ -110,16 +114,18 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                                 L"virtual host mapping skipped");
                         }
 
-                        // Apply controller-local default-bg only. Do NOT
-                        // touch the Profile's PreferredColorScheme here:
-                        // the Profile is shared across all controllers
-                        // from the same Environment (we don't use named
-                        // profiles), so setting it during a precache
-                        // build would clobber the active (adopted)
-                        // controller's preference, producing a visible
-                        // scrollbar/UI theme flip. adopt() drives the
-                        // Profile when it knows the real theme.
+                        // Apply controller-local default-bg always.
                         apply_default_bg_to_controller_();
+                        // Profile is shared across controllers from the
+                        // same Environment; setting PreferredColorScheme
+                        // during a build clobbers the active (adopted)
+                        // controller. So we only set it on the cold-start
+                        // build, where no other controller exists yet —
+                        // this lets the renderer pre-render dark content
+                        // and eliminates the cold-F3 light-flash.
+                        if (cold_start_profile_safe_) {
+                            apply_preferred_color_scheme_to_profile_();
+                        }
 
                         // The controller is parked under HWND_MESSAGE:
                         // keep it hidden and zero-sized until adopt

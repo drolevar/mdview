@@ -116,6 +116,14 @@ PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags) {
         return window;
     }
 
+    // Hint the manager so the *next* precache build (kicked from
+    // inside acquire() right after we adopt the current one) sets its
+    // default-bg to the right color from the start. This closes the
+    // light-flash-before-dark window observed on TC-dark cold/recycle
+    // F3. The current acquire is unaffected — its bg was set when the
+    // build started, before TC told us about the dark theme.
+    precache_manager::instance().note_theme(theme);
+
     auto acquire_result =
         precache_manager::instance().acquire(hwnd, theme, scale);
 
@@ -212,6 +220,10 @@ bool PluginWindow::load_next(std::wstring file_to_load,
             if (viewer_) {
                 viewer_->apply_theme(t);
             }
+            // Update precache's last-known theme too, so any future
+            // recycle build (kicked by the next F3 close → reopen
+            // cycle) starts with the right default-bg.
+            precache_manager::instance().note_theme(t);
         }
 
         // Integration harness opt-in: when MDVIEW_REQUEST_SUMMARY=1,
@@ -271,10 +283,15 @@ bool PluginWindow::send_command(int command, int parameter) noexcept {
             const bool dark =
                 (parameter & lcp_darkmode) != 0 ||
                 (parameter & lcp_darkmodenative) != 0;
+            const Theme t = dark ? Theme::Dark : Theme::Light;
             update_theme_(dark);
             if (viewer_) {
-                viewer_->apply_theme(dark ? Theme::Dark : Theme::Light);
+                viewer_->apply_theme(t);
             }
+            // Track for the *next* precache build (recycle for the next
+            // F3 after this Lister closes). The currently-adopted host
+            // is handled by viewer_->apply_theme above.
+            precache_manager::instance().note_theme(t);
             return true;
         }
         return true;  // unknown command: don't surface as an error

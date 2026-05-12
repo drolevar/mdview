@@ -31,6 +31,13 @@ public:
     // hidden (put_IsVisible(FALSE)); adopt() reveals it after
     // reparenting to the real Lister HWND.
     //
+    // `initial_theme` is the most-recently-observed TC theme at build
+    // time; the controller's DefaultBackgroundColor is set from it
+    // before the first paint to avoid a light-flash-before-dark on
+    // cold/recycle F3 when TC is in dark mode. The Profile's
+    // PreferredColorScheme is NOT touched during the precache build
+    // (see apply_preferred_color_scheme_to_profile_ docs).
+    //
     // `on_ready` fires once on the UI thread when the renderer signals
     // ready. `on_process_failed` fires on the UI thread when the
     // browser/renderer process exits unexpectedly. Both callbacks are
@@ -41,8 +48,17 @@ public:
     // controller creation failure manifests via `on_process_failed` /
     // log output rather than a null return; the precache_manager
     // handles those paths.
+    // `cold_start` true means this is the very first precache build per
+    // process, and no other controller exists yet. In that case the
+    // build also sets the WebView2 Profile's PreferredColorScheme so
+    // the renderer pre-renders content with the right theme — avoids
+    // the cold-F3 light-content flash. For subsequent (recycle) builds
+    // this must be false, since touching the shared Profile would
+    // clobber the active adopted controller.
     static std::unique_ptr<WebView2Host> create_under_message_only(
         HWND                          hwnd_message_parent,
+        Theme                         initial_theme,
+        bool                           cold_start,
         std::function<void()>          on_ready,
         ProcessFailedCallback          on_process_failed,
         std::function<void(HRESULT)>   on_env_failed) noexcept;
@@ -109,6 +125,11 @@ private:
     std::vector<EventRevoker>                  revokers_;
     std::shared_ptr<bool>                      alive_token_;
     Theme                                      pending_color_scheme_ = Theme::System;
+    // Set to true by create_under_message_only when this is the very
+    // first precache build per process. Allows the build path to set
+    // the shared Profile.PreferredColorScheme — otherwise unsafe because
+    // it would clobber an active adopted controller.
+    bool                                       cold_start_profile_safe_ = false;
 };
 
 }

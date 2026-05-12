@@ -20,6 +20,15 @@ void precache_manager::set_host_factory_for_test(HostFactory factory) {
     test_host_factory_ = std::move(factory);
 }
 
+void precache_manager::note_theme(Theme theme) noexcept {
+    std::lock_guard<std::mutex> lk(mu_);
+    if (last_theme_ != theme) {
+        debug_log::log(L"precache: note_theme {} -> {}",
+                       to_wire(last_theme_), to_wire(theme));
+        last_theme_ = theme;
+    }
+}
+
 void precache_manager::ensure_started() noexcept {
     {
         std::lock_guard<std::mutex> lk(mu_);
@@ -50,7 +59,10 @@ void precache_manager::start_build_() {
 void precache_manager::start_build_locked_() {
     if (state_ == State::Building || state_ == State::Parked) return;
     state_ = State::Building;
-    debug_log::log(L"precache: state Empty -> Building");
+    const bool cold_start = !cold_start_done_;
+    cold_start_done_ = true;
+    debug_log::log(L"precache: state Empty -> Building cold_start={}",
+                   cold_start ? L"1" : L"0");
 
     if (test_host_factory_) {
         // HWND_MESSAGE sentinel for the test-factory path; tests don't
@@ -60,6 +72,8 @@ void precache_manager::start_build_locked_() {
         }
         pending_host_ = test_host_factory_(
             hwnd_message_parent_,
+            last_theme_,
+            cold_start,
             [this]() { on_precache_ready_(); },
             [this](int kind) { on_precache_process_failed_(kind); },
             [this](HRESULT hr) { on_env_init_failed_(hr); });
@@ -85,6 +99,8 @@ void precache_manager::start_build_locked_() {
 
     pending_host_ = WebView2Host::create_under_message_only(
         hwnd_message_parent_,
+        last_theme_,
+        cold_start,
         [this]() { on_precache_ready_(); },
         [this](int kind) { on_precache_process_failed_(kind); },
         [this](HRESULT hr) { on_env_init_failed_(hr); });
@@ -244,6 +260,8 @@ void reset_precache_manager_for_test(precache_manager& m) noexcept {
     m.process_failed_retries_ = 0;
     m.pending_host_.reset();
     m.hwnd_message_parent_    = nullptr;
+    m.last_theme_             = Theme::System;
+    m.cold_start_done_        = false;
     m.test_host_factory_      = {};
 }
 
