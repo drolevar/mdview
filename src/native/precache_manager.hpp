@@ -9,6 +9,7 @@
 #include <memory>
 #include <mutex>
 #include <variant>
+#include <vector>
 
 namespace mdview { class precache_manager; }
 namespace mdview::detail {
@@ -115,6 +116,15 @@ private:
 
     HWND                            hwnd_message_parent_ = nullptr;
     std::unique_ptr<IWebView2Host>  pending_host_;
+
+    // Hosts queued for deferred destruction. Filled by
+    // on_precache_process_failed_ / on_env_init_failed_ when a host's
+    // own std::function callback is currently on our call stack —
+    // destroying the host inline would free the function object whose
+    // operator() is still executing. PostMessage to
+    // hwnd_message_parent_ schedules a msg_only_proc_ visit that
+    // clears the queue on a clean stack.
+    std::vector<std::unique_ptr<IWebView2Host>> doomed_hosts_;
 
     // Most recent TC theme observed via note_theme(). Each new precache
     // build picks this up so the controller's default-bg is set to the
