@@ -110,12 +110,16 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                                 L"virtual host mapping skipped");
                         }
 
-                        // Apply default-bg/preferred-color-scheme so the
-                        // pre-CSS paint background already matches TC's
-                        // theme by the time we adopt. pending_color_scheme_
-                        // may still be System at this point; adopt() will
-                        // push the real theme.
-                        apply_color_scheme_to_controller_();
+                        // Apply controller-local default-bg only. Do NOT
+                        // touch the Profile's PreferredColorScheme here:
+                        // the Profile is shared across all controllers
+                        // from the same Environment (we don't use named
+                        // profiles), so setting it during a precache
+                        // build would clobber the active (adopted)
+                        // controller's preference, producing a visible
+                        // scrollbar/UI theme flip. adopt() drives the
+                        // Profile when it knows the real theme.
+                        apply_default_bg_to_controller_();
 
                         // The controller is parked under HWND_MESSAGE:
                         // keep it hidden and zero-sized until adopt
@@ -285,11 +289,8 @@ void WebView2Host::set_color_scheme(Theme theme) noexcept {
     }
 }
 
-void WebView2Host::apply_color_scheme_to_controller_() noexcept {
+void WebView2Host::apply_default_bg_to_controller_() noexcept {
     if (!controller_) return;
-
-    debug_log::log(L"webview2-host: apply_color_scheme scheme={}",
-                   to_wire(pending_color_scheme_));
 
     if (auto c2 = controller_.try_query<ICoreWebView2Controller2>()) {
         COREWEBVIEW2_COLOR color{};
@@ -310,34 +311,46 @@ void WebView2Host::apply_color_scheme_to_controller_() noexcept {
             L"webview2-host: ICoreWebView2Controller2 not available - "
             L"DefaultBackgroundColor skipped");
     }
+}
 
-    if (webview_) {
-        if (auto wv13 = webview_.try_query<ICoreWebView2_13>()) {
-            wil::com_ptr<ICoreWebView2Profile> profile;
-            HRESULT hr1 = wv13->get_Profile(&profile);
-            debug_log::log(
-                L"webview2-host: get_Profile hr=0x{:08x}",
-                static_cast<uint32_t>(hr1));
-            if (SUCCEEDED(hr1) && profile) {
-                COREWEBVIEW2_PREFERRED_COLOR_SCHEME scheme =
-                    COREWEBVIEW2_PREFERRED_COLOR_SCHEME_AUTO;
-                if (pending_color_scheme_ == Theme::Dark) {
-                    scheme = COREWEBVIEW2_PREFERRED_COLOR_SCHEME_DARK;
-                } else if (pending_color_scheme_ == Theme::Light) {
-                    scheme = COREWEBVIEW2_PREFERRED_COLOR_SCHEME_LIGHT;
-                }
-                HRESULT hr2 = profile->put_PreferredColorScheme(scheme);
-                debug_log::log(
-                    L"webview2-host: put_PreferredColorScheme value={} hr=0x{:08x}",
-                    static_cast<int>(scheme),
-                    static_cast<uint32_t>(hr2));
+void WebView2Host::apply_preferred_color_scheme_to_profile_() noexcept {
+    if (!webview_) return;
+
+    if (auto wv13 = webview_.try_query<ICoreWebView2_13>()) {
+        wil::com_ptr<ICoreWebView2Profile> profile;
+        HRESULT hr1 = wv13->get_Profile(&profile);
+        debug_log::log(
+            L"webview2-host: get_Profile hr=0x{:08x}",
+            static_cast<uint32_t>(hr1));
+        if (SUCCEEDED(hr1) && profile) {
+            COREWEBVIEW2_PREFERRED_COLOR_SCHEME scheme =
+                COREWEBVIEW2_PREFERRED_COLOR_SCHEME_AUTO;
+            if (pending_color_scheme_ == Theme::Dark) {
+                scheme = COREWEBVIEW2_PREFERRED_COLOR_SCHEME_DARK;
+            } else if (pending_color_scheme_ == Theme::Light) {
+                scheme = COREWEBVIEW2_PREFERRED_COLOR_SCHEME_LIGHT;
             }
-        } else {
+            HRESULT hr2 = profile->put_PreferredColorScheme(scheme);
             debug_log::log(
-                L"webview2-host: ICoreWebView2_13 not available - "
-                L"PreferredColorScheme skipped");
+                L"webview2-host: put_PreferredColorScheme value={} hr=0x{:08x}",
+                static_cast<int>(scheme),
+                static_cast<uint32_t>(hr2));
         }
+    } else {
+        debug_log::log(
+            L"webview2-host: ICoreWebView2_13 not available - "
+            L"PreferredColorScheme skipped");
     }
+}
+
+void WebView2Host::apply_color_scheme_to_controller_() noexcept {
+    if (!controller_) return;
+
+    debug_log::log(L"webview2-host: apply_color_scheme scheme={}",
+                   to_wire(pending_color_scheme_));
+
+    apply_default_bg_to_controller_();
+    apply_preferred_color_scheme_to_profile_();
 }
 
 void WebView2Host::apply_settings_() {

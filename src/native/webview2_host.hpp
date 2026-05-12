@@ -73,6 +73,21 @@ private:
     void start_build_(HWND hwnd_message_parent) noexcept;
     void apply_settings_();
     void install_handlers_();
+
+    // put_DefaultBackgroundColor only — controller-local, safe to call
+    // at any phase (including during the precache build, before adopt).
+    void apply_default_bg_to_controller_() noexcept;
+
+    // put_PreferredColorScheme on the WebView2 Profile only. The Profile
+    // is SHARED across controllers from the same Environment when no
+    // named profile is used. Calling this during a precache build
+    // clobbers any active (adopted) controller's preference, causing
+    // visible scrollbar/UI theme flips. Call only at adopt time and on
+    // explicit runtime theme changes (set_color_scheme).
+    void apply_preferred_color_scheme_to_profile_() noexcept;
+
+    // Both of the above. Used at adopt time and for runtime theme
+    // changes (post-adopt). Do NOT call from the precache build path.
     void apply_color_scheme_to_controller_() noexcept;
 
     // Pre-adopt phase callbacks, owned by precache_manager.
