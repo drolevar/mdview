@@ -57,6 +57,17 @@ Session::Session() {
     current_ = this;
     try {
         sink_event_ = ::CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        // M8: post-embedded-assets the WLX must never read viewer/ from
+        // disk. The CMake viewer_stage target still drops viewer/ next
+        // to mdview.wlx64 in the build tree (harmless legacy). Remove
+        // it before loading the DLL so any accidental disk read would
+        // fail loudly rather than silently fall back to a stale copy.
+        const auto wlx_path = resolve_wlx_path();
+        if (!wlx_path.empty()) {
+            std::error_code ec;
+            std::filesystem::remove_all(
+                wlx_path.parent_path() / L"viewer", ec);
+        }
         create_parent_window_();
         load_dll_();
     } catch (...) {

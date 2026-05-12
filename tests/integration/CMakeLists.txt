@@ -8,6 +8,7 @@ add_executable(mdview_integration_tests
     session.cpp
     summary.cpp
     test_audit_late_remap.cpp
+    test_embedded_assets.cpp
     test_focus.cpp
     test_highlight.cpp
     test_lifecycle.cpp
