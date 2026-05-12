@@ -9,6 +9,7 @@ add_library(mdview_core STATIC
     common/paths.cpp
     common/version.cpp
     native/embedded_assets.cpp
+    native/embedded_resource_stream.cpp
     native/plugin_globals.cpp
     native/debug_log.cpp
     native/detect_string.cpp
