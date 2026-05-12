@@ -8,6 +8,7 @@ add_library(mdview_core STATIC
     common/utf.cpp
     common/paths.cpp
     common/version.cpp
+    native/asset_router.cpp
     native/embedded_assets.cpp
     native/embedded_resource_stream.cpp
     native/plugin_globals.cpp
