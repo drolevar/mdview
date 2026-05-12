@@ -56,11 +56,29 @@ public:
                           Theme theme,
                           float raster_scale) noexcept;
 
+    // Hint about the most recently observed TC theme. PluginWindow calls
+    // this from ListLoadW (and lc_newparams handlers) so subsequent
+    // precache builds set their pre-CSS default background to the right
+    // color before reparent — closing the brief "light flash before
+    // dark" window on cold F3 in TC-dark mode. Cold-start precache
+    // (built before any F3) still uses Theme::System (white default).
+    void note_theme(Theme theme) noexcept;
+
     // Test-only seam: lets tests replace the IWebView2Host factory with
-    // a mock. Production code never calls this.
+    // a mock. Production code never calls this. Parameters:
+    //  - initial_theme: manager's last-known theme at build time
+    //    (see note_theme).
+    //  - cold_start: true for the very first build per process. When
+    //    true, no other controller exists yet, so it's safe to set
+    //    the shared Profile's PreferredColorScheme during the build —
+    //    eliminating the cold-F3 light-content flash. For subsequent
+    //    (recycle) builds, an active controller exists, so the build
+    //    must NOT touch Profile (would clobber the live controller).
     using HostFactory = std::function<
         std::unique_ptr<IWebView2Host>(
             HWND hwnd_message_parent,
+            Theme                        initial_theme,
+            bool                         cold_start,
             std::function<void()>        on_ready,
             std::function<void(int kind)> on_process_failed,
             std::function<void(HRESULT)> on_env_failed)>;
@@ -97,6 +115,20 @@ private:
 
     HWND                            hwnd_message_parent_ = nullptr;
     std::unique_ptr<IWebView2Host>  pending_host_;
+
+    // Most recent TC theme observed via note_theme(). Each new precache
+    // build picks this up so the controller's default-bg is set to the
+    // right color before reparent, closing the brief light-flash-before-
+    // dark window. Defaults to System (white default-bg) for the cold-
+    // start build before any F3 has happened.
+    Theme                           last_theme_ = Theme::System;
+
+    // Set true after the FIRST precache build kicks off. The cold-start
+    // build is the only one safe to set Profile.PreferredColorScheme on,
+    // because no other controller exists yet that could be clobbered.
+    // Subsequent (recycle) builds run while an active controller is
+    // adopted, so they must skip the Profile-level call.
+    bool                            cold_start_done_ = false;
 
     HostFactory                     test_host_factory_;
 

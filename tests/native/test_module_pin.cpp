@@ -43,8 +43,8 @@ TEST_CASE("ensure_started pins the module",
     auto& m = mdview::precache_manager::instance();
     mdview::detail::reset_precache_manager_for_test(m);
     m.set_host_factory_for_test(
-        [](HWND, std::function<void()>, std::function<void(int)>,
-           std::function<void(HRESULT)>)
+        [](HWND, mdview::Theme, bool, std::function<void()>,
+           std::function<void(int)>, std::function<void(HRESULT)>)
         -> std::unique_ptr<mdview::IWebView2Host> {
             return std::make_unique<NullHost>();
         });

@@ -63,7 +63,7 @@ TEST_CASE("precache_manager ensure_started is idempotent",
           "[precache_manager]") {
     int host_create_count = 0;
     auto factory =
-        [&](HWND, std::function<void()> on_ready,
+        [&](HWND, Theme, bool, std::function<void()> on_ready,
             std::function<void(int)> on_pf,
             std::function<void(HRESULT)>)
         -> std::unique_ptr<IWebView2Host> {
@@ -88,7 +88,7 @@ TEST_CASE("precache_manager acquire pumps until ready",
     TestHost* host_ptr        = nullptr;
     int       host_create_count = 0;
     auto factory =
-        [&](HWND, std::function<void()> on_ready,
+        [&](HWND, Theme, bool, std::function<void()> on_ready,
             std::function<void(int)> on_pf,
             std::function<void(HRESULT)>)
         -> std::unique_ptr<IWebView2Host> {
@@ -126,7 +126,7 @@ TEST_CASE("precache rebuilds on ProcessFailed (within budget)",
           "[precache_manager]") {
     int host_create_count = 0;
     std::vector<TestHost*> created;
-    auto factory = [&](HWND, std::function<void()> on_ready,
+    auto factory = [&](HWND, Theme, bool, std::function<void()> on_ready,
                        std::function<void(int)> on_pf,
                        std::function<void(HRESULT)>)
         -> std::unique_ptr<IWebView2Host> {
@@ -160,7 +160,7 @@ TEST_CASE("precache exhausts retry budget -> EnvFailed",
           "[precache_manager]") {
     int host_create_count = 0;
     std::function<void(int)> last_pf;
-    auto factory = [&](HWND, std::function<void()>,
+    auto factory = [&](HWND, Theme, bool, std::function<void()>,
                        std::function<void(int)> on_pf,
                        std::function<void(HRESULT)>)
         -> std::unique_ptr<IWebView2Host> {
@@ -187,7 +187,7 @@ TEST_CASE("acquire returns InitFailedToken with real hr on env failure",
     constexpr HRESULT kFakeRuntimeMissing = 0x80070002;
     std::function<void(HRESULT)> deferred_on_env_failed;
     auto factory =
-        [&](HWND, std::function<void()>, std::function<void(int)>,
+        [&](HWND, Theme, bool, std::function<void()>, std::function<void(int)>,
             std::function<void(HRESULT)> on_env_failed)
         -> std::unique_ptr<IWebView2Host> {
             // Capture and defer: the real env callback fires asynchronously
