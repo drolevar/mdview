@@ -3,7 +3,6 @@
 #include "native/asset_router.hpp"
 #include "native/debug_log.hpp"
 #include "native/host_names.hpp"
-#include "native/viewer_paths.hpp"
 #include "native/webview2_environment.hpp"
 #include "native/webview2_externalize.hpp"
 #include "plugin/tc_lister_constants.hpp"
@@ -170,20 +169,13 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                                 kAppHostName);
                         }
 
-                        // Doc host: kept pre-mapped until Task 7 lands.
-                        if (auto wv3 =
-                                webview_.try_query<ICoreWebView2_3>()) {
-                            auto root = resolve_viewer_root();
-                            THROW_IF_FAILED(
-                                wv3->SetVirtualHostNameToFolderMapping(
-                                    kDocHostName,
-                                    root.c_str(),
-                                    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS));
-                        } else {
-                            debug_log::log(
-                                L"ICoreWebView2_3 unavailable; "
-                                L"doc-host mapping skipped");
-                        }
+                        // Doc host (kDocHostName): NOT pre-mapped.
+                        // remap_doc_dir installs the mapping the first
+                        // time a document loads. The renderer doesn't
+                        // reference doc-host resources until after
+                        // load_document runs and remap_doc_dir is called,
+                        // so requests before then would 404 — which is
+                        // fine: there are none.
 
                         // Apply controller-local default-bg always.
                         apply_default_bg_to_controller_();
