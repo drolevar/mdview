@@ -50,6 +50,56 @@ add_custom_command(
 add_custom_target(viewer_bundle ALL
     DEPENDS ${VIEWER_STAMP})
 
+# Pre-stage the viewer asset tree (everything we'd otherwise ship
+# loose next to mdview.wlx64) into a single clean directory so the
+# M8 resource generator can glob a single root. Mirrors the layout
+# in src/CMakeLists.txt's viewer_stage step but runs BEFORE
+# mdview_wlx is built, so the generator output can be linked into it.
+set(VIEWER_PRESTAGE_ROOT
+    "${CMAKE_BINARY_DIR}/generated/viewer-tree")
+set(VIEWER_PRESTAGE_STAMP
+    "${CMAKE_BINARY_DIR}/generated/viewer-tree.stamp")
+add_custom_command(
+    OUTPUT ${VIEWER_PRESTAGE_STAMP}
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${VIEWER_PRESTAGE_ROOT}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${VIEWER_PRESTAGE_ROOT}
+    COMMAND ${CMAKE_COMMAND} -E copy
+        ${VIEWER_DIR}/index.html
+        ${VIEWER_DIR}/styles.css
+        ${VIEWER_PRESTAGE_ROOT}
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${VIEWER_DIR}/styles
+        ${VIEWER_PRESTAGE_ROOT}/styles
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${VIEWER_DIR}/dist
+        ${VIEWER_PRESTAGE_ROOT}/dist
+    COMMAND ${CMAKE_COMMAND} -E touch ${VIEWER_PRESTAGE_STAMP}
+    DEPENDS ${VIEWER_STAMP}
+    COMMENT "Pre-staging viewer assets for embedded RC generation"
+    VERBATIM)
+add_custom_target(viewer_prestage DEPENDS ${VIEWER_PRESTAGE_STAMP})
+
+# Generate viewer_assets.rc + viewer_assets.gen.cpp from the
+# pre-staged tree. Re-runs whenever any pre-staged file changes
+# (custom_command DEPENDS-on-stamp), which is in turn refreshed
+# whenever ${VIEWER_STAMP} bumps (viewer_bundle did an esbuild).
+set(GEN_DIR  "${CMAKE_BINARY_DIR}/generated")
+set(GEN_RC   "${GEN_DIR}/viewer_assets.rc")
+set(GEN_CPP  "${GEN_DIR}/viewer_assets.gen.cpp")
+add_custom_command(
+    OUTPUT ${GEN_RC} ${GEN_CPP}
+    COMMAND ${CMAKE_COMMAND}
+            -DASSET_DIR=${VIEWER_PRESTAGE_ROOT}
+            -DOUTPUT_RC=${GEN_RC}
+            -DOUTPUT_CPP=${GEN_CPP}
+            -P ${CMAKE_SOURCE_DIR}/cmake/GenerateViewerResources.cmake
+    DEPENDS ${VIEWER_PRESTAGE_STAMP}
+            ${CMAKE_SOURCE_DIR}/cmake/GenerateViewerResources.cmake
+    COMMENT "Generating viewer_assets.rc + .gen.cpp from pre-staged tree"
+    VERBATIM)
+add_custom_target(viewer_assets_gen
+    DEPENDS ${GEN_RC} ${GEN_CPP})
+
 add_subdirectory(src)
 add_subdirectory(tests)
 add_subdirectory(tools/precache_probe)

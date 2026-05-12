@@ -17,6 +17,7 @@ add_executable(mdview_tests
     native/test_win32_window.cpp
     native/test_encoding.cpp
     native/test_document_loader.cpp
+    native/test_embedded_assets.cpp
     native/test_externalize.cpp
     native/test_theme.cpp
     native/test_plugin_window_commands.cpp
