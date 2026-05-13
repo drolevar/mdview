@@ -46,7 +46,7 @@ export interface SetThemeMessage {
 }
 
 export interface RenderedSummary {
-    summarySchema: 2;
+    summarySchema: 3;
     durationMs:    number;
     theme:         'light' | 'dark';
     blockCount: {
@@ -81,6 +81,15 @@ export interface RenderedSummary {
     math: {
         chunkLoaded:      boolean;
         chunkLoadMs:      number | null;
+        // True iff the dedicated KaTeX worker handled this doc's
+        // math render. False on worker-spawn failure, batch-timeout
+        // fallback to sync render, or the small-doc short-circuit
+        // (<= 8 placeholders: worker round-trip dominates the win).
+        workerUsed:       boolean;
+        // Main-thread-observed wall time from worker dispatch
+        // through last DOM insert. null on the small-doc short-
+        // circuit and on the no-math early-return paths.
+        workerWallMs:     number | null;
         // Placeholder counts discovered in the DOM. Non-zero even
         // when chunk-load failed, so the harness can tell "no math"
         // from "math present but chunk failed".
