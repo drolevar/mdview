@@ -74,9 +74,10 @@ parse_summary_json(const std::wstring& payload) {
             }
         }
 
-        // Schema v2: optional math field. Tolerates three shapes —
-        // missing (v1), explicit null (v2 with no math), and fully
-        // populated object.
+        // Schema v2/v3: optional math field. Tolerates four shapes —
+        // missing (v1), explicit null (v2/v3 with no math), v2 object
+        // (workerUsed / workerWallMs absent → default false / -1), and
+        // v3 fully populated object.
         if (auto math_it = j.find("math");
             math_it != j.end() && !math_it->is_null()
             && math_it->is_object()) {
@@ -86,6 +87,12 @@ parse_summary_json(const std::wstring& payload) {
                 cm != math_it->end() && !cm->is_null()
                 && cm->is_number()) {
                 m.chunk_load_ms = cm->get<int>();
+            }
+            m.worker_used = math_it->value("workerUsed", false);
+            if (auto wm = math_it->find("workerWallMs");
+                wm != math_it->end() && !wm->is_null()
+                && wm->is_number()) {
+                m.worker_wall_ms = wm->get<int>();
             }
             if (auto ps = math_it->find("placeholdersSeen");
                 ps != math_it->end() && ps->is_object()) {

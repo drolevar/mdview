@@ -26,12 +26,14 @@ struct MathErrorRecord {
     std::string message;
 };
 
-// Mirrors the schema v2 `math` field in viewer/src/protocol.ts. The
+// Mirrors the schema v3 `math` field in viewer/src/protocol.ts. The
 // `inline` and `display` JS names collide with C++ keywords / could
 // be confusing, so we suffix-disambiguate on the C++ side.
 struct MathSummary {
     bool chunk_loaded   = false;
     int  chunk_load_ms  = -1;   // -1 sentinel = JSON null / absent
+    bool worker_used    = false;
+    int  worker_wall_ms = -1;   // -1 sentinel = JSON null / absent
     struct {
         int inline_count  = 0;
         int display_count = 0;

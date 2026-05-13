@@ -53,7 +53,7 @@ export function buildSummary(
         || mathPass.chunkLoaded;
 
     return {
-        summarySchema: 2,
+        summarySchema: 3,
         durationMs,
         theme,
         blockCount,
@@ -66,6 +66,8 @@ export function buildSummary(
         math: hasMath ? {
             chunkLoaded:      mathPass.chunkLoaded,
             chunkLoadMs:      mathPass.chunkLoadMs,
+            workerUsed:       mathPass.workerUsed,
+            workerWallMs:     mathPass.workerWallMs,
             placeholdersSeen: mathPass.placeholdersSeen,
             inline:           mathPass.inline,
             display:          mathPass.display,
