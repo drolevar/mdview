@@ -11,7 +11,10 @@
 #include <wil/result_macros.h>
 #include <wrl/client.h>
 
+#include <chrono>
 #include <cstdint>
+#include <format>
+#include <locale>
 
 namespace mdview {
 
@@ -21,6 +24,33 @@ const std::wstring& app_origin_prefix_() {
     static const std::wstring p =
         std::wstring(L"https://") + kAppHostName + L"/";
     return p;
+}
+
+// Last-Modified derived from the WLX's PE COFF link timestamp. Stable
+// per build; changes on each rebuild → naturally invalidates V8's
+// bytecode cache when assets actually change. V8 stores this validator
+// alongside the compiled module; on subsequent fetches of the same
+// URL across fresh controllers, V8 reuses the cached compilation if
+// Last-Modified matches — saving the ~300ms-per-chunk reparse cost
+// that otherwise hits every cold F3.
+const std::wstring& last_modified_header_value_() {
+    static const std::wstring s = []() {
+        const auto base = reinterpret_cast<const BYTE*>(
+            globals().module_handle());
+        const auto* dos =
+            reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+        const auto* nt =
+            reinterpret_cast<const IMAGE_NT_HEADERS*>(
+                base + dos->e_lfanew);
+        const std::chrono::sys_seconds t{
+            std::chrono::seconds{nt->FileHeader.TimeDateStamp}};
+        // RFC 7231 IMF-fixdate requires English abbreviations; the
+        // classic ("C") locale guarantees those regardless of system
+        // locale.
+        return std::format(std::locale::classic(),
+                           L"{:%a, %d %b %Y %H:%M:%S GMT}", t);
+    }();
+    return s;
 }
 
 bool percent_decode_in_place_(std::wstring& s) noexcept {
@@ -53,7 +83,23 @@ std::wstring build_headers_(std::wstring_view content_type,
     h += L"Content-Type: ";
     h += content_type;
     h += L"\r\n";
-    h += L"Cache-Control: no-store\r\n";
+    // HTML: no-store so a stale CSP can never be reused. Everything
+    // else (JS / CSS / fonts) is embedded RCDATA and stable for the
+    // WLX's lifetime, so a long max-age lets WebView2 + V8 keep the
+    // compiled module cache warm across recycle controllers — without
+    // this, every F3 re-parses the 200 KB mermaid chunk from scratch
+    // and the renderer pays ~500 ms of redundant compile work.
+    if (include_csp) {
+        h += L"Cache-Control: no-store\r\n";
+    } else {
+        h += L"Cache-Control: public, max-age=86400, immutable\r\n";
+        // Last-Modified is what V8's bytecode cache actually validates
+        // against; Cache-Control alone isn't enough to keep the cache
+        // warm across fresh recycle controllers.
+        h += L"Last-Modified: ";
+        h += last_modified_header_value_();
+        h += L"\r\n";
+    }
     h += L"X-Content-Type-Options: nosniff\r\n";
     if (include_csp) {
         // Empirically validated 2026-05-13. style-src needs
