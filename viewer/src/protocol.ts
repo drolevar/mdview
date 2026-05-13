@@ -124,6 +124,23 @@ export function isSetTheme(m: unknown): m is SetThemeMessage {
     return t === 'light' || t === 'dark' || t === 'system';
 }
 
+export type LogLevel = 'error' | 'warn' | 'debug';
+
+export interface LogMessage {
+    type:  'log';
+    level: LogLevel;
+    text:  string;
+}
+
+export function isLogMessage(m: unknown): m is LogMessage {
+    if (typeof m !== 'object' || m === null) return false;
+    const o = m as Record<string, unknown>;
+    if (o['type'] !== 'log') return false;
+    const lvl = o['level'];
+    if (lvl !== 'error' && lvl !== 'warn' && lvl !== 'debug') return false;
+    return typeof o['text'] === 'string';
+}
+
 export function postReady(): void {
     window.chrome.webview.postMessage({ type: 'ready', version: 1 });
 }
