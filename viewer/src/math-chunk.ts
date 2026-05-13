@@ -131,6 +131,16 @@ async function ensureWorker(): Promise<Worker | null> {
     }
 }
 
+// Eagerly start the worker boot as soon as this module loads so
+// that by the time renderAll is called, the worker is (often) past
+// its worker-ready handshake. App.ts speculatively imports this
+// module right after markdown render, in parallel with the mermaid
+// pass -- giving us ~150ms of worker boot to overlap with the ~3s
+// mermaid pipeline. The catch is intentional: if eager spawn fails
+// here, the worker is marked dead and ensureWorker() will return
+// null on the actual render call, which then falls back to sync.
+void ensureWorker().catch(() => {});
+
 function dispatchBatch(
         w:     Worker,
         items: RenderItem[]): Promise<RenderResult[]> {
