@@ -17,6 +17,7 @@ let lastMermaidPass: MermaidPassData = {
 
 let lastMathPass: MathPassData = {
     chunkLoaded: false, chunkLoadMs: null,
+    workerUsed: false, workerWallMs: null,
     placeholdersSeen: { inline: 0, display: 0 },
     inline:  { rendered: 0, failed: 0 },
     display: { rendered: 0, failed: 0 },
@@ -156,6 +157,7 @@ function run(): void {
         if (inlineEls.length === 0 && displayEls.length === 0) {
             return {
                 chunkLoaded: false, chunkLoadMs: null,
+                workerUsed: false, workerWallMs: null,
                 placeholdersSeen,
                 inline:  { rendered: 0, failed: 0 },
                 display: { rendered: 0, failed: 0 },
@@ -166,9 +168,11 @@ function run(): void {
         try {
             const mod = await import('./math-chunk.js');
             const chunkLoadMs = Math.round(performance.now() - t0);
-            const { pass } = mod.renderAll(inlineEls, displayEls);
+            const { workerUsed, workerWallMs, pass } =
+                await mod.renderAll(inlineEls, displayEls);
             return {
                 chunkLoaded: true, chunkLoadMs,
+                workerUsed, workerWallMs,
                 placeholdersSeen,
                 ...pass,
             };
@@ -195,6 +199,7 @@ function run(): void {
             }
             return {
                 chunkLoaded: false, chunkLoadMs: null,
+                workerUsed: false, workerWallMs: null,
                 placeholdersSeen,
                 inline:  { rendered: 0, failed: 0 },
                 display: { rendered: 0, failed: 0 },
