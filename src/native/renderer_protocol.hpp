@@ -66,4 +66,19 @@ std::wstring encode_load_document(const LoadDocumentMessage& msg);
 std::optional<RendererMessage>
 decode_renderer_message(std::wstring_view json) noexcept;
 
+// Side-channel renderer log bridge. Independent of the
+// version-stamped renderer-state protocol above — log messages are
+// informational and have no schema versioning.
+enum class LogLevel { Error, Warn, Debug };
+
+struct LogMessage {
+    LogLevel     level = LogLevel::Error;
+    std::wstring text;
+};
+
+std::optional<LogMessage>
+decode_log_message(std::wstring_view json) noexcept;
+
+std::wstring_view log_level_name(LogLevel l) noexcept;
+
 }
