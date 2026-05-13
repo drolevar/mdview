@@ -133,4 +133,44 @@ decode_renderer_message(std::wstring_view json) noexcept {
     }
 }
 
+std::optional<LogMessage>
+decode_log_message(std::wstring_view json) noexcept {
+    if (json.empty()) return std::nullopt;
+    try {
+        std::string utf8 = utf16_to_utf8(json);
+        auto j = nlohmann::json::parse(utf8, nullptr,
+                                       /*allow_exceptions=*/false);
+        if (j.is_discarded() || !j.is_object()) return std::nullopt;
+        if (!j.contains("type") || !j["type"].is_string()
+            || j["type"].get<std::string>() != "log") {
+            return std::nullopt;
+        }
+        if (!j.contains("level") || !j["level"].is_string()) {
+            return std::nullopt;
+        }
+        if (!j.contains("text") || !j["text"].is_string()) {
+            return std::nullopt;
+        }
+        const std::string level = j["level"].get<std::string>();
+        LogMessage m;
+        if      (level == "error") m.level = LogLevel::Error;
+        else if (level == "warn")  m.level = LogLevel::Warn;
+        else if (level == "debug") m.level = LogLevel::Debug;
+        else return std::nullopt;
+        m.text = utf8_to_utf16(j["text"].get<std::string>());
+        return m;
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+std::wstring_view log_level_name(LogLevel l) noexcept {
+    switch (l) {
+        case LogLevel::Error: return L"error";
+        case LogLevel::Warn:  return L"warn";
+        case LogLevel::Debug: return L"debug";
+    }
+    return L"unknown";
+}
+
 }

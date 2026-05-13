@@ -3,6 +3,7 @@
 #include "native/asset_router.hpp"
 #include "native/debug_log.hpp"
 #include "native/host_names.hpp"
+#include "native/renderer_protocol.hpp"
 #include "native/webview2_environment.hpp"
 #include "native/webview2_externalize.hpp"
 #include "plugin/tc_lister_constants.hpp"
@@ -468,6 +469,14 @@ void WebView2Host::install_handlers_() {
                 wil::unique_cotaskmem_string raw;
                 THROW_IF_FAILED(args->get_WebMessageAsJson(&raw));
                 std::wstring_view body(raw.get());
+                // Log-bridge side channel: fires from any phase, no
+                // version stamp. Forward to debug_log so dbgview sees
+                // renderer-side events alongside the native log stream.
+                if (auto lm = decode_log_message(body); lm) {
+                    debug_log::log(L"viewer({}): {}",
+                        log_level_name(lm->level), lm->text);
+                    return S_OK;
+                }
                 if (phase_ == Phase::Building) {
                     // Cheap substring sniff against the fixed protocol.
                     if (body.find(L"\"type\":\"ready\"") !=

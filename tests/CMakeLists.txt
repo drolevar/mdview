@@ -24,6 +24,7 @@ add_executable(mdview_tests
     native/test_theme.cpp
     native/test_plugin_window_commands.cpp
     native/test_summary_v2.cpp
+    native/test_log_bridge.cpp
     # Compiled into the unit-test exe too so test_summary_v2 can
     # exercise the parser without spinning up an integration session.
     integration/summary.cpp)
