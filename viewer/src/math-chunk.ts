@@ -89,7 +89,10 @@ async function ensureWorker(): Promise<Worker | null> {
     if (workerDead) return null;
     if (worker) return worker;
     try {
-        const url = new URL('./katex-worker.js', import.meta.url);
+        // math-chunk lives at /chunks/math-chunk-<hash>.js; the
+        // worker entry-point bundle is at /katex-worker.js (esbuild
+        // places entry points in outdir root, chunks in chunks/).
+        const url = new URL('../katex-worker.js', import.meta.url);
         const w = new Worker(url, { type: 'module' });
         const readyPromise = new Promise<void>((resolve, reject) => {
             const t = setTimeout(
