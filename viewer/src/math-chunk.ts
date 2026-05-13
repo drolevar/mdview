@@ -48,7 +48,11 @@ interface WorkerReady {
 }
 
 const BATCH_SIZE = 16;
-const READY_TIMEOUT_MS = 50;
+// Worker spawn + KaTeX chunk download (~1.8 MB) + parse+exec
+// typically 60-200ms on cold start in WebView2. The plan's
+// original 50ms was hopelessly optimistic. 3s gives generous
+// headroom while still surfacing genuinely-broken worker setups.
+const READY_TIMEOUT_MS = 3000;
 const BATCH_TIMEOUT_MS = 5000;
 
 let worker:     Worker | null = null;
