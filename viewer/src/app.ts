@@ -70,12 +70,28 @@ function run(): void {
                     }
 
                     if (succeeded) {
+                        // Kick off the math-chunk import speculatively
+                        // BEFORE the mermaid pass so the KaTeX worker
+                        // can boot in parallel with mermaid. By the
+                        // time runMathPass awaits this promise, the
+                        // module + worker are already warm. Only fire
+                        // if the rendered DOM actually contains math
+                        // placeholders -- math-less docs don't need it.
+                        const hasMath = container.querySelector(
+                            '.mdview-math-inline, .mdview-math-display')
+                            !== null;
+                        const mathChunkP: Promise<
+                            typeof import('./math-chunk.js') | null
+                        > = hasMath
+                            ? import('./math-chunk.js').catch(() => null)
+                            : Promise.resolve(null);
+
                         // Mermaid pass: after markdown HTML is in the
                         // DOM, look for placeholders and lazy-load the
                         // chunk only if any are present.
                         lastMermaidPass = await runMermaidPass(
                             getResolvedTheme());
-                        lastMathPass = await runMathPass();
+                        lastMathPass = await runMathPass(mathChunkP);
                         const elapsed = Math.round(
                             performance.now() - start);
                         // Only mermaid bakes theme into rendered output
@@ -145,7 +161,9 @@ function run(): void {
         }
     }
 
-    async function runMathPass(): Promise<MathPassData> {
+    async function runMathPass(
+        mathChunkP: Promise<typeof import('./math-chunk.js') | null>,
+    ): Promise<MathPassData> {
         const inlineEls = container!.querySelectorAll<HTMLElement>(
             '.mdview-math-inline');
         const displayEls = container!.querySelectorAll<HTMLElement>(
@@ -166,7 +184,8 @@ function run(): void {
         }
         const t0 = performance.now();
         try {
-            const mod = await import('./math-chunk.js');
+            const mod = await mathChunkP;
+            if (!mod) throw new Error('math-chunk import failed');
             const chunkLoadMs = Math.round(performance.now() - t0);
             const { workerUsed, workerWallMs, pass } =
                 await mod.renderAll(inlineEls, displayEls);
