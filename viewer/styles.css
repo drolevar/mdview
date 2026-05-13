@@ -1,4 +1,5 @@
 :root {
+    color-scheme: light;
     --bg:        #ffffff;
     --fg:        #1c1c1e;
     --link:      #0066cc;
@@ -8,6 +9,7 @@
 }
 
 :root[data-theme="dark"] {
+    color-scheme: dark;
     --bg:        #1c1c1e;
     --fg:        #f2f2f2;
     --link:      #4ea3f7;
@@ -39,6 +41,11 @@ main#document h3 { font-size: 1.3rem; }
 main#document h1, h2, h3, h4, h5, h6 { font-weight: 600; }
 main#document a   { color: var(--link); text-decoration: none; }
 main#document a:hover { text-decoration: underline; }
+main#document a:focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
 
 main#document hr  { border: 0; border-top: 1px solid var(--rule); }
 
@@ -78,10 +85,10 @@ main#document th, main#document td {
     padding: 0.4rem 0.7rem;
 }
 
-/* highlight.js container — defers actual token colors to hljs-*.css */
+/* highlight.js container — defers actual token colors to hljs-*.css.
+   overflow-x lives on the parent <pre>; no need to repeat it here. */
 main#document pre code.hljs {
     display: block;
-    overflow-x: auto;
     padding: 0;       /* the <pre> already pads */
     background: transparent;
 }

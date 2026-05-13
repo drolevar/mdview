@@ -9,13 +9,16 @@
 
 /* Display math: KaTeX wraps in .katex-display; we wrap that in
    .mdview-math-display. Allow horizontal scroll so wide formulas
-   don't break the column layout. Y-axis padding prevents descender
-   clipping when overflow-x: auto promotes overflow-y to auto once
-   the horizontal scrollbar appears (CSS overflow spec behavior). */
+   don't break the column layout. overflow-y: hidden suppresses the
+   spurious vertical scrollbar that the CSS overflow spec would
+   otherwise promote (overflow-x: auto with overflow-y: visible →
+   overflow-y treated as auto). Y-axis padding still keeps descenders
+   from clipping. Multi-line display math (rare) clips silently. */
 main#document .mdview-math-display {
     margin: 0.8em 0;
     padding: 0.2em 0;
     overflow-x: auto;
+    overflow-y: hidden;
 }
 
 main#document .mdview-math-display .katex-display {
