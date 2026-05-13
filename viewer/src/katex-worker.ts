@@ -1,28 +1,64 @@
-// DEV: probe worker. Final form lands in Task 3.
 import katex from 'katex';
 
-const perf = performance as Performance & {
-    memory?: {
-        usedJSHeapSize?:  number;
-        totalJSHeapSize?: number;
-    };
+type RenderItem = {
+    id:          string;
+    tex:         string;
+    displayMode: boolean;
 };
 
-const before = perf.memory;
+type RenderResult =
+    | { id: string; status: 'rendered'; html: string }
+    | { id: string; status: 'failed';   errorMessage: string;
+        tex: string };
 
-// Force KaTeX to actually evaluate so the module isn't tree-shaken.
-const sample = katex.renderToString('x^2 + y^2 = z^2', {
-    throwOnError: false,
-    output:       'html',
-});
+interface RenderMathRequest {
+    type:    'render-math';
+    batchId: number;
+    items:   RenderItem[];
+}
 
-const after = perf.memory;
+interface RenderedMathResponse {
+    type:    'rendered-math';
+    batchId: number;
+    results: RenderResult[];
+}
 
-(self as unknown as Worker).postMessage({
-    type:          'probe-result',
-    heapUsedBefore:  before?.usedJSHeapSize  ?? null,
-    heapTotalBefore: before?.totalJSHeapSize ?? null,
-    heapUsedAfter:   after?.usedJSHeapSize   ?? null,
-    heapTotalAfter:  after?.totalJSHeapSize  ?? null,
-    sampleLen:       sample.length,
-});
+interface WorkerReady {
+    type: 'worker-ready';
+}
+
+const post = (msg: RenderedMathResponse | WorkerReady) => {
+    (self as unknown as Worker).postMessage(msg);
+};
+
+(self as unknown as Worker).onmessage = (e: MessageEvent) => {
+    const req = e.data as RenderMathRequest;
+    if (!req || req.type !== 'render-math') return;
+    const results: RenderResult[] = [];
+    for (const item of req.items) {
+        try {
+            const html = katex.renderToString(item.tex, {
+                displayMode:  item.displayMode,
+                throwOnError: true,
+                output:       'html',
+            });
+            results.push({ id: item.id, status: 'rendered', html });
+        } catch (err) {
+            const errorMessage = err instanceof Error
+                ? err.message
+                : String(err ?? '');
+            results.push({
+                id:  item.id,
+                status: 'failed',
+                errorMessage,
+                tex: item.tex,
+            });
+        }
+    }
+    post({ type: 'rendered-math', batchId: req.batchId, results });
+};
+
+// Announce readiness AFTER setting up the message handler so the
+// main thread doesn't race a render-math message in before we're
+// listening.
+post({ type: 'worker-ready' });
