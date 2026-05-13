@@ -74,7 +74,13 @@ add_custom_command(
         ${VIEWER_DIR}/dist
         ${VIEWER_PRESTAGE_ROOT}/dist
     COMMAND ${CMAKE_COMMAND} -E touch ${VIEWER_PRESTAGE_STAMP}
-    DEPENDS ${VIEWER_STAMP}
+    DEPENDS
+        ${VIEWER_STAMP}
+        ${VIEWER_DIR}/index.html
+        ${VIEWER_DIR}/styles.css
+        ${VIEWER_DIR}/styles/hljs-light.css
+        ${VIEWER_DIR}/styles/hljs-dark.css
+        ${VIEWER_DIR}/styles/katex-overrides.css
     COMMENT "Pre-staging viewer assets for embedded RC generation"
     VERBATIM)
 add_custom_target(viewer_prestage DEPENDS ${VIEWER_PRESTAGE_STAMP})
