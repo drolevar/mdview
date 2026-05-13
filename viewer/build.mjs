@@ -27,7 +27,7 @@ const stripUnusedFontFormats = {
 };
 
 await esbuild.build({
-    entryPoints: ['src/app.ts'],
+    entryPoints: ['src/app.ts', 'src/katex-worker.ts'],
     bundle:      true,
     format:      'esm',
     splitting:   true,
