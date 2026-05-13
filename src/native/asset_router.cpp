@@ -109,6 +109,7 @@ std::wstring build_headers_(std::wstring_view content_type,
         h += L"Content-Security-Policy: "
              L"default-src 'self'; "
              L"script-src 'self'; "
+             L"worker-src 'self'; "
              L"style-src 'self' 'unsafe-inline'; "
              L"img-src 'self' https://mdview-doc.example data:; "
              L"font-src 'self'; "
