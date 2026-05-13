@@ -8,6 +8,7 @@ import {
 import type { MermaidPassData }               from './mermaid-chunk.js';
 import type { MathPassData }                  from './math-chunk.js';
 import { buildSummary }                       from './summary.js';
+import { log, installGlobalErrorForwarders }  from './log.js';
 import 'katex/dist/katex.min.css';
 
 let lastMermaidPass: MermaidPassData = {
@@ -23,11 +24,12 @@ let lastMathPass: MathPassData = {
 };
 
 function run(): void {
+    installGlobalErrorForwarders();
     applyInitialTheme();
 
     const container = document.getElementById('document');
     if (!container) {
-        console.error('[mdview] #document container missing');
+        log.error('#document container missing');
         return;
     }
 
