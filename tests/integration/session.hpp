@@ -47,6 +47,16 @@ public:
 
     void reset_log();
 
+    // M10: block until a log line containing the substring is
+    // captured, or the timeout elapses. Polls every 50ms against the
+    // existing captured_log_ buffer. Returns true if the substring
+    // landed; false on timeout. Used by tests that need to wait for
+    // the mermaid background fill to drain (line:
+    // `mermaid: background_complete count=N total_ms=M`).
+    bool wait_for_log_substring(
+        const std::wstring& substr,
+        std::chrono::milliseconds timeout = std::chrono::seconds{5});
+
 private:
     void create_parent_window_();
     void load_dll_();
