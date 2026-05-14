@@ -68,13 +68,8 @@ function run(): void {
                     const baseUriAtStart = latestDocBaseUri;
                     const start     = performance.now();
                     let succeeded = false;
-                    let mdMs = 0;  // DEV: M10 probe
                     try {
-                        // DEV: M10 probe - markdown render time
-                        const tMd = performance.now();
                         container.innerHTML = renderMarkdown(latestContent);
-                        mdMs = Math.round(performance.now() - tMd);
-                        log.debug(`M10-probe: markdown_ms=${mdMs}`);
                         succeeded = true;
                     } catch (err) {
                         const e = err as Error;
@@ -108,23 +103,11 @@ function run(): void {
                         // Mermaid pass: after markdown HTML is in the
                         // DOM, look for placeholders and lazy-load the
                         // chunk only if any are present.
-                        // DEV: M10 probe - pass-level timings
-                        const tMerm = performance.now();
                         lastMermaidPass = await runMermaidPass(
                             getResolvedTheme());
-                        const mermMs = Math.round(
-                            performance.now() - tMerm);
-                        log.debug(`M10-probe: mermaid_pass_ms=${mermMs}`);
-                        const tMath = performance.now();
                         lastMathPass = await runMathPass(mathChunkP);
-                        const mathMs = Math.round(
-                            performance.now() - tMath);
-                        log.debug(`M10-probe: math_pass_ms=${mathMs}`);
                         const elapsed = Math.round(
                             performance.now() - start);
-                        log.debug(
-                            `M10-probe: total_render_ms=${elapsed} `
-                            + `md=${mdMs} mermaid=${mermMs} math=${mathMs}`);
                         // Only mermaid bakes theme into rendered output
                         // (SVG); math (currentColor), hljs (CSS classes)
                         // and markdown text all retint via CSS.
