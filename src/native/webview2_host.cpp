@@ -139,10 +139,29 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                             const std::wstring filter =
                                 std::wstring(L"https://") +
                                 kAppHostName + L"/*";
-                            THROW_IF_FAILED(
-                                webview_->AddWebResourceRequestedFilter(
-                                    filter.c_str(),
-                                    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL));
+                            // M10 audit retrofit: migrate to the
+                            // WithRequestSourceKinds overload introduced
+                            // in WebView2 SDK 1.0.1722.45. The old
+                            // AddWebResourceRequestedFilter is deprecated;
+                            // the new variant requires explicit
+                            // RequestSourceKinds (we want the default:
+                            // document + all subresource fetches).
+                            if (auto wv22 =
+                                    webview_.try_query<ICoreWebView2_22>()) {
+                                THROW_IF_FAILED(
+                                    wv22->AddWebResourceRequestedFilterWithRequestSourceKinds(
+                                        filter.c_str(),
+                                        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+                                        COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL));
+                            } else {
+                                // Older runtime without ICoreWebView2_22;
+                                // fall back to the deprecated overload
+                                // (still functional, just nags in logs).
+                                THROW_IF_FAILED(
+                                    webview_->AddWebResourceRequestedFilter(
+                                        filter.c_str(),
+                                        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL));
+                            }
                             auto res_handler = Microsoft::WRL::Callback<
                                 ICoreWebView2WebResourceRequestedEventHandler>(
                                 [env, wp]
