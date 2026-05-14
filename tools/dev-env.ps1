@@ -39,3 +39,22 @@ if (-not $env:VCPKG_ROOT) {
     }
     $env:VCPKG_ROOT = Split-Path $vcpkg.Source -Parent
 }
+
+# --- UPX (M12) ---
+# Resolve upx.exe path for tools/package-release.ps1. Order:
+#   1. $env:UPX_EXECUTABLE if already set (respect caller's choice).
+#   2. Project-known location at D:\Projects\procfs\_inspect\upx\upx-5.1.1-win64\upx.exe.
+#   3. Any upx.exe on PATH.
+# If none found, leave $env:UPX_EXECUTABLE unset; package-release.ps1
+# will warn and skip UPX in that case.
+if (-not $env:UPX_EXECUTABLE) {
+    $upxCandidate = 'D:\Projects\procfs\_inspect\upx\upx-5.1.1-win64\upx.exe'
+    if (Test-Path -LiteralPath $upxCandidate) {
+        $env:UPX_EXECUTABLE = $upxCandidate
+    } else {
+        $cmd = Get-Command upx.exe -ErrorAction SilentlyContinue
+        if ($cmd) {
+            $env:UPX_EXECUTABLE = $cmd.Source
+        }
+    }
+}
