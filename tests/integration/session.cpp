@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <thread>
 
 namespace mdview::integration {
 
@@ -314,6 +315,39 @@ void Session::reset_log() {
         sink_lines_.clear();
     }
     captured_log_.clear();
+}
+
+bool Session::wait_for_log_substring(
+    const std::wstring& substr,
+    std::chrono::milliseconds timeout) {
+    using clock = std::chrono::steady_clock;
+    const auto deadline = clock::now() + timeout;
+    const auto poll_interval = std::chrono::milliseconds{50};
+
+    while (clock::now() < deadline) {
+        {
+            std::lock_guard<std::mutex> lock(sink_mu_);
+            for (const auto& line : sink_lines_) {
+                if (line.find(substr) != std::wstring::npos) {
+                    return true;
+                }
+            }
+            for (const auto& line : captured_log_) {
+                if (line.find(substr) != std::wstring::npos) {
+                    return true;
+                }
+            }
+        }
+        // Pump messages while waiting so WebView2 callbacks can
+        // flow through and dispatch new log lines into the sink.
+        MSG msg;
+        while (::PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            ::TranslateMessage(&msg);
+            ::DispatchMessageW(&msg);
+        }
+        std::this_thread::sleep_for(poll_interval);
+    }
+    return false;
 }
 
 }
