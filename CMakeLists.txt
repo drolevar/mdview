@@ -22,13 +22,21 @@ find_program(NODE_EXECUTABLE node REQUIRED
     DOC "Node.js 20+ required to build viewer/ bundle")
 
 set(VIEWER_DIR    ${CMAKE_CURRENT_SOURCE_DIR}/viewer)
-set(VIEWER_STAMP  ${VIEWER_DIR}/dist/.viewer.stamp)
+# M11 fixup: stamp lives in the build dir so debug + release builds
+# each have their own. Previously, a debug build that produced
+# `viewer/dist/.viewer.stamp` would convince a subsequent release
+# build that node build.mjs needn't re-run -- and the release WLX
+# would silently embed the debug-mode (non-minified, ~6x larger)
+# dist content. With the stamp per-config, switching between debug
+# and release always triggers a fresh esbuild for the new config.
+set(VIEWER_STAMP  ${CMAKE_BINARY_DIR}/generated/viewer-bundle.stamp)
 
 add_custom_command(
     OUTPUT ${VIEWER_STAMP}
     COMMAND ${CMAKE_COMMAND} -E env
         "NODE_ENV=$<IF:$<CONFIG:Release>,production,development>"
         ${NODE_EXECUTABLE} ${VIEWER_DIR}/build.mjs
+    COMMAND ${CMAKE_COMMAND} -E touch ${VIEWER_STAMP}
     WORKING_DIRECTORY ${VIEWER_DIR}
     DEPENDS
         ${VIEWER_DIR}/build.mjs
