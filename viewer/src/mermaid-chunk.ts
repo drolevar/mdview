@@ -229,35 +229,3 @@ export function scheduleBackgroundChunks(
     };
 }
 
-// COMPAT WRAPPER: renderAll used by app.ts pre-Task 5. Removed
-// in Task 5 when app.ts switches to renderChunk + scheduleBackgroundChunks.
-export async function renderAll(
-    elements: NodeListOf<HTMLElement>,
-    options:  MermaidRenderOptions,
-): Promise<DiagramOutcome[]> {
-    // DEV: M10 probe - pass-total + init + per-diagram timing
-    const passStart = performance.now();
-    if (!initialized || initializedTheme !== options.theme) {
-        const tInit = performance.now();
-        init(options.theme);
-        const initMs = Math.round(performance.now() - tInit);
-        log.debug(`M10-probe: mermaid_init_ms=${initMs}`);
-    }
-
-    const els = Array.from(elements);
-    const outcomes: DiagramOutcome[] = new Array(els.length);
-    for (let i = 0; i < els.length; i += POOL_SIZE) {
-        const chunk = els.slice(i, i + POOL_SIZE);
-        const chunkResults = await renderChunk(chunk, options);
-        for (let k = 0; k < chunkResults.length; k++) {
-            outcomes[i + k] = chunkResults[k];
-        }
-    }
-
-    // DEV: M10 probe - mermaid pass total
-    const passMs = Math.round(performance.now() - passStart);
-    log.debug(
-        `M10-probe: mermaid_pass_total_ms=${passMs} n=${els.length} `
-        + `pool=${POOL_SIZE}`);
-    return outcomes;
-}
