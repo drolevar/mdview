@@ -53,15 +53,16 @@ export function buildSummary(
         || mathPass.chunkLoaded;
 
     return {
-        summarySchema: 3,
+        summarySchema: 4,
         durationMs,
         theme,
         blockCount,
         codeFences,
         mermaid: {
-            chunkLoaded:  mermaidPass.chunkLoaded,
-            chunkLoadMs:  mermaidPass.chunkLoadMs,
-            diagrams:     mermaidPass.diagrams,
+            chunkLoaded:      mermaidPass.chunkLoaded,
+            chunkLoadMs:      mermaidPass.chunkLoadMs,
+            placeholdersSeen: mermaidPass.placeholdersSeen,
+            diagrams:         mermaidPass.diagrams,
         },
         math: hasMath ? {
             chunkLoaded:      mathPass.chunkLoaded,

@@ -46,7 +46,7 @@ export interface SetThemeMessage {
 }
 
 export interface RenderedSummary {
-    summarySchema: 3;
+    summarySchema: 4;
     durationMs:    number;
     theme:         'light' | 'dark';
     blockCount: {
@@ -66,8 +66,13 @@ export interface RenderedSummary {
         highlighted: boolean;
     }>;
     mermaid: {
-        chunkLoaded:  boolean;
-        chunkLoadMs:  number | null;
+        chunkLoaded:      boolean;
+        chunkLoadMs:      number | null;
+        // M10: total placeholders discovered in the DOM at
+        // first-paint time. With progressive render (Task 5),
+        // diagrams[] may carry only the first chunk's outcomes
+        // while placeholdersSeen reports the doc total.
+        placeholdersSeen: number;
         diagrams: Array<{
             id:           string;
             status:       'rendered' | 'failed';
