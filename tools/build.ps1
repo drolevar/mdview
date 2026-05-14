@@ -13,6 +13,12 @@
     Install the plugin to %APPDATA%\GHISLER\plugins\wlx\mdview\.
     Release-only.
 
+.PARAMETER Package
+    Run tools/package-release.ps1 to produce a UPX-packed
+    mdview-<version>.zip in <buildDir>\dist\. Release-only.
+    May be combined with -Install; -Package runs first so the
+    packed binary is what gets installed.
+
 .PARAMETER Clean
     Delete the build directory before configuring.
 
@@ -20,6 +26,7 @@
     .\tools\build.ps1                       # debug build
     .\tools\build.ps1 -Test                 # debug build + tests
     .\tools\build.ps1 release -Install      # release build + install
+    .\tools\build.ps1 release -Package      # release build + zip artifact
 #>
 [CmdletBinding()]
 param(
@@ -29,6 +36,7 @@ param(
 
     [switch]$Test,
     [switch]$Install,
+    [switch]$Package,
     [switch]$Clean
 )
 
@@ -57,6 +65,15 @@ try {
             Write-Warning "test preset is debug-only; skipping -Test for $Config"
         } else {
             ctest --preset $preset
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+        }
+    }
+
+    if ($Package) {
+        if ($Config -ne 'release') {
+            Write-Warning "package-release is release-only; skipping -Package for $Config"
+        } else {
+            & (Join-Path $PSScriptRoot 'package-release.ps1') -BuildDir $buildDir
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
         }
     }
