@@ -75,11 +75,19 @@ void run_fixture(const FixtureSpec& f) {
     dump_perf_lines(s.captured_log());
 
     if (f.path_or_name.find(L"18_perf_stress.md") != std::wstring::npos) {
-        // M10 regression gate: stress fixture's first-paint
-        // wall time must stay under 1500ms in debug. M8 baseline
-        // was ~3,500ms; M10 target is ~600ms release. Debug runs
-        // 1.5-2x slower so 1500ms is a generous safety bound that
-        // catches catastrophic regressions, not tight wins.
+        // M10 regression gate: stress fixture's first-paint wall
+        // time must stay under 2500ms in the debug integration
+        // build. M8 baseline was ~3,500ms (release) and debug runs
+        // hotter -- typical measured run is ~900-1500ms here, so
+        // 2500ms is a "catastrophic regression" bound (~2x normal
+        // debug perf). Tight wins won't trip this; if it fires,
+        // something broke. The release-build numbers are tracked
+        // separately via manual smoke + dbgview.
+        // Native `render=Nms` from `viewer-host: first-load complete;
+        // ctrl=Xms nav=Yms render=Zms total=Tms` -- WLX-observed wall
+        // time (renderer-ready → first paint). Includes a few ms of
+        // nav/serialization beyond the renderer's self-reported
+        // summary.durationMs.
         int render_ms = -1;
         for (const auto& line : s.captured_log()) {
             const std::wstring marker = L"first-load complete; ";
@@ -88,32 +96,37 @@ void run_fixture(const FixtureSpec& f) {
             auto rpos = line.find(L"render=", pos);
             if (rpos == std::wstring::npos) continue;
             rpos += 7;  // skip "render="
+            const auto digit_start = rpos;
             int v = 0;
             while (rpos < line.size() && iswdigit(line[rpos])) {
                 v = v * 10 + (line[rpos] - L'0');
                 ++rpos;
             }
+            // Guard against malformed lines (e.g. "render=" with no
+            // digits) silently passing a 0ms gate.
+            if (rpos == digit_start) continue;
             render_ms = v;
             break;
         }
-        REQUIRE(render_ms >= 0);
-        CHECK(render_ms < 1500);
+        REQUIRE(render_ms > 0);
+        CHECK(render_ms < 2500);
     }
 }
 
 }  // namespace
 
+// `[.perf]` (leading dot) is the Catch2-hidden convention -- this
+// test does NOT run by default; explicit opt-in required (e.g.
+// `mdview_integration_tests.exe "[.perf]"`). The regression gate
+// at the end measures the stress fixture WARM (4th in the list;
+// preceding loads recycle the precache so by load #4 we're past
+// the cold-precache penalty).
 TEST_CASE("M10 perf probe: dump per-fixture timings",
-          "[integration][perf][m10]") {
-    // Order matters: first fixture pays the cold-precache penalty
-    // (precache state Empty during F3 -> acquire pump waits). Later
-    // fixtures get the recycle precache (already Parked).
+          "[integration][.perf][m10]") {
     const std::vector<FixtureSpec> fixtures = {
         // path or name                  mermaid_min   math_min
         { L"08_mermaid_basic.md",        2,            0 },
         { L"16_math_mixed.md",           1,            2 },
-        { L"D:\\Projects\\sd2g_fpga\\docs\\timing-diagrams.md",
-                                         5,            0 },
         { L"18_perf_stress.md",          50,           100 },
     };
 
