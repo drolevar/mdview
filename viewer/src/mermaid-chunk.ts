@@ -124,9 +124,115 @@ async function renderOneDiagram(
 // before m10-shipped along with all // DEV: code.
 const POOL_SIZE = 4;
 
+// Renders up to POOL_SIZE diagrams concurrently. Caller pre-slices.
+// Never throws -- per-diagram errors return as outcome.status='failed'.
+export async function renderChunk(
+    elements: HTMLElement[],
+    options:  MermaidRenderOptions,
+): Promise<DiagramOutcome[]> {
+    if (!initialized || initializedTheme !== options.theme) {
+        init(options.theme);
+    }
+    return Promise.all(elements.map((el, idx) => renderOneDiagram(el, idx)));
+}
+
+export interface BackgroundHandle {
+    abort(): void;
+    done:   Promise<void>;
+}
+
+// Drains the queue chunk-by-chunk via requestIdleCallback (fallback
+// to setTimeout(0)). Calls onChunk per completed chunk. Catches and
+// logs per-chunk errors; never lets one bad chunk kill the queue.
+// abort() flips a flag; the loop checks it after each await so an
+// in-flight chunk completes but its outcomes are dropped.
+export function scheduleBackgroundChunks(
+    remaining: HTMLElement[],
+    options:   MermaidRenderOptions,
+    onChunk:   (chunk: DiagramOutcome[]) => void,
+): BackgroundHandle {
+    let aborted = false;
+    const yieldToIdle = (cb: () => void): void => {
+        const w = self as unknown as {
+            requestIdleCallback?: (fn: () => void) => void;
+        };
+        if (typeof w.requestIdleCallback === 'function') {
+            w.requestIdleCallback(cb);
+        } else {
+            setTimeout(cb, 0);
+        }
+    };
+
+    const done = new Promise<void>((resolve) => {
+        let cursor = 0;
+        const startTime = performance.now();
+        let renderedCount = 0;
+
+        const tick = async (): Promise<void> => {
+            if (aborted || cursor >= remaining.length) {
+                if (!aborted) {
+                    const totalMs = Math.round(
+                        performance.now() - startTime);
+                    log.debug(
+                        `mermaid: background_complete `
+                        + `count=${renderedCount} total_ms=${totalMs}`);
+                }
+                resolve();
+                return;
+            }
+            const chunk = remaining.slice(cursor, cursor + POOL_SIZE);
+            cursor += POOL_SIZE;
+            try {
+                const outcomes = await renderChunk(chunk, options);
+                if (!aborted) {
+                    onChunk(outcomes);
+                    renderedCount += outcomes.length;
+                }
+            } catch (err) {
+                const msg = err instanceof Error
+                    ? err.message : String(err ?? '');
+                log.warn(`mermaid background chunk failed: ${msg}`);
+                // Paint failure frames on this chunk's placeholders so
+                // they don't sit empty forever. Each entry still gets
+                // counted via the outcome so summaries stay consistent.
+                if (!aborted) {
+                    const failOutcomes: DiagramOutcome[] = chunk.map(el => {
+                        const id = el.dataset['mermaidId'] ?? '';
+                        const sourceEl = el.querySelector('.mdview-mermaid-source');
+                        const source = sourceEl?.textContent ?? '';
+                        const sourceHtml = sourceEl
+                            ? sourceEl.outerHTML
+                            : `<pre class="mdview-mermaid-source">${escapeHtml(source)}</pre>`;
+                        el.innerHTML = sourceHtml + renderError(id, msg);
+                        el.classList.add('mdview-mermaid-failed');
+                        return {
+                            id, status: 'failed',
+                            diagramType: detectType(source),
+                            errorMessage: msg,
+                            renderMs: 0,
+                        };
+                    });
+                    onChunk(failOutcomes);
+                    renderedCount += failOutcomes.length;
+                }
+            }
+            yieldToIdle(() => { void tick(); });
+        };
+
+        yieldToIdle(() => { void tick(); });
+    });
+
+    return {
+        abort: () => { aborted = true; },
+        done,
+    };
+}
+
+// COMPAT WRAPPER: renderAll used by app.ts pre-Task 5. Removed
+// in Task 5 when app.ts switches to renderChunk + scheduleBackgroundChunks.
 export async function renderAll(
     elements: NodeListOf<HTMLElement>,
-    options: MermaidRenderOptions,
+    options:  MermaidRenderOptions,
 ): Promise<DiagramOutcome[]> {
     // DEV: M10 probe - pass-total + init + per-diagram timing
     const passStart = performance.now();
@@ -139,15 +245,9 @@ export async function renderAll(
 
     const els = Array.from(elements);
     const outcomes: DiagramOutcome[] = new Array(els.length);
-    // DEV: M10 concurrency probe - render chunks of POOL_SIZE in
-    // parallel. If mermaid is race-safe for distinct ids this should
-    // cut wall time by ~POOL_SIZE on the stress fixture. If unsafe,
-    // outcomes will contain spurious 'failed' entries or the SVG
-    // visuals will be wrong (cross-pollinated graph contents).
     for (let i = 0; i < els.length; i += POOL_SIZE) {
         const chunk = els.slice(i, i + POOL_SIZE);
-        const chunkResults = await Promise.all(
-            chunk.map((el, j) => renderOneDiagram(el, i + j)));
+        const chunkResults = await renderChunk(chunk, options);
         for (let k = 0; k < chunkResults.length; k++) {
             outcomes[i + k] = chunkResults[k];
         }
