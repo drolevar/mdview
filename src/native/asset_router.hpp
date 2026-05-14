@@ -45,4 +45,13 @@ HRESULT respond_unavailable(
     ICoreWebView2WebResourceRequestedEventArgs* args,
     ICoreWebView2Environment* env) noexcept;
 
+// M11: If-Modified-Since exact-match check. The stored Last-Modified
+// is byte-equal across a stable build (same PE COFF timestamp formatted
+// via std::format with classic locale), so string compare is correct
+// and avoids parsing date arithmetic. Returns true when both inputs
+// are non-empty and exactly equal, false otherwise (including when the
+// incoming IMS value is empty — i.e. the header was absent).
+bool should_respond_304(std::wstring_view if_modified_since,
+                        std::wstring_view our_last_modified) noexcept;
+
 }  // namespace mdview

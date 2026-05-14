@@ -85,14 +85,17 @@ std::wstring build_headers_(std::wstring_view content_type,
     h += L"\r\n";
     // HTML: no-store so a stale CSP can never be reused. Everything
     // else (JS / CSS / fonts) is embedded RCDATA and stable for the
-    // WLX's lifetime, so a long max-age lets WebView2 + V8 keep the
-    // compiled module cache warm across recycle controllers — without
-    // this, every F3 re-parses the 200 KB mermaid chunk from scratch
-    // and the renderer pays ~500 ms of redundant compile work.
+    // WLX's lifetime, so `no-cache, must-revalidate` lets Chromium
+    // cache the body while always revalidating — it sends
+    // `If-Modified-Since` on repeat fetches, and `handle_app_request`
+    // short-circuits with 304 when the value matches our stored
+    // Last-Modified. That skips the ~30 IStream::Read COM round-trips
+    // per warm render (M11 Task 3). V8's bytecode cache uses the same
+    // Last-Modified validator independently to skip recompile.
     if (include_csp) {
         h += L"Cache-Control: no-store\r\n";
     } else {
-        h += L"Cache-Control: public, max-age=86400, immutable\r\n";
+        h += L"Cache-Control: no-cache, must-revalidate\r\n";
         // Last-Modified is what V8's bytecode cache actually validates
         // against; Cache-Control alone isn't enough to keep the cache
         // warm across fresh recycle controllers.
@@ -155,6 +158,35 @@ HRESULT respond_not_found_(
         L"text/plain; charset=utf-8", /*include_csp*/ false);
 }
 
+// M11: build a 304 Not Modified response with empty body and the
+// same Last-Modified validator. Chromium serves cached bytes after
+// receiving this; V8's separate bytecode cache continues to validate
+// via Last-Modified independently.
+HRESULT respond_304_(
+        ICoreWebView2WebResourceRequestedEventArgs* args,
+        ICoreWebView2Environment* env) noexcept {
+    using Microsoft::WRL::ComPtr;
+    using Microsoft::WRL::MakeAndInitialize;
+    ComPtr<EmbeddedResourceStream> empty_stream;
+    RETURN_IF_FAILED(MakeAndInitialize<EmbeddedResourceStream>(
+        &empty_stream, static_cast<const std::byte*>(nullptr),
+        static_cast<std::size_t>(0)));
+
+    std::wstring headers =
+        L"Last-Modified: " + last_modified_header_value_() + L"\r\n"
+        L"Cache-Control: no-cache, must-revalidate\r\n"
+        L"X-Content-Type-Options: nosniff\r\n";
+
+    wil::com_ptr<ICoreWebView2WebResourceResponse> response;
+    RETURN_IF_FAILED(env->CreateWebResourceResponse(
+        empty_stream.Get(),
+        304,
+        L"Not Modified",
+        headers.c_str(),
+        &response));
+    return args->put_Response(response.get());
+}
+
 }  // namespace
 
 std::optional<std::wstring>
@@ -211,6 +243,13 @@ HRESULT respond_unavailable(
         L"text/plain; charset=utf-8", /*include_csp*/ false);
 }
 
+bool should_respond_304(std::wstring_view if_modified_since,
+                        std::wstring_view our_last_modified) noexcept {
+    if (if_modified_since.empty()) return false;
+    if (our_last_modified.empty()) return false;
+    return if_modified_since == our_last_modified;
+}
+
 HRESULT handle_app_request(
         ICoreWebView2WebResourceRequestedEventArgs* args,
         ICoreWebView2Environment* env) noexcept {
@@ -230,6 +269,31 @@ HRESULT handle_app_request(
         return respond_not_found_(args, env, *path);
     }
 
+    const bool is_html =
+        asset->content_type.find(L"text/html") !=
+        std::wstring_view::npos;
+
+    // M11: If-Modified-Since short-circuit. Chromium sends this on
+    // repeat fetches now that non-HTML responses are
+    // `no-cache, must-revalidate`. HTML stays `no-store` so it never
+    // ships an IMS — skip the check there. Header absent / mismatch
+    // / failure all fall through to the normal 200 response.
+    if (!is_html) {
+        wil::com_ptr<ICoreWebView2HttpRequestHeaders> req_headers;
+        if (SUCCEEDED(req->get_Headers(&req_headers)) && req_headers) {
+            wil::unique_cotaskmem_string ims;
+            if (SUCCEEDED(req_headers->GetHeader(
+                    L"If-Modified-Since", &ims)) && ims) {
+                if (should_respond_304(
+                        ims.get(), last_modified_header_value_())) {
+                    debug_log::log(
+                        L"wlx: asset-router 304 path={}", *path);
+                    return respond_304_(args, env);
+                }
+            }
+        }
+    }
+
     const HMODULE module = globals().module_handle();
     HRSRC hrsrc = ::FindResourceExW(
         module, RT_RCDATA,
@@ -244,9 +308,6 @@ HRESULT handle_app_request(
         return respond_not_found_(args, env, *path);
     }
 
-    const bool is_html =
-        asset->content_type.find(L"text/html") !=
-        std::wstring_view::npos;
     debug_log::log(L"wlx: asset-router 200 path={} size={} mime={}",
                    *path,
                    static_cast<uint32_t>(size),

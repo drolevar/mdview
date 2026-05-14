@@ -91,3 +91,24 @@ TEST_CASE("path: too-short URI rejected", "[asset_router]") {
     CHECK_FALSE(parse_app_request_path(L"").has_value());
     CHECK_FALSE(parse_app_request_path(L"https://").has_value());
 }
+
+using mdview::should_respond_304;
+
+TEST_CASE("304 helper: returns true when If-Modified-Since exactly matches Last-Modified",
+          "[asset_router][m11]") {
+    const std::wstring our_lm = L"Thu, 14 May 2026 22:30:00 GMT";
+    CHECK(should_respond_304(our_lm, our_lm));
+}
+
+TEST_CASE("304 helper: returns false when If-Modified-Since differs",
+          "[asset_router][m11]") {
+    const std::wstring our_lm = L"Thu, 14 May 2026 22:30:00 GMT";
+    CHECK_FALSE(should_respond_304(
+        L"Wed, 01 Jan 2020 00:00:00 GMT", our_lm));
+}
+
+TEST_CASE("304 helper: returns false when If-Modified-Since header absent",
+          "[asset_router][m11]") {
+    const std::wstring our_lm = L"Thu, 14 May 2026 22:30:00 GMT";
+    CHECK_FALSE(should_respond_304(L"", our_lm));
+}
