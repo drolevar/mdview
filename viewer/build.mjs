@@ -1,7 +1,16 @@
 import esbuild from 'esbuild';
-import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+// M11: wipe dist/ before every build. Esbuild emits content-hashed
+// chunk filenames and never cleans the output directory, so any
+// rebuild that produces different hashes (e.g. debug↔release switch,
+// repeated incremental iterations) leaves orphan chunks behind.
+// GenerateViewerResources.cmake globs the whole tree and embeds
+// every match into RCDATA, bloating the WLX by 5-10x in the worst
+// case. A fresh dist on every build keeps RCDATA deterministic and
+// minimal.
+rmSync('dist', { recursive: true, force: true });
 mkdirSync('dist', { recursive: true });
 
 const isProd = process.env.NODE_ENV === 'production';
