@@ -118,11 +118,12 @@ async function renderOneDiagram(
     }
 }
 
-// DEV: M10 concurrency probe - POOL_SIZE governs how many diagrams
-// run concurrently. 1 = original sequential behavior; >1 = chunked
-// Promise.all. Bump to test race-safety + wall-time impact. Strip
-// before m10-shipped along with all // DEV: code.
-const POOL_SIZE = 4;
+// M10: bounded concurrency for mermaid renders. Measured pool=4 is
+// the sweet spot in WebView2 -- pool=8 regresses on the stress
+// fixture. See docs/tc_mdview_m10_mermaid_progressive_design.md
+// section 2.1 for the probe data. Exported so app.ts can match the
+// slice boundary when splitting foreground from background chunks.
+export const POOL_SIZE = 4;
 
 // Renders up to POOL_SIZE diagrams concurrently. Caller pre-slices.
 // Never throws -- per-diagram errors return as outcome.status='failed'.
