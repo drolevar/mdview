@@ -5,7 +5,9 @@ import {
     isLoadDocument, isSetTheme,
     postReady, postRendered, postRenderError,
 } from './protocol.js';
-import type { MermaidPassData }               from './mermaid-chunk.js';
+import type { MermaidPassData, BackgroundHandle }
+                                              from './mermaid-chunk.js';
+import { POOL_SIZE }                          from './mermaid-chunk.js';
 import type { MathPassData }                  from './math-chunk.js';
 import { buildSummary }                       from './summary.js';
 import { log, installGlobalErrorForwarders }  from './log.js';
@@ -24,6 +26,8 @@ let lastMathPass: MathPassData = {
     display: { rendered: 0, failed: 0 },
     errors:  [],
 };
+
+let backgroundHandle: BackgroundHandle | null = null;
 
 function run(): void {
     installGlobalErrorForwarders();
@@ -50,6 +54,15 @@ function run(): void {
         void (async () => {
             try {
                 while (true) {
+                    // M10: cancel any background mermaid fill from
+                    // the previous doc. This is a no-op if no doc was
+                    // active or the background already drained. After
+                    // abort, the in-flight chunk completes silently;
+                    // its outcomes don't reach the old pass.diagrams
+                    // (which is about to be replaced anyway when
+                    // container.innerHTML reassigns).
+                    backgroundHandle?.abort();
+                    backgroundHandle = null;
                     const idAtStart = latestId;
                     const summaryAtStart = latestSummaryRequested;
                     const baseUriAtStart = latestDocBaseUri;
@@ -149,7 +162,7 @@ function run(): void {
         const placeholders = container!.querySelectorAll<HTMLElement>(
             '[data-mermaid-id]');
         const placeholdersSeen = placeholders.length;
-        if (placeholders.length === 0) {
+        if (placeholdersSeen === 0) {
             return {
                 chunkLoaded: false, chunkLoadMs: null,
                 placeholdersSeen: 0, diagrams: [],
@@ -159,11 +172,32 @@ function run(): void {
         try {
             const mod = await import('./mermaid-chunk.js');
             const chunkLoadMs = Math.round(performance.now() - t0);
-            const diagrams = await mod.renderAll(placeholders, { theme });
-            return {
+            const allEls = Array.from(placeholders) as HTMLElement[];
+            const firstChunk = allEls.slice(0, POOL_SIZE);
+            const firstOutcomes = await mod.renderChunk(
+                firstChunk, { theme });
+
+            // Build the pass data with first-chunk outcomes only.
+            // Background scheduler pushes additional outcomes into the
+            // same diagrams array; lastMermaidPass references this
+            // object so window.onerror handlers still see the live state.
+            const pass: MermaidPassData = {
                 chunkLoaded: true, chunkLoadMs,
-                placeholdersSeen, diagrams,
+                placeholdersSeen,
+                diagrams: firstOutcomes,
             };
+
+            // Schedule remaining via idle ticks. Fire-and-forget;
+            // outcomes append to pass.diagrams as each chunk completes.
+            if (allEls.length > POOL_SIZE) {
+                backgroundHandle = mod.scheduleBackgroundChunks(
+                    allEls.slice(POOL_SIZE),
+                    { theme },
+                    (chunkOutcomes) => {
+                        pass.diagrams.push(...chunkOutcomes);
+                    });
+            }
+            return pass;
         } catch (err) {
             const msg = err instanceof Error
                 ? err.message
