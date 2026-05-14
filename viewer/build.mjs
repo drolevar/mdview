@@ -56,5 +56,7 @@ await esbuild.build({
     logLevel:    'info',
 });
 
-// Stamp file CMake watches as the single deterministic OUTPUT.
-writeFileSync(join('dist', '.viewer.stamp'), new Date().toISOString());
+// M11 fixup: stamp is now written by CMake (touch) at a build-tree
+// path so debug and release builds each have their own. Previously
+// the stamp inside `dist/` was shared and caused config switches to
+// silently skip esbuild. See CMakeLists.txt VIEWER_STAMP.
