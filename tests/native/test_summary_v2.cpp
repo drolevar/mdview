@@ -163,3 +163,55 @@ TEST_CASE("parse_summary_json tolerates math object with missing subfields",
     CHECK(s->math->display_failed   == 0);
     CHECK(s->math->errors.empty());
 }
+
+TEST_CASE("parser reads mermaid.placeholdersSeen from v4 payload",
+          "[summary][v4]") {
+    const auto payload = LR"({
+        "summarySchema": 4,
+        "durationMs": 100,
+        "theme": "light",
+        "blockCount": {"paragraph": 1, "heading": 0, "codeFence": 0,
+            "table": 0, "blockquote": 0, "listOrdered": 0,
+            "listUnordered": 0, "image": 0, "link": 0, "hr": 0},
+        "codeFences": [],
+        "mermaid": {
+            "chunkLoaded": true,
+            "chunkLoadMs": 42,
+            "placeholdersSeen": 80,
+            "diagrams": []
+        },
+        "math": null,
+        "imageRequests": []
+    })";
+    auto s = mdview::integration::parse_summary_json(payload);
+    REQUIRE(s.has_value());
+    CHECK(s->summary_schema == 4);
+    CHECK(s->mermaid_chunk_loaded);
+    CHECK(s->mermaid_chunk_load_ms == 42);
+    CHECK(s->mermaid_placeholders_seen == 80);
+}
+
+TEST_CASE("parser defaults mermaid.placeholdersSeen to 0 on v3 payload",
+          "[summary][v4][backcompat]") {
+    const auto payload = LR"({
+        "summarySchema": 3,
+        "durationMs": 100,
+        "theme": "light",
+        "blockCount": {"paragraph": 1, "heading": 0, "codeFence": 0,
+            "table": 0, "blockquote": 0, "listOrdered": 0,
+            "listUnordered": 0, "image": 0, "link": 0, "hr": 0},
+        "codeFences": [],
+        "mermaid": {
+            "chunkLoaded": true,
+            "chunkLoadMs": 42,
+            "diagrams": []
+        },
+        "math": null,
+        "imageRequests": []
+    })";
+    auto s = mdview::integration::parse_summary_json(payload);
+    REQUIRE(s.has_value());
+    CHECK(s->summary_schema == 3);
+    CHECK(s->mermaid_chunk_loaded);
+    CHECK(s->mermaid_placeholders_seen == 0);
+}

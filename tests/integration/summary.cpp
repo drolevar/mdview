@@ -55,6 +55,7 @@ parse_summary_json(const std::wstring& payload) {
                     ? m["chunkLoadMs"].get<int>()
                     : -1)
                 : -1;
+            s.mermaid_placeholders_seen = m.value("placeholdersSeen", 0);  // M10
             if (m.contains("diagrams") && m["diagrams"].is_array()) {
                 for (auto& d : m["diagrams"]) {
                     DiagramRecord r;
