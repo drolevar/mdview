@@ -1,3 +1,5 @@
+#requires -Version 7
+
 <#
 .SYNOPSIS
     Builds the M12 release artifact: UPX-packed WLX + pluginst.inf
@@ -103,11 +105,11 @@ Write-Host "Wrote $plugInst"
 # 4. Zip
 # ---------------------------------------------------------------
 $zipPath = Join-Path $distDir "mdview-$version.zip"
-Compress-Archive -Path $wlx, $plugInst -DestinationPath $zipPath -Force
+Compress-Archive -LiteralPath $wlx, $plugInst -DestinationPath $zipPath -Force
 $zipBytes = (Get-Item -LiteralPath $zipPath).Length
 Write-Host ("Wrote $zipPath ({0:N2} MB)" -f ($zipBytes / 1MB))
 
 # ---------------------------------------------------------------
 # Done. Output the zip path so callers can pipe it.
 # ---------------------------------------------------------------
-$zipPath
+(Resolve-Path -LiteralPath $zipPath).Path
