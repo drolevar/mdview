@@ -57,6 +57,11 @@ struct RenderedSummary {
     std::vector<CodeFenceRecord> code_fences;
     bool   mermaid_chunk_loaded = false;
     int    mermaid_chunk_load_ms = -1;
+    // M10: total placeholders discovered in the DOM at first-paint
+    // time. Mirrors the math.placeholders_seen pattern (M9). Lets
+    // tests assert "doc has N diagrams" even when the initial summary
+    // only carries the first foreground chunk's outcomes.
+    int    mermaid_placeholders_seen = 0;
     std::vector<DiagramRecord>   mermaid_diagrams;
 
     // nullopt in schema v1 payloads and in v2 payloads where the doc
