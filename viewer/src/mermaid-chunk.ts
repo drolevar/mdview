@@ -71,12 +71,12 @@ function renderError(id: string, message: string): string {
            `</div>`;
 }
 
-// DEV: M10 concurrency probe - render a single diagram. Extracted
-// from the original for-await body so it can be invoked in parallel
-// chunks. Returns its outcome; never throws.
+// Renders a single diagram. Extracted from the original for-await
+// body so it can be invoked from chunked Promise.all. Returns its
+// outcome; never throws -- per-diagram errors return as
+// outcome.status='failed'.
 async function renderOneDiagram(
-    el:  HTMLElement,
-    idx: number,
+    el: HTMLElement,
 ): Promise<DiagramOutcome> {
     const id = el.dataset['mermaidId'] ?? '';
     const sourceEl = el.querySelector('.mdview-mermaid-source');
@@ -88,9 +88,6 @@ async function renderOneDiagram(
         el.innerHTML = svg;
         el.classList.add('mdview-mermaid-rendered');
         const renderMs = Math.round(performance.now() - t0);
-        log.debug(
-            `M10-probe: mermaid_diagram idx=${idx} id=${id} `
-            + `type=${diagramType ?? 'unknown'} render_ms=${renderMs}`);
         return {
             id, status: 'rendered', diagramType,
             errorMessage: null,
@@ -106,10 +103,6 @@ async function renderOneDiagram(
         el.innerHTML = sourceHtml + renderError(id, msg);
         el.classList.add('mdview-mermaid-failed');
         const renderMs = Math.round(performance.now() - t0);
-        log.debug(
-            `M10-probe: mermaid_diagram idx=${idx} id=${id} `
-            + `type=${diagramType ?? 'unknown'} render_ms=${renderMs} `
-            + `status=failed`);
         return {
             id, status: 'failed', diagramType,
             errorMessage: msg,
@@ -134,7 +127,7 @@ export async function renderChunk(
     if (!initialized || initializedTheme !== options.theme) {
         init(options.theme);
     }
-    return Promise.all(elements.map((el, idx) => renderOneDiagram(el, idx)));
+    return Promise.all(elements.map((el) => renderOneDiagram(el)));
 }
 
 export interface BackgroundHandle {
