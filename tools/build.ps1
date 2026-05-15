@@ -52,18 +52,23 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-if ($env:VSCMD_ARG_TGT_ARCH -and $env:VSCMD_ARG_TGT_ARCH -ne $Arch) {
+# dev-env.ps1 is dot-sourced below and also declares a param named
+# $Arch, which would rebind THIS script's $Arch in our scope. Capture
+# the requested arch into a local that the dot-source cannot clobber.
+$buildArch = $Arch
+
+if ($env:VSCMD_ARG_TGT_ARCH -and $env:VSCMD_ARG_TGT_ARCH -ne $buildArch) {
     throw "This shell is already VS-activated for target '$($env:VSCMD_ARG_TGT_ARCH)', " +
-          "but you requested '$Arch'. dev-env.ps1 is idempotent and will not re-activate " +
+          "but you requested '$buildArch'. dev-env.ps1 is idempotent and will not re-activate " +
           "(single-arch-per-process by design). Open a fresh PowerShell and re-run: " +
-          "build.ps1 $Config $Arch"
+          "build.ps1 $Config $buildArch"
 }
 
-$vsArch = if ($Arch -eq 'x64') { 'amd64' } else { 'x86' }
+$vsArch = if ($buildArch -eq 'x64') { 'amd64' } else { 'x86' }
 . (Join-Path $PSScriptRoot 'dev-env.ps1') -Arch $vsArch
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$preset   = "windows-msvc-$Arch-$Config"
+$preset   = "windows-msvc-$buildArch-$Config"
 $buildDir = "build\$preset"
 
 Push-Location $repoRoot
