@@ -256,6 +256,7 @@ void install_cbt_hook_() noexcept {
 }
 
 void __stdcall ListSetDefaultParams(ListDefaultParamStruct* dps) {
+    mdview::Theme tc_theme = mdview::Theme::System;
     if (dps != nullptr) {
         try {
             mdview::globals().set_default_params(
@@ -268,7 +269,7 @@ void __stdcall ListSetDefaultParams(ListDefaultParamStruct* dps) {
             // uses Theme::System (white default-bg + light renderer),
             // producing a brief light-content flash on cold F3 in
             // TC-dark mode.
-            const mdview::Theme tc_theme =
+            tc_theme =
                 parse_tc_dark_mode_from_ini(std::string(dps->DefaultIniName));
             mdview::precache_manager::instance().note_theme(tc_theme);
         } catch (...) {
@@ -280,7 +281,14 @@ void __stdcall ListSetDefaultParams(ListDefaultParamStruct* dps) {
     // DWM's initial surface allocation hits dark instead of
     // COLOR_WINDOW. Useful when ListSetDefaultParams fires before
     // the user's first F3 (i.e. when TC pre-loads the plugin).
-    install_cbt_hook_();
+    //
+    // Theme-gated: only install in TC dark mode. In light mode the
+    // dark class-brush would leak through during Lister teardown
+    // (WebView2 detached, PluginWindow destroyed, bare TLister briefly
+    // visible) and show a black flash on close.
+    if (tc_theme == mdview::Theme::Dark) {
+        install_cbt_hook_();
+    }
     mdview::precache_manager::instance().ensure_started();
 }
 
