@@ -234,3 +234,40 @@ jobs:
           name: mdview-combined-zip
           path: dist/mdview-*.zip
           if-no-files-found: error
+
+  # Tag-only: assemble a DRAFT GitHub Release from the CI-built
+  # combined zip. A human flips it public (draft-hybrid). Inert on
+  # branch/PR pushes (build + package still run there); fires only
+  # on a v* tag.
+  release:
+    name: release (draft)
+    needs: [package]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download combined zip
+        uses: actions/download-artifact@v7
+        with:
+          name: mdview-combined-zip
+          path: dist
+
+      - name: Create or update DRAFT release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.ref_name }}"
+          zip=$(ls dist/mdview-*.zip)
+          title="$tag — cross-arch combined package"
+          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload "$tag" "$zip" --repo "${{ github.repository }}" --clobber
+            gh release edit "$tag" --repo "${{ github.repository }}" --draft \
+              --title "$title" --notes-file .github/RELEASE_NOTES.md
+          else
+            gh release create "$tag" "$zip" --repo "${{ github.repository }}" --draft \
+              --title "$title" --notes-file .github/RELEASE_NOTES.md
+          fi
