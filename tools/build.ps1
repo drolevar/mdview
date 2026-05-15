@@ -6,6 +6,10 @@
 .PARAMETER Config
     'debug' (default) or 'release'.
 
+.PARAMETER Arch
+    'x64' (default) or 'x86'. Single-arch per invocation — run a
+    fresh shell per arch.
+
 .PARAMETER Test
     Run ctest after building. Debug-only.
 
@@ -27,12 +31,17 @@
     .\tools\build.ps1 -Test                 # debug build + tests
     .\tools\build.ps1 release -Install      # release build + install
     .\tools\build.ps1 release -Package      # release build + zip artifact
+    .\tools\build.ps1 release x86           # x86 release build
 #>
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
     [ValidateSet('debug', 'release')]
     [string]$Config = 'debug',
+
+    [Parameter(Position = 1)]
+    [ValidateSet('x64', 'x86')]
+    [string]$Arch = 'x64',
 
     [switch]$Test,
     [switch]$Install,
@@ -42,10 +51,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-. (Join-Path $PSScriptRoot 'dev-env.ps1')
+$vsArch = if ($Arch -eq 'x64') { 'amd64' } else { 'x86' }
+. (Join-Path $PSScriptRoot 'dev-env.ps1') -Arch $vsArch
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$preset   = "windows-msvc-x64-$Config"
+$preset   = "windows-msvc-$Arch-$Config"
 $buildDir = "build\$preset"
 
 Push-Location $repoRoot

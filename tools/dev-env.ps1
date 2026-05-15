@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
     Load VS Developer environment and set VCPKG_ROOT. Idempotent.
+    Takes -Arch (default amd64) to pick the target architecture.
 
 .DESCRIPTION
     Dot-source this file from any PowerShell session that needs to
@@ -12,9 +13,20 @@
     PATH (DevShell adds it) so it adapts to whichever vcpkg the
     bundled VS install provides.
 
+    -Arch selects the target compiler ('amd64' default, or 'x86').
+    Single-arch per process: open a fresh shell per architecture.
+
 .EXAMPLE
     . .\tools\dev-env.ps1
+
+.EXAMPLE
+    . .\tools\dev-env.ps1 -Arch x86
 #>
+
+param(
+    [ValidateSet('amd64', 'x86')]
+    [string]$Arch = 'amd64'
+)
 
 if (-not $env:VSINSTALLDIR) {
     $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -29,7 +41,7 @@ if (-not $env:VSINSTALLDIR) {
     # invocation resolves cleanly.
     $env:Path = "$(Split-Path $vswhere -Parent);$env:Path"
     & (Join-Path $vsRoot 'Common7\Tools\Launch-VsDevShell.ps1') `
-        -Arch amd64 -HostArch amd64 -SkipAutomaticLocation 2>&1 | Out-Null
+        -Arch $Arch -HostArch amd64 -SkipAutomaticLocation 2>&1 | Out-Null
 }
 
 if (-not $env:VCPKG_ROOT) {
