@@ -38,7 +38,7 @@ TEST_CASE("embedded assets serve cold F3 with no loose viewer",
     REQUIRE(s.load(L"01_mixed.md"));
     auto summary = s.wait_for_summary();
     REQUIRE(summary.has_value());
-    CHECK(summary->summary_schema == 4);
+    CHECK(summary->summary_schema == 5);
 
     const auto& log = s.captured_log();
     CHECK(log_has(log, L"asset-router filter installed"));

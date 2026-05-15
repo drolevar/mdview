@@ -70,11 +70,18 @@ TEST_CASE("mermaid placeholdersSeen reports doc total at first paint",
     REQUIRE(summary.has_value());
     REQUIRE(summary->mermaid_chunk_loaded);
     // Stress fixture has 80 mermaid blocks; placeholders_seen
-    // reports the doc total even though only the first chunk
-    // (POOL_SIZE=4) is in mermaid_diagrams at first-paint time.
+    // reports the doc total. foreground_count is the renderer's
+    // atomic snapshot of the first (POOL_SIZE=4) slice, taken
+    // before background chunks push into diagrams[]. Asserting on
+    // diagrams.size() here is racy: the array is shared by
+    // reference and grows live while runMathPass is awaited (the
+    // stress fixture's ~480 math instances make that await long
+    // enough for background idle ticks to fire — especially on a
+    // hidden CI window where requestIdleCallback isn't throttled
+    // by paint contention). foreground_count does not move.
     CHECK(summary->mermaid_placeholders_seen >= 80);
-    CHECK(summary->mermaid_diagrams.size() <= 4);
-    CHECK(summary->mermaid_diagrams.size() >= 1);
+    CHECK(summary->mermaid_foreground_count <= 4);
+    CHECK(summary->mermaid_foreground_count >= 1);
 }
 
 TEST_CASE("mermaid background fill completes",

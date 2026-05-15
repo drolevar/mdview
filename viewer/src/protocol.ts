@@ -46,7 +46,7 @@ export interface SetThemeMessage {
 }
 
 export interface RenderedSummary {
-    summarySchema: 4;
+    summarySchema: 5;
     durationMs:    number;
     theme:         'light' | 'dark';
     blockCount: {
@@ -73,6 +73,12 @@ export interface RenderedSummary {
         // diagrams[] may carry only the first chunk's outcomes
         // while placeholdersSeen reports the doc total.
         placeholdersSeen: number;
+        // Schema v5: size of the foreground (first POOL_SIZE)
+        // slice, snapshotted before background chunks push into
+        // diagrams[]. Deterministic regardless of how many
+        // background idle ticks fired during the awaited math
+        // pass; diagrams.length is not.
+        foregroundCount: number;
         diagrams: Array<{
             id:           string;
             status:       'rendered' | 'failed';
