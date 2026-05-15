@@ -76,6 +76,35 @@ suite that loads the real WLX in-process and drives a live WebView2.
 `build.ps1 -Test` runs everything via `ctest`. The integration
 window is visible by default.
 
+### Hidden tags (not run by default or in CI)
+
+A few integration cases assert on WebView2 *runtime* behavior that
+is deterministic on a developer machine (visible window, warm
+user-data-dir cache) but not on a CI runner (hidden window,
+cold/ephemeral cache, slower scheduling). They are tagged with a
+leading-dot Catch2 tag so they are **hidden by default** — excluded
+from CI and from `build.ps1 -Test` — and run only on demand:
+
+- `[.perf]` — render-time perf probes / regression thresholds.
+- `[.unstable]` — environment-sensitive end-to-end observations
+  (e.g. the 304-revalidation count, which depends on Chromium's
+  HTTP-cache heuristics, not on our code).
+
+The underlying *logic* these cases observe is covered
+deterministically by native unit tests (e.g. `should_respond_304`
+for the 304 short-circuit), so excluding them from the gate does
+not reduce correctness coverage — it removes flakiness. Run them
+explicitly when investigating:
+
+```powershell
+# from the build dir
+.\tests\integration\mdview_integration_tests.exe "[.unstable]"
+.\tests\integration\mdview_integration_tests.exe "[.perf]"
+```
+
+CI gates on the deterministic subset only; the environment-sensitive
+checks are exercised via manual smoke before a release.
+
 ## Versioning
 
 `tools\get-version.ps1` derives a SemVer-compatible version from
