@@ -12,6 +12,7 @@
 *.bat     text eol=crlf
 *.cmd     text eol=crlf
 *.def     text eol=crlf
+*.template text eol=crlf
 
 *.png     binary
 *.jpg     binary

@@ -1,6 +1,6 @@
 [plugininstall]
-type=lister
+type=wlx
 file=mdview.wlx64
 description=Markdown preview with Mermaid + KaTeX (v{{VERSION}})
-defaultextension=md
+defaultextension=md,markdown,mdown,mkd
 defaultdir=mdview
