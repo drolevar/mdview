@@ -60,7 +60,8 @@ if (-not $env:VCPKG_ROOT) {
 #   2. Project-known location at D:\Projects\procfs\_inspect\upx\upx-5.1.1-win64\upx.exe.
 #   3. Any upx.exe on PATH.
 # If none found, leave $env:UPX_EXECUTABLE unset; package-release.ps1
-# will warn and skip UPX in that case.
+# then throws (refusing to ship an unpacked release artifact) unless
+# it is run with -UpxMode none.
 if (-not $env:UPX_EXECUTABLE) {
     $upxCandidate = 'D:\Projects\procfs\_inspect\upx\upx-5.1.1-win64\upx.exe'
     if (Test-Path -LiteralPath $upxCandidate) {
