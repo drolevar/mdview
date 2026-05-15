@@ -20,6 +20,20 @@ std::filesystem::path Session::smoke_dir;
 
 namespace {
 
+// WLX filename for the bitness this test exe was built as. Mirrors
+// cmake/TcmdPlugin.cmake: 64-bit -> mdview.wlx64, ARM64 ->
+// mdview.wlxa64, 32-bit -> mdview.wlx. The integration exe and the
+// WLX are produced by the same CMake preset, so the exe's own
+// bitness always matches the WLX it must load — a compile-time
+// selector is correct here.
+#if defined(_M_ARM64) || defined(__aarch64__)
+constexpr const wchar_t* kWlxName = L"mdview.wlxa64";
+#elif defined(_WIN64)
+constexpr const wchar_t* kWlxName = L"mdview.wlx64";
+#else
+constexpr const wchar_t* kWlxName = L"mdview.wlx";
+#endif
+
 LRESULT CALLBACK parent_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
     return ::DefWindowProcW(h, m, w, l);
 }
@@ -60,7 +74,7 @@ Session::Session() {
         sink_event_ = ::CreateEventW(nullptr, FALSE, FALSE, nullptr);
         // M8: post-embedded-assets the WLX must never read viewer/ from
         // disk. The CMake viewer_stage target still drops viewer/ next
-        // to mdview.wlx64 in the build tree (harmless legacy). Remove
+        // to the WLX in the build tree (harmless legacy). Remove
         // it before loading the DLL so any accidental disk read would
         // fail loudly rather than silently fall back to a stale copy.
         const auto wlx_path = resolve_wlx_path();
@@ -141,8 +155,8 @@ std::filesystem::path Session::resolve_wlx_path() {
     // `<build>/src/` for the standard layout where exe lives at
     // `<build>/tests/integration/`.
     std::filesystem::path candidates[] = {
-        exe_dir / L"mdview.wlx64",
-        exe_dir.parent_path().parent_path() / L"src" / L"mdview.wlx64",
+        exe_dir / kWlxName,
+        exe_dir.parent_path().parent_path() / L"src" / kWlxName,
     };
     for (auto& c : candidates) {
         std::error_code ec;
@@ -157,7 +171,10 @@ void Session::load_dll_() {
         dll_ = ::LoadLibraryW(dll_path.c_str());
     }
     if (!dll_) {
-        throw std::runtime_error("LoadLibrary mdview.wlx64 failed");
+        std::string msg = "LoadLibrary ";
+        msg += std::filesystem::path{kWlxName}.string();
+        msg += " failed";
+        throw std::runtime_error(msg);
     }
 
     fn_set_params_ = reinterpret_cast<Fn_ListSetDefaultParams>(
@@ -172,7 +189,9 @@ void Session::load_dll_() {
         ::GetProcAddress(dll_, "ListCloseWindow"));
 
     if (!fn_set_params_ || !fn_load_ || !fn_close_) {
-        throw std::runtime_error("WLX exports missing in mdview.wlx64");
+        std::string msg = "WLX exports missing in ";
+        msg += std::filesystem::path{kWlxName}.string();
+        throw std::runtime_error(msg);
     }
 
     fn_set_log_sink_ = reinterpret_cast<Fn_MdviewTest_SetLogSink>(
