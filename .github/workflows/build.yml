@@ -49,13 +49,22 @@ jobs:
           $h = (Get-FileHash "$env:VCPKG_ROOT\vcpkg.exe" -Algorithm SHA256).Hash.Substring(0, 16)
           "fingerprint=$h" >> $env:GITHUB_OUTPUT
 
-      - name: Cache vcpkg installed
+      # Independent per-config caches: the debug and release
+      # vcpkg_installed trees are cached under separate keys so a
+      # run where only one tree exists (e.g. the integration gate
+      # fails before the release build) can never poison a shared
+      # key and silently force from-source rebuilds on later runs.
+      - name: Cache vcpkg installed (debug)
         uses: actions/cache@v5
         with:
-          path: |
-            ${{ github.workspace }}/build/windows-msvc-${{ matrix.arch }}-debug/vcpkg_installed
-            ${{ github.workspace }}/build/windows-msvc-${{ matrix.arch }}-release/vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ matrix.arch }}-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          path: ${{ github.workspace }}/build/windows-msvc-${{ matrix.arch }}-debug/vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ matrix.arch }}-debug-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+
+      - name: Cache vcpkg installed (release)
+        uses: actions/cache@v5
+        with:
+          path: ${{ github.workspace }}/build/windows-msvc-${{ matrix.arch }}-release/vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ matrix.arch }}-release-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
 
       - name: Configure (debug)
         run: cmake --preset windows-msvc-${{ matrix.arch }}-debug
@@ -169,6 +178,16 @@ jobs:
           name: mdview-x86-release
           path: artifacts/x86
 
+      # Cache the pinned UPX zip keyed by its immutable version+SHA
+      # so the third-party releases-CDN fetch happens once, not every
+      # run (removes a transient-network spurious-red on the release
+      # packaging job). The key changes only if the pin changes.
+      - name: Cache UPX
+        uses: actions/cache@v5
+        with:
+          path: upx-dl
+          key: upx-5.1.1-win64-fa5380bca4c2718547aaa0134bc0d8a7fa27e102f0ac6371573d60d1c21d64de
+
       - name: Provision UPX (pinned, SHA256-verified)
         shell: pwsh
         run: |
@@ -176,13 +195,19 @@ jobs:
           $zip  = "upx-$ver-win64.zip"
           $url  = "https://github.com/upx/upx/releases/download/v$ver/$zip"
           $want = 'fa5380bca4c2718547aaa0134bc0d8a7fa27e102f0ac6371573d60d1c21d64de'
-          Invoke-WebRequest -Uri $url -OutFile $zip
-          $got = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          New-Item -ItemType Directory -Force upx-dl | Out-Null
+          $zipPath = "upx-dl/$zip"
+          if (-not (Test-Path $zipPath)) {
+            Invoke-WebRequest -Uri $url -OutFile $zipPath
+          }
+          # Always verify — whether freshly downloaded or cache-restored
+          # (defends against a corrupted/poisoned cache too).
+          $got = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
           if ($got -ne $want) {
             Write-Error "UPX sha256 mismatch: got $got want $want"
             exit 1
           }
-          Expand-Archive $zip -DestinationPath upx -Force
+          Expand-Archive $zipPath -DestinationPath upx -Force
           $exe = (Get-ChildItem upx -Recurse -Filter upx.exe | Select-Object -First 1).FullName
           "UPX_EXECUTABLE=$exe" >> $env:GITHUB_ENV
           & $exe --version
