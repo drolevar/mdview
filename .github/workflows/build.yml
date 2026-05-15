@@ -10,8 +10,13 @@ permissions:
   contents: read
 
 jobs:
-  windows-x64-debug:
+  build:
+    name: build-${{ matrix.arch }}
     runs-on: windows-2025-vs2026
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, x86]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -24,7 +29,7 @@ jobs:
         # step-security/msvc-dev-cmd@v1 once mdview is public.
         uses: drolevar/msvc-dev-cmd@42a75f472a092656b3978a23e6719e068f5f02d4
         with:
-          arch: x64
+          arch: ${{ matrix.arch }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -37,13 +42,6 @@ jobs:
         working-directory: viewer
         run: npm ci
 
-      # Fingerprint vcpkg.exe so a runner-image bump that changes the
-      # bundled vcpkg tool invalidates the cache key. Without this the
-      # key only encodes the manifest; a tool change makes the cached
-      # ABI hashes stale, vcpkg discards the restored tree and rebuilds
-      # from source, and actions/cache refuses to overwrite the existing
-      # key on save — so the freshly-built contents are dropped and the
-      # next run repeats the same waste indefinitely.
       - name: Fingerprint vcpkg tool
         id: vcpkg
         shell: pwsh
@@ -54,32 +52,34 @@ jobs:
       - name: Cache vcpkg installed
         uses: actions/cache@v5
         with:
-          path: ${{ github.workspace }}/build/windows-msvc-x64-debug/vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          path: |
+            ${{ github.workspace }}/build/windows-msvc-${{ matrix.arch }}-debug/vcpkg_installed
+            ${{ github.workspace }}/build/windows-msvc-${{ matrix.arch }}-release/vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ matrix.arch }}-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
 
-      - name: Configure
-        run: cmake --preset windows-msvc-x64-debug
+      - name: Configure (debug)
+        run: cmake --preset windows-msvc-${{ matrix.arch }}-debug
 
-      - name: Build
-        run: cmake --build --preset windows-msvc-x64-debug
+      - name: Build (debug)
+        run: cmake --build --preset windows-msvc-${{ matrix.arch }}-debug
 
       - name: Run unit tests
-        run: ctest --preset windows-msvc-x64-debug --label-exclude integration --output-on-failure
+        run: ctest --preset windows-msvc-${{ matrix.arch }}-debug --label-exclude integration --output-on-failure
 
       - name: Run integration tests
         env:
           MDVIEW_HARNESS_HIDDEN: '1'
           MDVIEW_SMOKE_DIR: ${{ github.workspace }}/tests/smoke
-        run: ctest --preset windows-msvc-x64-debug --label-regex "^integration$" --output-on-failure
+        run: ctest --preset windows-msvc-${{ matrix.arch }}-debug --label-regex "^integration$" --output-on-failure
 
       - name: Upload integration logs on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: integration-logs
+          name: integration-logs-${{ matrix.arch }}
           path: |
-            build/windows-msvc-x64-debug/tests/integration/screenshots/
-            build/windows-msvc-x64-debug/Testing/
+            build/windows-msvc-${{ matrix.arch }}-debug/tests/integration/screenshots/
+            build/windows-msvc-${{ matrix.arch }}-debug/Testing/
 
       - name: Build production viewer bundle
         working-directory: viewer
@@ -126,14 +126,85 @@ jobs:
             }
           }
 
-      - name: Upload plugin artifact
+      - name: Configure (release)
+        run: cmake --preset windows-msvc-${{ matrix.arch }}-release
+
+      - name: Build (release)
+        run: cmake --build --preset windows-msvc-${{ matrix.arch }}-release
+
+      - name: Stage release WLX
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force pkg-stage | Out-Null
+          Copy-Item "build/windows-msvc-${{ matrix.arch }}-release/src/mdview.wlx*" pkg-stage/ -Force
+          Get-ChildItem pkg-stage
+
+      - name: Upload release WLX artifact
         uses: actions/upload-artifact@v7
         with:
-          name: mdview-wlx64-debug
-          path: |
-            build/windows-msvc-x64-debug/src/mdview.wlx64
-            viewer/index.html
-            viewer/styles.css
-            viewer/styles/
-            viewer/dist/
+          name: mdview-${{ matrix.arch }}-release
+          path: pkg-stage/mdview.wlx*
+          if-no-files-found: error
+
+  package:
+    name: package
+    needs: [build]
+    runs-on: windows-2025-vs2026
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download x64 release artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: mdview-x64-release
+          path: artifacts/x64
+
+      - name: Download x86 release artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: mdview-x86-release
+          path: artifacts/x86
+
+      - name: Provision UPX (pinned, SHA256-verified)
+        shell: pwsh
+        run: |
+          $ver  = '5.1.1'
+          $zip  = "upx-$ver-win64.zip"
+          $url  = "https://github.com/upx/upx/releases/download/v$ver/$zip"
+          $want = 'fa5380bca4c2718547aaa0134bc0d8a7fa27e102f0ac6371573d60d1c21d64de'
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          $got = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          if ($got -ne $want) {
+            Write-Error "UPX sha256 mismatch: got $got want $want"
+            exit 1
+          }
+          Expand-Archive $zip -DestinationPath upx -Force
+          $exe = (Get-ChildItem upx -Recurse -Filter upx.exe | Select-Object -First 1).FullName
+          "UPX_EXECUTABLE=$exe" >> $env:GITHUB_ENV
+          & $exe --version
+
+      - name: Build combined package
+        id: pkg
+        shell: pwsh
+        run: |
+          $zip = & ./tools/package-release.ps1 `
+            -Wlx64 artifacts/x64/mdview.wlx64 `
+            -Wlx32 artifacts/x86/mdview.wlx `
+            -OutDir dist
+          if (-not $zip -or -not (Test-Path -LiteralPath $zip)) {
+            Write-Error "packager did not produce a zip"
+            exit 1
+          }
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          Write-Host "Built $zip"
+
+      - name: Upload combined zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: mdview-combined-zip
+          path: dist/mdview-*.zip
           if-no-files-found: error
