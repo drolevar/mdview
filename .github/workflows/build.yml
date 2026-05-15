@@ -102,7 +102,13 @@ jobs:
             Write-Error "viewer entry exceeds 400 KB budget ($kb KB)"
             exit 1
           }
-          $chunks = Get-ChildItem viewer/dist/chunks -ErrorAction SilentlyContinue
+          # .js only -- production esbuild emits linked .js.map
+          # sourcemaps too, but those are NOT shipped: the WLX
+          # RCDATA generator excludes them (GenerateViewerResources
+          # .cmake: FILTER EXCLUDE REGEX "\.map$"). Gating their
+          # size here would fail on the ~4x-larger sourcemaps for
+          # no real reason.
+          $chunks = Get-ChildItem viewer/dist/chunks -Filter *.js -ErrorAction SilentlyContinue
           foreach ($c in $chunks) {
             $ckb = [math]::Round($c.Length / 1024, 1)
             Write-Host "chunk: $($c.Name) = $ckb KB"
