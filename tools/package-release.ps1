@@ -1,115 +1,110 @@
 #requires -Version 7
-
 <#
 .SYNOPSIS
-    Builds the M12 release artifact: UPX-packed WLX + pluginst.inf
-    bundled into mdview-<version>.zip.
+    Produce the combined Total Commander plugin zip:
+    mdview.wlx (x86) + mdview.wlx64 (x64) + pluginst.inf + README.txt.
 
-.PARAMETER BuildDir
-    Path to the CMake release build dir. Must contain
-    src\mdview.wlx64 (the freshly linked WLX).
-
+    Pure packager: it does NOT build. Pass the two already-built
+    release binaries and an output directory. Used by CI's `package`
+    job (consuming both arch artifacts); also runnable locally for
+    debugging by pointing at two local release build trees.
+.PARAMETER Wlx64
+    Path to the x64 mdview.wlx64.
+.PARAMETER Wlx32
+    Path to the x86 mdview.wlx.
+.PARAMETER OutDir
+    Directory the mdview-<version>.zip is written to (created if absent).
 .PARAMETER UpxMode
-    Compression mode: 'nrv2b' (default; --best), 'lzma'
-    (--lzma --best), or 'none' (skip UPX, ship uncompressed).
-
+    'nrv2b' (default, M12 Task 5 measured decision), 'lzma', or 'none'.
 .PARAMETER UpxExe
-    Path to upx.exe. Defaults to $env:UPX_EXECUTABLE (set by
-    dev-env.ps1 in M12 Task 4). If neither is set or the file
-    doesn't exist, the script warns and skips UPX regardless
-    of -UpxMode.
-
-.EXAMPLE
-    .\tools\package-release.ps1 -BuildDir build\windows-msvc-x64-release
+    upx.exe path. Defaults to $env:UPX_EXECUTABLE.
 #>
-
-[CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [string] $BuildDir,
-
-    [ValidateSet('nrv2b', 'lzma', 'none')]
-    [string] $UpxMode = 'nrv2b',
-
+    [Parameter(Mandatory)][string] $Wlx64,
+    [Parameter(Mandatory)][string] $Wlx32,
+    [Parameter(Mandatory)][string] $OutDir,
+    [ValidateSet('nrv2b', 'lzma', 'none')][string] $UpxMode = 'nrv2b',
     [string] $UpxExe = $env:UPX_EXECUTABLE
 )
 
 $ErrorActionPreference = 'Stop'
 
-# Resolve repo root so all relative paths are deterministic.
-$repoRoot = Split-Path -Parent $PSScriptRoot
+$repoRoot = Split-Path -Parent $PSScriptRoot   # tools/ -> repo root
 
-if (-not (Test-Path -LiteralPath $BuildDir)) {
-    throw "BuildDir not found: $BuildDir"
+if (-not (Test-Path -LiteralPath $Wlx64)) {
+    throw "x64 WLX not found at '$Wlx64' — pass the built mdview.wlx64."
+}
+if (-not (Test-Path -LiteralPath $Wlx32)) {
+    throw "x86 WLX not found at '$Wlx32' — pass the built mdview.wlx."
 }
 
-$wlx = Join-Path $BuildDir "src\mdview.wlx64"
-if (-not (Test-Path -LiteralPath $wlx)) {
-    throw "WLX not found at $wlx — run a release build first."
+$version = (& (Join-Path $repoRoot 'tools\get-version.ps1')).Trim()
+if (-not $version) {
+    throw "get-version.ps1 returned empty — cannot name the artifact."
 }
 
-# ---------------------------------------------------------------
-# 1. Compute version
-# ---------------------------------------------------------------
-$getVersion = Join-Path $repoRoot "tools\get-version.ps1"
-$version = (& $getVersion).Trim()
-if (-not $version) { throw "get-version.ps1 returned empty" }
-Write-Host "Package version: $version"
+# Stage copies under a temp dir with the canonical names the zip
+# must contain. Never UPX the caller's inputs in place (CI's are
+# downloaded artifacts; a local caller's are its build tree).
+$staging = Join-Path ([System.IO.Path]::GetTempPath()) ("mdview-pkg-" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $staging -Force | Out-Null
+try {
+    $s64 = Join-Path $staging 'mdview.wlx64'
+    $s32 = Join-Path $staging 'mdview.wlx'
+    Copy-Item -LiteralPath $Wlx64 -Destination $s64 -Force
+    Copy-Item -LiteralPath $Wlx32 -Destination $s32 -Force
 
-# ---------------------------------------------------------------
-# 2. UPX pack (in place)
-# ---------------------------------------------------------------
-if ($UpxMode -eq 'none') {
-    Write-Host "UPX: skipped (-UpxMode none)"
-}
-elseif (-not $UpxExe -or -not (Test-Path -LiteralPath $UpxExe)) {
-    Write-Warning "UPX: skipped — UpxExe not found ('$UpxExe'). Set `$env:UPX_EXECUTABLE or pass -UpxExe explicitly."
-}
-else {
-    $beforeBytes = (Get-Item -LiteralPath $wlx).Length
-    Write-Host "UPX: packing $wlx ($('{0:N2}' -f ($beforeBytes / 1MB)) MB) with mode '$UpxMode'..."
-
-    $upxArgs = @()
-    if ($UpxMode -eq 'lzma') {
-        $upxArgs += '--lzma'
+    function Invoke-Upx([string] $target) {
+        if ($UpxMode -eq 'none') {
+            Write-Host "UPX: skipped (-UpxMode none) for $target"
+            return
+        }
+        if (-not $UpxExe -or -not (Test-Path -LiteralPath $UpxExe)) {
+            throw "UPX: UpxExe not found ('$UpxExe'). Set `$env:UPX_EXECUTABLE or pass -UpxExe (or -UpxMode none)."
+        }
+        $before = (Get-Item -LiteralPath $target).Length
+        Write-Host ("UPX: packing {0} ({1:N2} MB) mode '{2}'..." -f $target, ($before / 1MB), $UpxMode)
+        $upxArgs = @()
+        if ($UpxMode -eq 'lzma') { $upxArgs += '--lzma' }
+        $upxArgs += '--best'
+        $upxArgs += $target
+        # UPX writes its banner/summary to stdout; keep it out of the
+        # PowerShell success stream so the script's only pipeline
+        # output stays the final zip path (callers do `$zip = & ...`).
+        & $UpxExe @upxArgs 2>&1 | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw "UPX exited $LASTEXITCODE on $target — refusing to ship a possibly corrupt artifact."
+        }
+        $after = (Get-Item -LiteralPath $target).Length
+        Write-Host ("UPX: {0} {1:N2} MB -> {2:N2} MB ({3:N1}%)" -f `
+            $target, ($before / 1MB), ($after / 1MB), (($after / $before) * 100))
     }
-    $upxArgs += '--best'
-    $upxArgs += $wlx
+    Invoke-Upx $s64
+    Invoke-Upx $s32
 
-    & $UpxExe @upxArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "UPX exited with code $LASTEXITCODE — refusing to ship a possibly corrupt artifact."
+    function Render-Template([string] $tplName, [string] $outFile) {
+        $tpl = Get-Content -LiteralPath (Join-Path $repoRoot "tools\$tplName") -Raw
+        $rendered = $tpl -replace '\{\{VERSION\}\}', $version
+        Set-Content -LiteralPath $outFile -Value $rendered -Encoding utf8 -NoNewline
+        Write-Host "Rendered $outFile (v$version)"
     }
+    $plugInst   = Join-Path $staging 'pluginst.inf'
+    $readmePath = Join-Path $staging 'README.txt'
+    Render-Template 'pluginst.inf.template'       $plugInst
+    Render-Template 'package-readme.txt.template' $readmePath
 
-    $afterBytes = (Get-Item -LiteralPath $wlx).Length
-    $ratio = ($afterBytes / $beforeBytes) * 100
-    Write-Host ("UPX: done — {0:N2} MB -> {1:N2} MB ({2:N1}%)" -f `
-        ($beforeBytes / 1MB), ($afterBytes / 1MB), $ratio)
+    if (-not (Test-Path -LiteralPath $OutDir)) {
+        New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+    }
+    $zipPath = Join-Path $OutDir "mdview-$version.zip"
+    if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+    Compress-Archive -LiteralPath $s32, $s64, $plugInst, $readmePath `
+        -DestinationPath $zipPath -Force
+
+    (Resolve-Path -LiteralPath $zipPath).Path
 }
-
-# ---------------------------------------------------------------
-# 3. Render pluginst.inf from template
-# ---------------------------------------------------------------
-$distDir = Join-Path $BuildDir "dist"
-if (-not (Test-Path -LiteralPath $distDir)) {
-    New-Item -ItemType Directory -Path $distDir | Out-Null
+finally {
+    if (Test-Path -LiteralPath $staging) {
+        Remove-Item -Recurse -Force -LiteralPath $staging
+    }
 }
-
-$template = Get-Content -LiteralPath (Join-Path $repoRoot "tools\pluginst.inf.template") -Raw
-$rendered = $template -replace '\{\{VERSION\}\}', $version
-$plugInst = Join-Path $distDir "pluginst.inf"
-Set-Content -LiteralPath $plugInst -Value $rendered -Encoding utf8 -NoNewline
-Write-Host "Wrote $plugInst"
-
-# ---------------------------------------------------------------
-# 4. Zip
-# ---------------------------------------------------------------
-$zipPath = Join-Path $distDir "mdview-$version.zip"
-Compress-Archive -LiteralPath $wlx, $plugInst -DestinationPath $zipPath -Force
-$zipBytes = (Get-Item -LiteralPath $zipPath).Length
-Write-Host ("Wrote $zipPath ({0:N2} MB)" -f ($zipBytes / 1MB))
-
-# ---------------------------------------------------------------
-# Done. Output the zip path so callers can pipe it.
-# ---------------------------------------------------------------
-(Resolve-Path -LiteralPath $zipPath).Path

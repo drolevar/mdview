@@ -1,0 +1,38 @@
+mdview v{{VERSION}}
+Markdown viewer plugin for Total Commander
+(Mermaid diagrams, TeX math via KaTeX, syntax highlighting)
+
+WHAT'S IN THIS ZIP
+  mdview.wlx     32-bit plugin (used by 32-bit Total Commander)
+  mdview.wlx64   64-bit plugin (used by 64-bit Total Commander)
+  pluginst.inf   Total Commander auto-install manifest
+  README.txt     this file
+
+INSTALL (recommended)
+  1. Open this .zip inside Total Commander (Ctrl+PageDown on it,
+     or drag it onto a panel).
+  2. Total Commander detects pluginst.inf and offers to install
+     the plugin. Accept.
+  3. Press F3 on any .md / .markdown / .mdown / .mkd file.
+
+  Total Commander automatically uses the binary matching its own
+  bitness; both are installed.
+
+MANUAL INSTALL (fallback)
+  Copy the binary matching your Total Commander bitness into a
+  folder under TC's plugin directory, e.g.
+    ...\plugins\wlx\mdview\mdview.wlx     (32-bit TC)
+    ...\plugins\wlx\mdview\mdview.wlx64   (64-bit TC)
+  then add it under Configuration -> Options -> Edit/View/Search
+  -> Lister Plugins. Detect string:
+    EXT="MD" | EXT="MARKDOWN" | EXT="MDOWN" | EXT="MKD"
+
+REQUIREMENTS
+  - Total Commander (32- or 64-bit).
+  - Microsoft Edge WebView2 Runtime (preinstalled on current
+    Windows 11; otherwise:
+    https://developer.microsoft.com/microsoft-edge/webview2/ ).
+
+LICENSE
+  MIT. Copyright (c) 2026 Andrij Abyzov.
+  Project: https://github.com/drolevar/mdview
