@@ -20,7 +20,7 @@ bool log_has(const std::vector<std::wstring>& lines,
 
 // Asserts the WLX serves its viewer assets out of RT_RCDATA via the
 // asset router, with no viewer/ tree on disk. Session::Session removes
-// any leftover viewer/ next to mdview.wlx64 before LoadLibraryW, so a
+// any leftover viewer/ next to the WLX before LoadLibraryW, so a
 // successful render here is end-to-end proof that:
 //   1. The asset router is wired into the WebView2Host (otherwise
 //      Navigate would 404).
