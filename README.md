@@ -19,7 +19,9 @@ an embedded Microsoft Edge WebView2.
    `pluginst.inf` and offers to install the plugin. Accept.
 3. Press **F3** on any `.md` file.
 
-Requires 64-bit Total Commander and the
+Works on 32- and 64-bit Total Commander; the installer
+(`pluginst.inf`) auto-selects the binary matching TC's bitness.
+Requires the
 [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
 (preinstalled on current Windows 11). Full details, including manual
 install: [docs/installing.md](docs/installing.md).
@@ -33,7 +35,7 @@ install: [docs/installing.md](docs/installing.md).
 - **TeX math** via KaTeX, rendered off-thread in a web worker
 - Syntax highlighting for fenced code blocks
 - Follows Total Commander's light/dark theme, live
-- Single self-contained `.wlx64` — no loose asset tree
+- Single self-contained `.wlx`/`.wlx64` — no loose asset tree
 
 ## Build from source
 

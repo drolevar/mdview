@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- **Total Commander**, 64-bit.
+- **Total Commander**, 32-bit or 64-bit.
 - **Microsoft Edge WebView2 Runtime.** Preinstalled on current
   Windows 11. If a `.md` file opens to an error about the runtime,
   install the Evergreen runtime from
@@ -17,9 +17,13 @@
    it onto a panel.
 3. Total Commander detects the bundled `pluginst.inf` and prompts to
    install the plugin. Accept.
-4. Total Commander copies `mdview.wlx64` into its plugin directory
-   and registers it as a Lister plugin for `.md`, `.markdown`,
-   `.mdown`, and `.mkd` files.
+4. Total Commander copies the matching binary into its plugin
+   directory and registers it as a Lister plugin for `.md`,
+   `.markdown`, `.mdown`, and `.mkd` files. The zip ships both
+   `mdview.wlx` (32-bit) and `mdview.wlx64` (64-bit); `pluginst.inf`
+   declares `file=mdview.wlx` and Total Commander appends `64`
+   automatically when running 64-bit, so the right binary is
+   selected for you.
 
 Press **F3** on any Markdown file (or use Quick View, Ctrl+Q).
 
@@ -31,10 +35,15 @@ Commander's plugin directory; `pluginst.inf` only specifies the
 
 If you build from source or prefer manual setup:
 
-1. Copy `mdview.wlx64` into a folder under Total Commander's plugin
-   directory, e.g. `…\plugins\wlx\mdview\mdview.wlx64`.
+1. Copy the binary matching your Total Commander's bitness into a
+   folder under its plugin directory, e.g.
+   `…\plugins\wlx\mdview\mdview.wlx64`. Use `mdview.wlx64` for
+   64-bit Total Commander, `mdview.wlx` for 32-bit. (Copying both
+   into the same folder is also fine — Total Commander loads the
+   one matching its bitness.)
 2. In Total Commander: **Configuration → Options → Edit/View/Search
-   → Lister plugins**, add `mdview.wlx64`.
+   → Lister plugins**, add the file you copied (`mdview.wlx64` for
+   64-bit, `mdview.wlx` for 32-bit).
 3. Set its detect string to associate the Markdown extensions you
    want, e.g.:
 
