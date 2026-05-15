@@ -34,6 +34,9 @@ endif()
 
 mdview_set_warnings(mdview_integration_tests)
 
+target_precompile_headers(mdview_integration_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/cmake/pch.hpp)
+
 add_dependencies(mdview_integration_tests mdview_wlx)
 
 add_test(NAME mdview_integration
