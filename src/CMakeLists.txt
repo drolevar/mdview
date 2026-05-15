@@ -46,6 +46,9 @@ target_compile_definitions(mdview_core PUBLIC
 
 mdview_set_warnings(mdview_core)
 
+target_precompile_headers(mdview_core PRIVATE
+    ${CMAKE_SOURCE_DIR}/cmake/pch.hpp)
+
 add_library(mdview_wlx SHARED
     plugin/dll_main.cpp
     plugin/wlx_exports.cpp

@@ -38,6 +38,9 @@ target_link_libraries(mdview_tests PRIVATE
 
 mdview_set_warnings(mdview_tests)
 
+target_precompile_headers(mdview_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/cmake/pch.hpp)
+
 include(Catch)
 catch_discover_tests(mdview_tests)
 
