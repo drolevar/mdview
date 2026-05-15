@@ -14,7 +14,9 @@
     bundled VS install provides.
 
     -Arch selects the target compiler ('amd64' default, or 'x86').
-    Single-arch per process: open a fresh shell per architecture.
+    Single-arch-per-process by design: open a fresh shell per arch.
+    The guard below is idempotent and will not re-activate VS for a
+    second arch in the same shell (build.ps1 enforces this loudly).
 
 .EXAMPLE
     . .\tools\dev-env.ps1
