@@ -62,6 +62,12 @@ struct RenderedSummary {
     // tests assert "doc has N diagrams" even when the initial summary
     // only carries the first foreground chunk's outcomes.
     int    mermaid_placeholders_seen = 0;
+    // Schema v5: size of the foreground (first POOL_SIZE) slice,
+    // snapshotted in the renderer before background chunks push into
+    // diagrams[]. Deterministic, unlike mermaid_diagrams.size() which
+    // races the background idle-fill during the awaited math pass.
+    // Defaults to 0 for pre-v5 payloads.
+    int    mermaid_foreground_count = 0;
     std::vector<DiagramRecord>   mermaid_diagrams;
 
     // nullopt in schema v1 payloads and in v2 payloads where the doc

@@ -15,7 +15,7 @@ import 'katex/dist/katex.min.css';
 
 let lastMermaidPass: MermaidPassData = {
     chunkLoaded: false, chunkLoadMs: null,
-    placeholdersSeen: 0, diagrams: [],
+    placeholdersSeen: 0, foregroundCount: 0, diagrams: [],
 };
 
 let lastMathPass: MathPassData = {
@@ -148,7 +148,7 @@ function run(): void {
         if (placeholdersSeen === 0) {
             return {
                 chunkLoaded: false, chunkLoadMs: null,
-                placeholdersSeen: 0, diagrams: [],
+                placeholdersSeen: 0, foregroundCount: 0, diagrams: [],
             };
         }
         const t0 = performance.now();
@@ -167,6 +167,7 @@ function run(): void {
             const pass: MermaidPassData = {
                 chunkLoaded: true, chunkLoadMs,
                 placeholdersSeen,
+                foregroundCount: firstOutcomes.length,
                 diagrams: firstOutcomes,
             };
 
@@ -201,7 +202,7 @@ function run(): void {
             }
             return {
                 chunkLoaded: false, chunkLoadMs: null,
-                placeholdersSeen, diagrams: [],
+                placeholdersSeen, foregroundCount: 0, diagrams: [],
             };
         }
     }

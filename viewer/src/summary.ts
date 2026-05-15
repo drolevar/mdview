@@ -53,7 +53,7 @@ export function buildSummary(
         || mathPass.chunkLoaded;
 
     return {
-        summarySchema: 4,
+        summarySchema: 5,
         durationMs,
         theme,
         blockCount,
@@ -62,6 +62,7 @@ export function buildSummary(
             chunkLoaded:      mermaidPass.chunkLoaded,
             chunkLoadMs:      mermaidPass.chunkLoadMs,
             placeholdersSeen: mermaidPass.placeholdersSeen,
+            foregroundCount:  mermaidPass.foregroundCount,
             diagrams:         mermaidPass.diagrams,
         },
         math: hasMath ? {

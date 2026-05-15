@@ -56,6 +56,7 @@ parse_summary_json(const std::wstring& payload) {
                     : -1)
                 : -1;
             s.mermaid_placeholders_seen = m.value("placeholdersSeen", 0);  // M10
+            s.mermaid_foreground_count  = m.value("foregroundCount", 0);   // schema v5
             if (m.contains("diagrams") && m["diagrams"].is_array()) {
                 for (auto& d : m["diagrams"]) {
                     DiagramRecord r;

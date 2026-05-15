@@ -20,6 +20,15 @@ export interface MermaidPassData {
     // how many actually rendered before first-paint). Mirrors the
     // math.placeholdersSeen pattern from M9.
     placeholdersSeen: number;
+    // Count of diagrams in the foreground (first POOL_SIZE) slice,
+    // snapshotted when the pass is built — before any background
+    // chunk pushes into `diagrams`. `diagrams` is shared by
+    // reference and grows live as background chunks drain, so its
+    // length at summary-build time is non-deterministic (it depends
+    // on how many idle ticks fired during the awaited math pass).
+    // foregroundCount is the stable value tests assert the
+    // progressive contract against.
+    foregroundCount:  number;
     diagrams:         DiagramOutcome[];
 }
 

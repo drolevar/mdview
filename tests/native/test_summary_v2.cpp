@@ -215,3 +215,56 @@ TEST_CASE("parser defaults mermaid.placeholdersSeen to 0 on v3 payload",
     CHECK(s->mermaid_chunk_loaded);
     CHECK(s->mermaid_placeholders_seen == 0);
 }
+
+TEST_CASE("parser reads mermaid.foregroundCount from v5 payload",
+          "[summary][v5]") {
+    const auto payload = LR"({
+        "summarySchema": 5,
+        "durationMs": 100,
+        "theme": "light",
+        "blockCount": {"paragraph": 1, "heading": 0, "codeFence": 0,
+            "table": 0, "blockquote": 0, "listOrdered": 0,
+            "listUnordered": 0, "image": 0, "link": 0, "hr": 0},
+        "codeFences": [],
+        "mermaid": {
+            "chunkLoaded": true,
+            "chunkLoadMs": 42,
+            "placeholdersSeen": 80,
+            "foregroundCount": 4,
+            "diagrams": []
+        },
+        "math": null,
+        "imageRequests": []
+    })";
+    auto s = mdview::integration::parse_summary_json(payload);
+    REQUIRE(s.has_value());
+    CHECK(s->summary_schema == 5);
+    CHECK(s->mermaid_placeholders_seen == 80);
+    CHECK(s->mermaid_foreground_count == 4);
+}
+
+TEST_CASE("parser defaults mermaid.foregroundCount to 0 on v4 payload",
+          "[summary][v5][backcompat]") {
+    const auto payload = LR"({
+        "summarySchema": 4,
+        "durationMs": 100,
+        "theme": "light",
+        "blockCount": {"paragraph": 1, "heading": 0, "codeFence": 0,
+            "table": 0, "blockquote": 0, "listOrdered": 0,
+            "listUnordered": 0, "image": 0, "link": 0, "hr": 0},
+        "codeFences": [],
+        "mermaid": {
+            "chunkLoaded": true,
+            "chunkLoadMs": 42,
+            "placeholdersSeen": 80,
+            "diagrams": []
+        },
+        "math": null,
+        "imageRequests": []
+    })";
+    auto s = mdview::integration::parse_summary_json(payload);
+    REQUIRE(s.has_value());
+    CHECK(s->summary_schema == 4);
+    CHECK(s->mermaid_placeholders_seen == 80);
+    CHECK(s->mermaid_foreground_count == 0);
+}
