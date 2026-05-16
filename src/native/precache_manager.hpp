@@ -18,6 +18,11 @@ namespace mdview::detail {
 // and call it without touching unrelated translation units.
 void reset_precache_manager_for_test(precache_manager&) noexcept;
 
+// Test seam: overrides the acquire() modal-pump timeout (default
+// 15000 ms). Tests set a short value so the bounded-pump exit can be
+// exercised without a multi-second wait. Production never calls this.
+void set_acquire_timeout_for_test(DWORD ms) noexcept;
+
 }
 
 namespace mdview {
