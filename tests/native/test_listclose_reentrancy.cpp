@@ -41,6 +41,7 @@
 //     manual-smoke ship-gate line in the M15 plan Task 12 Step 2
 //     ("B2: reentrant close during the cold-F3 modal pause → no crash").
 
+#include "plugin/listclose_defer.hpp"
 #include "plugin/plugin_window.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -48,18 +49,6 @@
 #include <windows.h>
 
 namespace {
-
-// Distilled ListCloseWindow decision. Mirrors wlx_exports.cpp exactly:
-// when the window was NOT found in g_windows (found == false, i.e.
-// doomed == nullptr) AND it is the in-construction HWND, the close is
-// deferred (do NOT destroy). Any other combination proceeds to the
-// normal destroy/owned-teardown path.
-bool close_should_defer(bool found_in_windows,
-                        HWND list_win,
-                        HWND constructing_hwnd) {
-    if (found_in_windows) return false;          // owned: ~PluginWindow
-    return list_win != nullptr && list_win == constructing_hwnd;
-}
 
 struct ScopedEnvVar {
     const wchar_t* name;
@@ -79,21 +68,21 @@ TEST_CASE("ListCloseWindow defers only for the in-construction HWND",
     // Reentrant close during construction: not yet in g_windows, and
     // it IS the in-construction HWND -> defer (the post-create emplace
     // owns it; do not destroy out from under create()).
-    CHECK(close_should_defer(/*found=*/false, /*list=*/a,
-                             /*constructing=*/a));
+    CHECK(mdview::listclose_should_defer(/*found=*/false, /*list=*/a,
+                                         /*constructing=*/a));
 
     // Not in g_windows and NOT the in-construction HWND (e.g. the
     // fallback-window path, or a different Lister) -> proceed to the
     // ::DestroyWindow fallback, do NOT defer.
-    CHECK_FALSE(close_should_defer(false, b, a));
-    CHECK_FALSE(close_should_defer(false, a, nullptr));
+    CHECK_FALSE(mdview::listclose_should_defer(false, b, a));
+    CHECK_FALSE(mdview::listclose_should_defer(false, a, nullptr));
 
     // Found in g_windows -> owned; ~PluginWindow handles it. Never
     // defer even if the sentinel still (spuriously) matched.
-    CHECK_FALSE(close_should_defer(/*found=*/true, a, a));
+    CHECK_FALSE(mdview::listclose_should_defer(/*found=*/true, a, a));
 
     // A null ListWin never matches a null sentinel.
-    CHECK_FALSE(close_should_defer(false, nullptr, nullptr));
+    CHECK_FALSE(mdview::listclose_should_defer(false, nullptr, nullptr));
 }
 
 TEST_CASE(
