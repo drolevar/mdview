@@ -122,6 +122,46 @@ TEST_CASE("precache_manager acquire pumps until ready",
     CHECK(host_create_count == 2);
 }
 
+TEST_CASE("acquire returns a bounded failure on a hung runtime",
+          "[precache_manager]") {
+    // A hung WebView2 runtime: the controller-create callback never
+    // fires, so on_ready / on_process_failed / on_env_failed are NEVER
+    // invoked. State stays Building forever. The retry-budget and
+    // EnvFailed machinery only handle a *failed* runtime; a *hung* one
+    // would leave the bare GetMessageW pump blocked forever, freezing
+    // TC's UI thread. The bounded pump must time out and return an
+    // init-failed token instead of hanging.
+    auto factory =
+        [&](HWND, Theme, bool, std::function<void()>,
+            std::function<void(int)>,
+            std::function<void(HRESULT)>)
+        -> std::unique_ptr<IWebView2Host> {
+            // Deliberately drop all callbacks: never drive the state
+            // machine to Parked/EnvFailed. Simulates a hung runtime.
+            return std::make_unique<TestHost>();
+        };
+
+    auto& m = fresh_manager();
+    m.set_host_factory_for_test(factory);
+    // Short timeout so the bounded-pump exit is exercised fast. Without
+    // the bound, acquire() would block in GetMessageW indefinitely.
+    detail::set_acquire_timeout_for_test(300);
+    m.ensure_started();
+
+    // State is stuck at Building (no ready callback). acquire() must
+    // pump, hit the deadline, and return InitFailedToken{E_ABORT}.
+    auto result = m.acquire(HWND_MESSAGE, Theme::Dark, 1.0f);
+
+    REQUIRE(std::holds_alternative<precache_manager::InitFailedToken>(
+        result));
+    CHECK(std::get<precache_manager::InitFailedToken>(result).hr
+          == E_ABORT);
+
+    // Restore the production default so later cases in this process
+    // aren't slowed (or, worse, masked) by the short test timeout.
+    detail::set_acquire_timeout_for_test(15000);
+}
+
 TEST_CASE("precache rebuilds on ProcessFailed (within budget)",
           "[precache_manager]") {
     int host_create_count = 0;

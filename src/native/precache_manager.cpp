@@ -16,6 +16,13 @@ namespace {
 // std::function whose operator() is still executing). PostMessage
 // lets the destructor run after the stack unwinds.
 constexpr UINT kMsgDestroyDoomed = WM_USER + 0;
+
+// Upper bound on the acquire() modal pump. Generous: well ABOVE the
+// measured plugin-load->Parked (~0.85 s) and the legit cold-F3-
+// before-Parked wait (~0.8-1.2 s). Only a genuinely hung WebView2
+// runtime (controller-create callback never fires; no ProcessFailed;
+// no EnvFailed) trips this. Overridable via the test seam below.
+DWORD g_acquire_timeout_ms = 15000;
 }
 
 precache_manager& precache_manager::instance() noexcept {
@@ -180,24 +187,43 @@ precache_manager::AcquireResult precache_manager::acquire(
         }
     }
 
-    // Modal pump until state leaves Building. Same pattern modal
-    // dialogs use: we run a local GetMessage loop on the caller's
-    // thread so the WebView2 callbacks driving the state machine get
-    // a chance to fire.
+    // Bounded modal pump until state leaves Building. Same pattern
+    // modal dialogs use: a local message loop on the caller's thread
+    // so the WebView2 callbacks driving the state machine get a chance
+    // to fire. The deadline is the only escape hatch for a *hung*
+    // runtime (controller-create callback never fires, no
+    // ProcessFailed, no EnvFailed) — without it this loop, running on
+    // TC's UI thread, would freeze the whole app forever. A slow-but-
+    // eventually-Parked precache still exits via the
+    // state_ != State::Building check long before the deadline, so the
+    // legit "user F3'd before the precache was ready" wait is
+    // preserved; only a genuinely hung runtime hits the timeout.
+    const ULONGLONG deadline = ::GetTickCount64() + g_acquire_timeout_ms;
     while (true) {
         {
             std::lock_guard<std::mutex> lk(mu_);
             if (state_ != State::Building) break;
         }
-        MSG msg;
-        BOOL r = ::GetMessageW(&msg, nullptr, 0, 0);
-        if (r <= 0) {
+        const ULONGLONG now = ::GetTickCount64();
+        if (now >= deadline) {
             debug_log::log(
-                L"precache: acquire pump exit GetMessage={}", r);
+                L"precache: acquire timed out after {} ms (hung runtime)",
+                g_acquire_timeout_ms);
             return InitFailedToken{E_ABORT};
         }
-        ::TranslateMessage(&msg);
-        ::DispatchMessageW(&msg);
+        const DWORD wait_ms = static_cast<DWORD>(deadline - now);
+        const DWORD w = ::MsgWaitForMultipleObjects(
+            0, nullptr, FALSE, wait_ms, QS_ALLINPUT);
+        if (w == WAIT_TIMEOUT) continue;          // re-check state + deadline
+        MSG msg;
+        while (::PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) {
+                debug_log::log(L"precache: acquire pump got WM_QUIT");
+                return InitFailedToken{E_ABORT};
+            }
+            ::TranslateMessage(&msg);
+            ::DispatchMessageW(&msg);
+        }
     }
 
     std::unique_ptr<IWebView2Host> host;
@@ -300,6 +326,10 @@ void reset_precache_manager_for_test(precache_manager& m) noexcept {
     m.cold_start_done_        = false;
     m.doomed_hosts_.clear();
     m.test_host_factory_      = {};
+}
+
+void set_acquire_timeout_for_test(DWORD ms) noexcept {
+    g_acquire_timeout_ms = ms;
 }
 
 }
