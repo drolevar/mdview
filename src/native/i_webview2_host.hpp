@@ -18,8 +18,12 @@ namespace mdview {
 //      builds env + controller under an HWND_MESSAGE parent, navigates
 //      to the app, waits for renderer 'ready'. Owned by precache_manager
 //      during this phase; the host is hidden the whole time.
-//   2. adopt() — reparent the controller to the real Lister HWND, push
-//      theme + raster scale, make visible. Pure reparent: no callbacks.
+//   2. adopt() — reparent the controller to the real Lister HWND,
+//      push theme + raster scale. Pure reparent: no callbacks.
+//      Does NOT make the controller visible — visibility is
+//      deferred to rebind_callbacks() so the renderer-message
+//      handler is installed before WebView2 can dispatch (the
+//      load-bearing M6 race fix).
 //   3. rebind_callbacks() — replace the manager-owned precache
 //      callbacks with the caller's (PluginWindow / ViewerHost). Called
 //      after adopt completes.
@@ -30,8 +34,10 @@ public:
 
     virtual ~IWebView2Host() = default;
 
-    // Reparent the controller to `new_parent`, apply theme + raster
-    // scale, and make visible. Must be called once on a host that has
+    // Reparent the controller to `new_parent` and apply theme + raster
+    // scale. Does NOT make the controller visible (rebind_callbacks()
+    // does, after the message handler is wired — M6 race fix). Must be
+    // called once on a host that has
     // reached the Parked phase (post-renderer-ready under the
     // message-only parent). Multiple adopt() calls or adopt() on a
     // non-Parked host log and abort. Does not wire callbacks — caller
