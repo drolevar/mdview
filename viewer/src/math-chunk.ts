@@ -57,6 +57,7 @@ const BATCH_TIMEOUT_MS = 5000;
 
 let worker:     Worker | null = null;
 let workerDead: boolean       = false;
+let workerPromise: Promise<Worker | null> | null = null;
 let nextBatchId = 0;
 const pending = new Map<
     number,
@@ -92,43 +93,51 @@ function attachWorkerHandlers(w: Worker): void {
 async function ensureWorker(): Promise<Worker | null> {
     if (workerDead) return null;
     if (worker) return worker;
-    try {
-        // math-chunk lives at /chunks/math-chunk-<hash>.js; the
-        // worker entry-point bundle is at /katex-worker.js (esbuild
-        // places entry points in outdir root, chunks in chunks/).
-        const url = new URL('../katex-worker.js', import.meta.url);
-        const w = new Worker(url, { type: 'module' });
-        const readyPromise = new Promise<void>((resolve, reject) => {
-            const t = setTimeout(
-                () => reject(new Error('worker-ready timeout')),
-                READY_TIMEOUT_MS);
-            w.addEventListener('message', function onReady(e: MessageEvent) {
-                const m = e.data as { type?: string } | null;
-                if (m && m.type === 'worker-ready') {
+    // Single-flight: concurrent callers (eager module-load + render
+    // path) share one in-flight spawn instead of each new Worker().
+    if (workerPromise) return workerPromise;
+    workerPromise = (async (): Promise<Worker | null> => {
+        try {
+            // math-chunk lives at /chunks/math-chunk-<hash>.js; the
+            // worker entry-point bundle is at /katex-worker.js (esbuild
+            // places entry points in outdir root, chunks in chunks/).
+            const url = new URL('../katex-worker.js', import.meta.url);
+            const w = new Worker(url, { type: 'module' });
+            const readyPromise = new Promise<void>((resolve, reject) => {
+                const t = setTimeout(
+                    () => reject(new Error('worker-ready timeout')),
+                    READY_TIMEOUT_MS);
+                w.addEventListener('message', function onReady(e: MessageEvent) {
+                    const m = e.data as { type?: string } | null;
+                    if (m && m.type === 'worker-ready') {
+                        clearTimeout(t);
+                        w.removeEventListener('message', onReady);
+                        resolve();
+                    }
+                });
+                w.addEventListener('error', (e: ErrorEvent) => {
                     clearTimeout(t);
-                    w.removeEventListener('message', onReady);
-                    resolve();
-                }
+                    reject(new Error(e.message || 'worker error'));
+                }, { once: true });
             });
-            w.addEventListener('error', (e: ErrorEvent) => {
-                clearTimeout(t);
-                reject(new Error(e.message || 'worker error'));
-            }, { once: true });
-        });
-        await readyPromise;
-        attachWorkerHandlers(w);
-        worker = w;
-        return w;
-    } catch (err) {
-        const m = err instanceof Error ? err.message : String(err);
-        log.warn(`math-worker spawn failed: ${m} (falling back to sync render)`);
-        workerDead = true;
-        if (worker) {
-            try { worker.terminate(); } catch { /* ignore */ }
+            await readyPromise;
+            attachWorkerHandlers(w);
+            worker = w;
+            return w;
+        } catch (err) {
+            const m = err instanceof Error ? err.message : String(err);
+            log.warn(`math-worker spawn failed: ${m} (falling back to sync render)`);
+            workerDead = true;
+            if (worker) {
+                try { worker.terminate(); } catch { /* ignore */ }
+            }
+            worker = null;
+            return null;
         }
-        worker = null;
-        return null;
-    }
+    })();
+    const result = await workerPromise;
+    if (result === null) workerPromise = null;  // transient failure: allow a later retry (unless workerDead short-circuits first)
+    return result;
 }
 
 // Eagerly start the worker boot as soon as this module loads so
