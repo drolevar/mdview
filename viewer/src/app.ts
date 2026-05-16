@@ -4,6 +4,7 @@ import { render as renderMarkdown }           from './markdown.js';
 import {
     isLoadDocument, isSetTheme,
     postReady, postRendered, postRenderError,
+    NO_DOC_ID,
 } from './protocol.js';
 import type { MermaidPassData, BackgroundHandle }
                                               from './mermaid-chunk.js';
@@ -42,7 +43,7 @@ function run(): void {
     const baseEl = document.getElementById(
         'mdview-base') as HTMLBaseElement | null;
 
-    let latestId      = 0;
+    let latestId      = NO_DOC_ID;
     let latestContent = '';
     let rendering     = false;
     let latestSummaryRequested = false;
@@ -303,6 +304,15 @@ function run(): void {
             renderLatest();
         });
 
+    // Two deliberate, complementary error channels (do NOT collapse):
+    //  (a) postRenderError -> structured `renderError` to the host
+    //      (behavior channel; render-lifecycle id; native decodes it).
+    //  (b) log.ts installGlobalErrorForwarders -> {type:'log'} to
+    //      dbgview (visibility channel; see log.ts:20-23 — it exists
+    //      precisely because (a) is render-gated and misses
+    //      async/worker/theme failures).
+    // Before any doc / between docs latestId is NO_DOC_ID so the host
+    // can tell the error is not tied to a live render.
     window.addEventListener('error', (ev) => {
         // Conservative on unknown-source errors: keep whatever the
         // last successful render established. lastMermaidPass tracks
