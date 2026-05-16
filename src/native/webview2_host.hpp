@@ -28,8 +28,9 @@ public:
     // Static factory: build env + controller under the given
     // HWND_MESSAGE-style parent, navigate to the app, and wait for the
     // renderer to send `{"type":"ready"}`. The controller is created
-    // hidden (put_IsVisible(FALSE)); adopt() reveals it after
-    // reparenting to the real Lister HWND.
+    // hidden (put_IsVisible(FALSE)); adopt() reparents to the real
+    // Lister HWND but leaves it hidden. rebind_callbacks() reveals it
+    // once the message handler is wired (the M6 race fix).
     //
     // `initial_theme` is the most-recently-observed TC theme at build
     // time; the controller's DefaultBackgroundColor is set from it

@@ -212,10 +212,10 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
                 *t_renderer_ready_ - t_start_).count();
         debug_log::log(L"viewer-host: renderer ready t={}ms", ready_ms);
 
-        // M6: adopt() already set put_IsVisible(TRUE); no show() call
-        // here. The controller's first visible frame is the post-adopt
-        // reparented surface, which is dark-themed via the controller
-        // default bg path.
+        // M6: rebind_callbacks() (which runs after adopt()) already set
+        // put_IsVisible(TRUE); no show() call here. The controller's
+        // first visible frame is the post-adopt reparented surface,
+        // which is dark-themed via the controller default bg path.
 
         // Snapshot pending_load_ BEFORE firing the event. The user
         // callback may run for a long time and may itself call
