@@ -5,6 +5,7 @@
 #include "native/theme.hpp"
 #include "platform/win32_window.hpp"
 #include "plugin/fallback_window.hpp"
+#include "plugin/listclose_defer.hpp"
 #include "plugin/plugin_window.hpp"
 
 #include <listplug.h>   // vendored under external/totalcmd-wlx-sdk/src/
@@ -379,7 +380,9 @@ void __stdcall ListCloseWindow(HWND ListWin) {
         // eventual real close (or ~PluginWindow) destroys it normally.
         if (doomed == nullptr) {
             std::lock_guard<std::mutex> lock(g_windows_mutex);
-            if (ListWin != nullptr && ListWin == g_constructing_hwnd) {
+            if (mdview::listclose_should_defer(
+                    /*found_in_g_windows=*/false, ListWin,
+                    g_constructing_hwnd)) {
                 mdview::debug_log::log(
                     L"wlx: ListCloseWindow deferred (window still "
                     L"constructing) hwnd=0x{:p}",
