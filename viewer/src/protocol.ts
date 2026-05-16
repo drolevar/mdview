@@ -29,6 +29,14 @@ export interface LoadDocumentDocument {
     markdown:    string;
 }
 
+// Sentinel doc id for a renderError raised when no document is the
+// live render target (before the first loadDocument, or between
+// docs). A valid in-range integer the native decoder accepts
+// (get_int_in_range) and distinct from every real id (real ids are
+// positive, monotonic) — lets the host tell the error is not tied
+// to a live render.
+export const NO_DOC_ID = -1;
+
 export interface LoadDocumentMessage {
     type:     'loadDocument';
     // Envelope `version` is intentionally frozen at 1. Message *shape*
