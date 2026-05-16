@@ -23,8 +23,19 @@ TEST_CASE("audit: late-remap produces a working first nav with images",
     REQUIRE_FALSE(sum->image_requests.empty());
     auto in_doc = std::any_of(
         sum->image_requests.begin(), sum->image_requests.end(),
-        [](auto& p) { return p.second; });
+        [](auto& r) { return r.in_doc_base_uri; });
     CHECK(in_doc);
+
+    // Regression gate (folded into M15): the doc-relative image must
+    // actually decode, not merely be classified in-base. 7c5bc73
+    // mapped the doc host DENY_CORS, silently blocking every cross-
+    // origin doc image while classification stayed true — so this
+    // test was green for ~8 milestones with images broken. `loaded`
+    // (schema v6) closes that blind spot.
+    auto any_loaded = std::any_of(
+        sum->image_requests.begin(), sum->image_requests.end(),
+        [](auto& r) { return r.in_doc_base_uri && r.loaded; });
+    CHECK(any_loaded);
 
     // B8 true-child guard: the doc base URI is hard-coded native-side
     // to kDocBaseUri ("https://mdview-doc.example/", trailing slash;
@@ -40,9 +51,9 @@ TEST_CASE("audit: late-remap produces a working first nav with images",
     // path-prefixed, slash-less docBaseUri, so it is covered by the
     // M15 manual-smoke checklist instead.
     constexpr std::string_view kDocRoot = "https://mdview-doc.example/";
-    for (const auto& [url, in_base] : sum->image_requests) {
-        if (std::string_view{url}.substr(0, kDocRoot.size()) == kDocRoot) {
-            CHECK(in_base);
+    for (const auto& r : sum->image_requests) {
+        if (std::string_view{r.url}.substr(0, kDocRoot.size()) == kDocRoot) {
+            CHECK(r.in_doc_base_uri);
         }
     }
 }

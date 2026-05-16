@@ -30,6 +30,29 @@ let lastMathPass: MathPassData = {
 
 let backgroundHandle: BackgroundHandle | null = null;
 
+// Integration-harness only: summary.imageRequests[].loaded reflects
+// img.complete && naturalWidth > 0, but <img> fetches are async and
+// the render path does not await them. On the summary path we wait
+// for every image to settle (load or error) so `loaded` is real;
+// bounded so a stuck fetch can't stall the harness. Production never
+// requests a summary, so render-complete timing stays untouched.
+function settleImages(root: HTMLElement, timeoutMs: number): Promise<void> {
+    const pending = Array.from(root.querySelectorAll('img'))
+        .filter(im => !im.complete);
+    if (pending.length === 0) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+        let left = pending.length;
+        let timer = 0;
+        const finish = () => { window.clearTimeout(timer); resolve(); };
+        const one = () => { if (--left <= 0) finish(); };
+        timer = window.setTimeout(finish, timeoutMs);
+        for (const img of pending) {
+            img.addEventListener('load',  one, { once: true });
+            img.addEventListener('error', one, { once: true });
+        }
+    });
+}
+
 function run(): void {
     installGlobalErrorForwarders();
     applyInitialTheme();
@@ -120,6 +143,10 @@ function run(): void {
                             lastMermaidPass.chunkLoaded
                             && lastMermaidPass.diagrams.length > 0;
                         if (summaryAtStart) {
+                            // Wait for <img>s to settle so the
+                            // summary's imageRequests[].loaded is
+                            // real (harness-only; see settleImages).
+                            await settleImages(container, 3000);
                             const summary = buildSummary(
                                 container,
                                 elapsed,

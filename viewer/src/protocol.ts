@@ -59,7 +59,7 @@ export interface SetThemeMessage {
 }
 
 export interface RenderedSummary {
-    summarySchema: 5;
+    summarySchema: 6;
     durationMs:    number;
     theme:         'light' | 'dark';
     blockCount: {
@@ -129,6 +129,10 @@ export interface RenderedSummary {
     imageRequests: Array<{
         url:           string;
         inDocBaseUri:  boolean;
+        // Schema v6: img.complete && naturalWidth > 0 — true only
+        // when the image actually decoded. Distinguishes a rendered
+        // doc image from one blocked/404'd (classification cannot).
+        loaded:        boolean;
     }>;
 }
 

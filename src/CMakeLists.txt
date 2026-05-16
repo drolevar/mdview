@@ -39,7 +39,8 @@ target_include_directories(mdview_core PUBLIC
 target_link_libraries(mdview_core PUBLIC
     WIL::WIL
     nlohmann_json::nlohmann_json
-    unofficial::webview2::webview2)
+    unofficial::webview2::webview2
+    Shlwapi)
 
 target_compile_definitions(mdview_core PUBLIC
     WIL_LOCK_EXCEPTION_MODE)

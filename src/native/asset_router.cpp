@@ -6,6 +6,8 @@
 #include "native/host_names.hpp"
 #include "native/plugin_globals.hpp"
 
+#include <shlwapi.h>
+
 #include <wil/com.h>
 #include <wil/resource.h>
 #include <wil/result_macros.h>
@@ -13,8 +15,11 @@
 
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <format>
 #include <locale>
+#include <mutex>
+#include <system_error>
 
 namespace mdview {
 
@@ -24,6 +29,30 @@ const std::wstring& app_origin_prefix_() {
     static const std::wstring p =
         std::wstring(L"https://") + kAppHostName + L"/";
     return p;
+}
+
+const std::wstring& doc_origin_prefix_() {
+    static const std::wstring p =
+        std::wstring(L"https://") + kDocHostName + L"/";
+    return p;
+}
+
+// Current document directory the doc host serves from. Guarded
+// because set_current_doc_dir runs on the TC thread (ListLoadW)
+// while handle_doc_request reads it on the WebView2 thread.
+std::mutex& doc_dir_mutex_() {
+    static std::mutex m;
+    return m;
+}
+
+std::filesystem::path& doc_dir_storage_() {
+    static std::filesystem::path p;
+    return p;
+}
+
+std::filesystem::path current_doc_dir_() {
+    std::lock_guard<std::mutex> lk(doc_dir_mutex_());
+    return doc_dir_storage_();
 }
 
 // Last-Modified derived from the WLX's PE COFF link timestamp. Stable
@@ -216,6 +245,38 @@ HRESULT respond_304_(
     }
 }
 
+// Content-Type for a doc-served file by extension. Doc-relative
+// resources are overwhelmingly images; default to a safe binary
+// type (with X-Content-Type-Options: nosniff applied by the header
+// builder, the browser won't sniff it into something executable).
+std::wstring_view doc_content_type_(const std::filesystem::path& p) {
+    std::wstring ext = p.extension().wstring();
+    for (auto& c : ext) c = static_cast<wchar_t>(::towlower(c));
+    if (ext == L".png")  return L"image/png";
+    if (ext == L".jpg" || ext == L".jpeg") return L"image/jpeg";
+    if (ext == L".gif")  return L"image/gif";
+    if (ext == L".svg")  return L"image/svg+xml";
+    if (ext == L".webp") return L"image/webp";
+    if (ext == L".bmp")  return L"image/bmp";
+    if (ext == L".ico")  return L"image/x-icon";
+    if (ext == L".avif") return L"image/avif";
+    return L"application/octet-stream";
+}
+
+// True iff `full` is `base` itself or lexically nested under it,
+// compared component-wise (not a raw string prefix, so "…/doc" does
+// not match "…/docfoo"). Both paths must already be normalized.
+bool path_within_(const std::filesystem::path& base,
+                  const std::filesystem::path& full) {
+    auto bi = base.begin();
+    auto fi = full.begin();
+    for (; bi != base.end(); ++bi, ++fi) {
+        if (fi == full.end()) return false;
+        if (*bi != *fi) return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 std::optional<std::wstring>
@@ -261,6 +322,57 @@ parse_app_request_path(std::wstring_view uri) noexcept {
     if (path.empty() || path == L"/") {
         path = L"/index.html";
     }
+
+    return path;
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+std::optional<std::wstring>
+parse_doc_request_path(std::wstring_view uri) noexcept {
+  // noexcept: same per-request no-throw contract as
+  // parse_app_request_path. Mirrors its body; the only behavioral
+  // difference is the empty-path branch (nullopt, not /index.html)
+  // since the doc host has no default document.
+  try {
+    const auto& prefix = doc_origin_prefix_();
+    if (uri.size() < prefix.size()) return std::nullopt;
+    if (uri.substr(0, prefix.size()) != prefix) return std::nullopt;
+
+    // Keep the leading '/' of the path.
+    std::wstring path(uri.substr(prefix.size() - 1));
+
+    // Strip query string and fragment (everything past '?' or '#').
+    if (auto q = path.find_first_of(L"?#"); q != std::wstring::npos) {
+        path.resize(q);
+    }
+
+    if (!percent_decode_in_place_(path)) return std::nullopt;
+
+    // Reject backslash and ASCII control bytes.
+    for (wchar_t c : path) {
+        if (c == L'\\' || c < 0x20) return std::nullopt;
+    }
+
+    // Reject ".." anywhere (any-position; server-side path traversal
+    // is never legitimate here).
+    if (path.find(L"..") != std::wstring::npos) return std::nullopt;
+
+    // Collapse duplicate slashes.
+    std::wstring collapsed;
+    collapsed.reserve(path.size());
+    bool prev_slash = false;
+    for (wchar_t c : path) {
+        if (c == L'/' && prev_slash) continue;
+        collapsed.push_back(c);
+        prev_slash = (c == L'/');
+    }
+    path = std::move(collapsed);
+
+    // No index.html mapping for the doc host: an empty/"/" request
+    // has no target file.
+    if (path.empty() || path == L"/") return std::nullopt;
 
     return path;
   } catch (...) {
@@ -366,6 +478,91 @@ HRESULT handle_app_request(
         200, L"OK", asset->content_type, /*include_csp*/ is_html);
   } catch (...) {
     debug_log::log(L"wlx: asset-router handle_app_request OOM");
+    return E_OUTOFMEMORY;
+  }
+}
+
+void set_current_doc_dir(std::filesystem::path dir) noexcept {
+    try {
+        std::lock_guard<std::mutex> lk(doc_dir_mutex_());
+        doc_dir_storage_() = std::move(dir);
+    } catch (...) {
+        // Locking / assignment can't realistically throw here, but
+        // the per-request path must never std::terminate; a failed
+        // set just leaves the previous dir (stale -> 404 at worst).
+    }
+}
+
+HRESULT handle_doc_request(
+        ICoreWebView2WebResourceRequestedEventArgs* args,
+        ICoreWebView2Environment* env) noexcept {
+  // noexcept: mirrors handle_app_request — any bad_alloc that slips
+  // a per-helper guard ends here as a controlled E_OUTOFMEMORY,
+  // never std::terminate / a killed TC process mid-render.
+  try {
+    wil::com_ptr<ICoreWebView2WebResourceRequest> req;
+    RETURN_IF_FAILED(args->get_Request(&req));
+    wil::unique_cotaskmem_string uri;
+    RETURN_IF_FAILED(req->get_Uri(&uri));
+
+    auto path = parse_doc_request_path(uri.get());
+    if (!path) {
+        return respond_not_found_(args, env,
+            uri.get() ? uri.get() : L"(null)");
+    }
+
+    const std::filesystem::path doc_dir = current_doc_dir_();
+    if (doc_dir.empty()) {
+        return respond_not_found_(args, env, *path);
+    }
+
+    // path begins with '/'; strip it so the append is relative.
+    const std::filesystem::path rel(
+        std::wstring_view(*path).substr(1));
+    const std::filesystem::path target = doc_dir / rel;
+
+    // Containment check (defense in depth — ".." already rejected
+    // in the parser). weakly_canonical resolves symlinks/.. without
+    // requiring the path to exist; on any filesystem_error -> 404.
+    std::error_code ec;
+    const std::filesystem::path base =
+        std::filesystem::weakly_canonical(doc_dir, ec);
+    if (ec) return respond_not_found_(args, env, *path);
+    const std::filesystem::path full =
+        std::filesystem::weakly_canonical(target, ec);
+    if (ec) return respond_not_found_(args, env, *path);
+    if (!path_within_(base.lexically_normal(),
+                      full.lexically_normal())) {
+        return respond_not_found_(args, env, *path);
+    }
+
+    if (!std::filesystem::is_regular_file(full, ec) || ec) {
+        return respond_not_found_(args, env, *path);
+    }
+
+    const std::wstring_view content_type = doc_content_type_(full);
+
+    // File-backed IStream: owns the file handle, WebView2 reads it
+    // lazily. EmbeddedResourceStream is pointer-only/zero-copy and
+    // must not be used here (no backing buffer for a disk file).
+    wil::com_ptr<IStream> stream;
+    const HRESULT shr = ::SHCreateStreamOnFileEx(
+        full.c_str(), STGM_READ | STGM_SHARE_DENY_WRITE,
+        0, FALSE, nullptr, &stream);
+    if (FAILED(shr) || !stream) {
+        return respond_not_found_(args, env, *path);
+    }
+
+    const auto headers =
+        build_headers_(content_type, /*include_csp*/ false);
+    wil::com_ptr<ICoreWebView2WebResourceResponse> response;
+    RETURN_IF_FAILED(env->CreateWebResourceResponse(
+        stream.get(), 200, L"OK", headers.c_str(), &response));
+    debug_log::log(L"wlx: asset-router 200 doc path={} mime={}",
+                   *path, content_type);
+    return args->put_Response(response.get());
+  } catch (...) {
+    debug_log::log(L"wlx: asset-router doc OOM");
     return E_OUTOFMEMORY;
   }
 }

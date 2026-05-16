@@ -136,9 +136,12 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                                     L"dev-mode app-host mapping skipped");
                             }
                         } else {
-                            const std::wstring filter =
+                            const std::wstring app_filter =
                                 std::wstring(L"https://") +
                                 kAppHostName + L"/*";
+                            const std::wstring doc_filter =
+                                std::wstring(L"https://") +
+                                kDocHostName + L"/*";
                             // M10 audit retrofit: migrate to the
                             // WithRequestSourceKinds overload introduced
                             // in WebView2 SDK 1.0.1722.45. The old
@@ -146,11 +149,19 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                             // the new variant requires explicit
                             // RequestSourceKinds (we want the default:
                             // document + all subresource fetches).
+                            // Both hosts go through the same handler;
+                            // the doc host serves doc-relative files
+                            // from disk (handle_doc_request).
                             if (auto wv22 =
                                     webview_.try_query<ICoreWebView2_22>()) {
                                 THROW_IF_FAILED(
                                     wv22->AddWebResourceRequestedFilterWithRequestSourceKinds(
-                                        filter.c_str(),
+                                        app_filter.c_str(),
+                                        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+                                        COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL));
+                                THROW_IF_FAILED(
+                                    wv22->AddWebResourceRequestedFilterWithRequestSourceKinds(
+                                        doc_filter.c_str(),
                                         COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
                                         COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL));
                             } else {
@@ -159,12 +170,19 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                                 // (still functional, just nags in logs).
                                 THROW_IF_FAILED(
                                     webview_->AddWebResourceRequestedFilter(
-                                        filter.c_str(),
+                                        app_filter.c_str(),
+                                        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL));
+                                THROW_IF_FAILED(
+                                    webview_->AddWebResourceRequestedFilter(
+                                        doc_filter.c_str(),
                                         COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL));
                             }
+                            const std::wstring doc_prefix =
+                                std::wstring(L"https://") +
+                                kDocHostName + L"/";
                             auto res_handler = Microsoft::WRL::Callback<
                                 ICoreWebView2WebResourceRequestedEventHandler>(
-                                [env, wp]
+                                [env, wp, doc_prefix]
                                 (ICoreWebView2*,
                                  ICoreWebView2WebResourceRequestedEventArgs* args)
                                     noexcept -> HRESULT {
@@ -172,7 +190,28 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                                     if (!a) {
                                         return respond_unavailable(args, env);
                                     }
-                                    return handle_app_request(args, env);
+                                    // Dispatch by host: doc-relative
+                                    // resources hit the disk-backed doc
+                                    // handler, everything else the
+                                    // embedded asset router.
+                                    bool is_doc = false;
+                                    wil::com_ptr<
+                                        ICoreWebView2WebResourceRequest> rq;
+                                    if (SUCCEEDED(args->get_Request(&rq))
+                                        && rq) {
+                                        wil::unique_cotaskmem_string u;
+                                        if (SUCCEEDED(rq->get_Uri(&u)) && u) {
+                                            std::wstring_view uv(u.get());
+                                            is_doc =
+                                                uv.size() >= doc_prefix.size()
+                                                && uv.substr(
+                                                    0, doc_prefix.size())
+                                                   == doc_prefix;
+                                        }
+                                    }
+                                    return is_doc
+                                        ? handle_doc_request(args, env)
+                                        : handle_app_request(args, env);
                                 });
                             EventRegistrationToken res_tok{};
                             THROW_IF_FAILED(
@@ -189,13 +228,13 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                                 kAppHostName);
                         }
 
-                        // Doc host (kDocHostName): NOT pre-mapped.
-                        // remap_doc_dir installs the mapping the first
-                        // time a document loads. The renderer doesn't
-                        // reference doc-host resources until after
-                        // load_document runs and remap_doc_dir is called,
-                        // so requests before then would 404 — which is
-                        // fine: there are none.
+                        // Doc host (kDocHostName) is served by the
+                        // WebResourceRequested asset-router (see
+                        // asset_router handle_doc_request) — the same
+                        // path that reliably serves the app host.
+                        // Nothing to pre-map; set_current_doc_dir
+                        // (called from remap_doc_dir per load) points
+                        // it at the document's directory.
 
                         // Apply controller-local default-bg always.
                         apply_default_bg_to_controller_();
@@ -354,15 +393,14 @@ void WebView2Host::post_to_renderer(std::wstring_view json) {
 HRESULT WebView2Host::remap_doc_dir(
         const std::filesystem::path& doc_dir) noexcept {
     if (!webview_) return E_UNEXPECTED;
-    auto wv3 = webview_.try_query<ICoreWebView2_3>();
-    if (!wv3) return E_NOINTERFACE;
-
-    LOG_IF_FAILED(wv3->ClearVirtualHostNameToFolderMapping(kDocHostName));
-
-    return wv3->SetVirtualHostNameToFolderMapping(
-        kDocHostName,
-        doc_dir.c_str(),
-        COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS);
+    // The doc host is served by the WebResourceRequested asset-router
+    // (handle_doc_request), not SetVirtualHostNameToFolderMapping —
+    // the virtual-host mapping silently fails for cross-origin
+    // fetches from the app-host page (broke every doc-relative <img>
+    // since M8). Just point the router at the new doc dir.
+    mdview::set_current_doc_dir(doc_dir);
+    debug_log::log(L"wlx: doc-dir set dir={}", doc_dir.wstring());
+    return S_OK;
 }
 
 void WebView2Host::reload() noexcept {
