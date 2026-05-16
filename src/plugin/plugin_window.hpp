@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <wil/resource.h>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -13,8 +14,17 @@ namespace mdview {
 
 class PluginWindow {
 public:
+    // `on_hwnd_created`, when set, is invoked exactly once with the
+    // freshly-created HWND right after CreateWindowExW succeeds and
+    // BEFORE the modal precache-acquire pump runs inside create().
+    // ListLoadW uses it to publish the in-construction HWND so a
+    // reentrant ListCloseWindow dispatched during that pump doesn't
+    // destroy the still-constructing window (the post-create
+    // g_windows.emplace owns it). Default {} keeps every other caller
+    // unchanged.
     static std::unique_ptr<PluginWindow> create(
-        HWND parent, std::wstring file_to_load, int show_flags);
+        HWND parent, std::wstring file_to_load, int show_flags,
+        std::function<void(HWND)> on_hwnd_created = {});
 
     PluginWindow(HWND hwnd, std::wstring file_to_load);
     ~PluginWindow();

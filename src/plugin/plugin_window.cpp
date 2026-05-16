@@ -42,7 +42,8 @@ HBRUSH get_dark_window_brush_() noexcept {
 }
 
 std::unique_ptr<PluginWindow>
-PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags) {
+PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags,
+                     std::function<void(HWND)> on_hwnd_created) {
     HMODULE module = globals().module_handle();
     HINSTANCE inst = reinterpret_cast<HINSTANCE>(module);
 
@@ -87,6 +88,17 @@ PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags) {
     // messages after ListLoadW returns; the splash paints on the
     // theme-aware class brush before WebView2 reveals.
     ::InvalidateRect(hwnd, nullptr, TRUE);
+
+    // Publish the HWND to the caller before any modal pump runs. The
+    // precache acquire() below pumps TC's message queue, during which
+    // a reentrant ListCloseWindow could fire for this still-unfinished
+    // window. ListLoadW records the HWND here so that close path can
+    // defer instead of destroying it out from under us. Done after the
+    // HWND exists and WM_NCCREATE wired the self-ptr, before the
+    // env-failure short-circuit so it holds on that path too.
+    if (on_hwnd_created) {
+        on_hwnd_created(hwnd);
+    }
 
     // Acquire a pre-adopted host from the precache manager. The call
     // runs a modal message pump until the precache reaches Parked

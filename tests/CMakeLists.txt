@@ -23,6 +23,7 @@ add_executable(mdview_tests
     native/test_externalize.cpp
     native/test_theme.cpp
     native/test_plugin_window_commands.cpp
+    native/test_listclose_reentrancy.cpp
     native/test_summary_v2.cpp
     native/test_log_bridge.cpp
     # Compiled into the unit-test exe too so test_summary_v2 can
