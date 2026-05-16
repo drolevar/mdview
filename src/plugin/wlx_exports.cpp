@@ -190,6 +190,10 @@ mdview::Theme read_windows_app_theme() noexcept {
 // Light. Wrong guesses cost one cold-F3 flash; subsequent recycle
 // precaches use the real ListLoadW show_flags via note_theme.
 mdview::Theme parse_tc_dark_mode_from_ini(const std::string& plugin_ini_path) noexcept {
+    // noexcept: std::filesystem::path construction allocates. On OOM
+    // fall back to the documented default (Light) — a wrong guess only
+    // costs one cold-F3 flash; never std::terminate at plugin load.
+    try {
     // TC's ListDefaultParamStruct.DefaultIniName points at the *plugin*
     // ini (e.g. lsplugin.ini), NOT TC's main wincmd.ini. The DarkMode
     // key lives in wincmd.ini, which by convention sits in the same
@@ -224,6 +228,9 @@ mdview::Theme parse_tc_dark_mode_from_ini(const std::string& plugin_ini_path) no
                            wincmd_path.empty() ? L"(empty)"
                                                : wincmd_path.c_str());
     return t;
+    } catch (...) {
+        return mdview::Theme::Light;
+    }
 }
 
 }  // namespace
