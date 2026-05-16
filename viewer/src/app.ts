@@ -98,7 +98,11 @@ function run(): void {
                         const mathChunkP: Promise<
                             typeof import('./math-chunk.js') | null
                         > = hasMath
-                            ? import('./math-chunk.js').catch(() => null)
+                            ? import('./math-chunk.js').catch((e) => {
+                                log.error('math-chunk import failed: ' +
+                                    (e instanceof Error ? e.message : String(e)));
+                                return null;
+                              })
                             : Promise.resolve(null);
 
                         // Mermaid pass: after markdown HTML is in the
