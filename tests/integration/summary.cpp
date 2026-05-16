@@ -126,9 +126,11 @@ parse_summary_json(const std::wstring& payload) {
 
         if (j.contains("imageRequests") && j["imageRequests"].is_array()) {
             for (auto& ir : j["imageRequests"]) {
-                s.image_requests.emplace_back(
-                    ir.value("url", std::string{}),
-                    ir.value("inDocBaseUri", false));
+                ImageRequestRecord r;
+                r.url             = ir.value("url", std::string{});
+                r.in_doc_base_uri = ir.value("inDocBaseUri", false);
+                r.loaded          = ir.value("loaded", false);  // v6
+                s.image_requests.push_back(std::move(r));
             }
         }
         return s;

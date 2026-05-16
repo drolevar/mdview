@@ -243,6 +243,62 @@ TEST_CASE("parser reads mermaid.foregroundCount from v5 payload",
     CHECK(s->mermaid_foreground_count == 4);
 }
 
+TEST_CASE("parser reads imageRequests.loaded from v6 payload",
+          "[summary][v6]") {
+    const auto payload = LR"({
+        "summarySchema": 6,
+        "durationMs": 50,
+        "theme": "light",
+        "blockCount": {"paragraph": 0, "heading": 0, "codeFence": 0,
+            "table": 0, "blockquote": 0, "listOrdered": 0,
+            "listUnordered": 0, "image": 2, "link": 0, "hr": 0},
+        "codeFences": [],
+        "mermaid": {"chunkLoaded": false, "chunkLoadMs": null,
+            "placeholdersSeen": 0, "foregroundCount": 0, "diagrams": []},
+        "math": null,
+        "imageRequests": [
+            {"url": "https://mdview-doc.example/ok.png",
+             "inDocBaseUri": true,  "loaded": true},
+            {"url": "https://mdview-doc.example/missing.png",
+             "inDocBaseUri": true,  "loaded": false}
+        ]
+    })";
+    auto s = mdview::integration::parse_summary_json(payload);
+    REQUIRE(s.has_value());
+    CHECK(s->summary_schema == 6);
+    REQUIRE(s->image_requests.size() == 2);
+    CHECK(s->image_requests[0].in_doc_base_uri);
+    CHECK(s->image_requests[0].loaded);
+    CHECK(s->image_requests[1].in_doc_base_uri);
+    CHECK_FALSE(s->image_requests[1].loaded);
+}
+
+TEST_CASE("parser defaults imageRequests.loaded false on pre-v6 payload",
+          "[summary][v6][backcompat]") {
+    const auto payload = LR"({
+        "summarySchema": 5,
+        "durationMs": 50,
+        "theme": "light",
+        "blockCount": {"paragraph": 0, "heading": 0, "codeFence": 0,
+            "table": 0, "blockquote": 0, "listOrdered": 0,
+            "listUnordered": 0, "image": 1, "link": 0, "hr": 0},
+        "codeFences": [],
+        "mermaid": {"chunkLoaded": false, "chunkLoadMs": null,
+            "placeholdersSeen": 0, "foregroundCount": 0, "diagrams": []},
+        "math": null,
+        "imageRequests": [
+            {"url": "https://mdview-doc.example/a.png",
+             "inDocBaseUri": true}
+        ]
+    })";
+    auto s = mdview::integration::parse_summary_json(payload);
+    REQUIRE(s.has_value());
+    CHECK(s->summary_schema == 5);
+    REQUIRE(s->image_requests.size() == 1);
+    CHECK(s->image_requests[0].in_doc_base_uri);
+    CHECK_FALSE(s->image_requests[0].loaded);   // absent -> false
+}
+
 TEST_CASE("parser defaults mermaid.foregroundCount to 0 on v4 payload",
           "[summary][v5][backcompat]") {
     const auto payload = LR"({

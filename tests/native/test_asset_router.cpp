@@ -125,6 +125,99 @@ TEST_CASE("path: percent-decode never throws on malformed escape (B5)",
     CHECK(*r == L"/a b");
 }
 
+using mdview::parse_doc_request_path;
+
+TEST_CASE("doc path: simple ok", "[asset_router][doc]") {
+    auto r = parse_doc_request_path(
+        L"https://mdview-doc.example/logo.png");
+    REQUIRE(r.has_value());
+    CHECK(*r == L"/logo.png");
+}
+
+TEST_CASE("doc path: nested ok", "[asset_router][doc]") {
+    auto r = parse_doc_request_path(
+        L"https://mdview-doc.example/img/sub/pic.jpg");
+    REQUIRE(r.has_value());
+    CHECK(*r == L"/img/sub/pic.jpg");
+}
+
+TEST_CASE("doc path: empty => nullopt (no index.html)",
+          "[asset_router][doc]") {
+    CHECK_FALSE(parse_doc_request_path(
+        L"https://mdview-doc.example/").has_value());
+    CHECK_FALSE(parse_doc_request_path(
+        L"https://mdview-doc.example").has_value());
+}
+
+TEST_CASE("doc path: wrong host rejected", "[asset_router][doc]") {
+    CHECK_FALSE(parse_doc_request_path(
+        L"https://mdview-app.example/logo.png").has_value());
+    CHECK_FALSE(parse_doc_request_path(
+        L"https://evil.example/logo.png").has_value());
+}
+
+TEST_CASE("doc path: wrong scheme rejected", "[asset_router][doc]") {
+    CHECK_FALSE(parse_doc_request_path(
+        L"http://mdview-doc.example/logo.png").has_value());
+    CHECK_FALSE(parse_doc_request_path(
+        L"file:///C:/logo.png").has_value());
+}
+
+TEST_CASE("doc path: literal .. rejected", "[asset_router][doc]") {
+    CHECK_FALSE(parse_doc_request_path(
+        L"https://mdview-doc.example/../secret.png").has_value());
+}
+
+TEST_CASE("doc path: percent-encoded .. rejected",
+          "[asset_router][doc]") {
+    CHECK_FALSE(parse_doc_request_path(
+        L"https://mdview-doc.example/%2e%2e/secret.png").has_value());
+}
+
+TEST_CASE("doc path: backslash rejected", "[asset_router][doc]") {
+    CHECK_FALSE(parse_doc_request_path(
+        L"https://mdview-doc.example/img\\logo.png").has_value());
+}
+
+TEST_CASE("doc path: control byte rejected", "[asset_router][doc]") {
+    // %0a = LF (0x0A); reject as ASCII control byte after decode.
+    CHECK_FALSE(parse_doc_request_path(
+        L"https://mdview-doc.example/logo%0a.png").has_value());
+}
+
+TEST_CASE("doc path: query and fragment stripped",
+          "[asset_router][doc]") {
+    auto r1 = parse_doc_request_path(
+        L"https://mdview-doc.example/logo.png?v=2");
+    REQUIRE(r1.has_value());
+    CHECK(*r1 == L"/logo.png");
+    auto r2 = parse_doc_request_path(
+        L"https://mdview-doc.example/logo.png#frag");
+    REQUIRE(r2.has_value());
+    CHECK(*r2 == L"/logo.png");
+}
+
+TEST_CASE("doc path: duplicate slashes collapsed",
+          "[asset_router][doc]") {
+    auto r = parse_doc_request_path(
+        L"https://mdview-doc.example/img//logo.png");
+    REQUIRE(r.has_value());
+    CHECK(*r == L"/img/logo.png");
+}
+
+TEST_CASE("doc path: percent-decoded ASCII path",
+          "[asset_router][doc]") {
+    auto r = parse_doc_request_path(
+        L"https://mdview-doc.example/my%20logo.png");
+    REQUIRE(r.has_value());
+    CHECK(*r == L"/my logo.png");
+}
+
+TEST_CASE("doc path: too-short URI rejected", "[asset_router][doc]") {
+    CHECK_FALSE(parse_doc_request_path(L"").has_value());
+    CHECK_FALSE(parse_doc_request_path(L"https://").has_value());
+}
+
 using mdview::should_respond_304;
 
 TEST_CASE("304 helper: returns true when If-Modified-Since exactly matches Last-Modified",

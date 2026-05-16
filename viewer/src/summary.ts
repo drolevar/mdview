@@ -33,7 +33,8 @@ export function buildSummary(
 
     const imageRequests = Array.from(container.querySelectorAll('img'))
         .map(img => {
-            const url = (img as HTMLImageElement).src;
+            const el = img as HTMLImageElement;
+            const url = el.src;
             // Path-segment aware: a sibling-prefixed URL (…/docfoo/x)
             // must NOT count as in-base for docBaseUri …/doc. The
             // exact base URL itself still counts as in-base.
@@ -45,6 +46,10 @@ export function buildSummary(
                 inDocBaseUri: base.length > 0
                     ? (url === docBaseUri || url.startsWith(base))
                     : false,
+                // Schema v6: did the image actually decode? A blocked
+                // or 404'd image still has src + inDocBaseUri set, so
+                // classification alone can't catch a broken doc image.
+                loaded: el.complete && el.naturalWidth > 0,
             };
         });
 
@@ -59,7 +64,7 @@ export function buildSummary(
         || mathPass.chunkLoaded;
 
     return {
-        summarySchema: 5,
+        summarySchema: 6,
         durationMs,
         theme,
         blockCount,

@@ -45,6 +45,12 @@ struct MathSummary {
     std::vector<MathErrorRecord> errors;
 };
 
+struct ImageRequestRecord {
+    std::string url;
+    bool        in_doc_base_uri = false;
+    bool        loaded          = false;   // schema v6; false pre-v6
+};
+
 struct RenderedSummary {
     int    summary_schema = 0;
     int    duration_ms    = 0;
@@ -74,7 +80,7 @@ struct RenderedSummary {
     // contained no math (wire shape: `"math": null`).
     std::optional<MathSummary> math;
 
-    std::vector<std::pair<std::string, bool>> image_requests;
+    std::vector<ImageRequestRecord> image_requests;
 };
 
 std::optional<RenderedSummary>
