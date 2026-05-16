@@ -1,6 +1,7 @@
 #include "native/renderer_protocol.hpp"
 
 #include "common/utf.hpp"
+#include "native/debug_log.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -77,8 +78,11 @@ decode_renderer_message(std::wstring_view json) noexcept {
         if (!j.contains("type") || !j["type"].is_string()) {
             return std::nullopt;
         }
-        if (!j.contains("version") || !j["version"].is_number_integer()
-            || j["version"].get<int>() != 1) {
+        if (!j.contains("version") || !j["version"].is_number_integer()) {
+            return std::nullopt;
+        }
+        if (const int v = j["version"].get<int>(); v != 1) {
+            debug_log::log(L"renderer message version mismatch got={} want=1", v);
             return std::nullopt;
         }
 
