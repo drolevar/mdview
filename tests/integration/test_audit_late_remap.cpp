@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <string_view>
 
 using namespace mdview::integration;
 
@@ -19,10 +20,31 @@ TEST_CASE("audit: late-remap produces a working first nav with images",
     // drain time (controller-ready); the renderer's image requests fire
     // after the post-drain loadDocument message arrives, so they see
     // the just-set mapping without needing a reload.
+    REQUIRE_FALSE(sum->image_requests.empty());
     auto in_doc = std::any_of(
         sum->image_requests.begin(), sum->image_requests.end(),
         [](auto& p) { return p.second; });
     CHECK(in_doc);
+
+    // B8 true-child guard: the doc base URI is hard-coded native-side
+    // to kDocBaseUri ("https://mdview-doc.example/", trailing slash;
+    // the whole doc dir maps to the host root). `./logo.png` therefore
+    // resolves under that root, and the path-segment-aware classifier
+    // (summary.ts) must still flag it true — i.e. the trailing-slash
+    // `base` + url.startsWith(base) branch holds end-to-end through the
+    // real renderer/summary pipeline. Every request that resolves under
+    // the doc host must be classified in-base (no false negative).
+    //
+    // The sibling-prefixed FALSE case ("…/docfoo/x" vs base "…/doc")
+    // cannot be exercised here: the harness has no API to inject a
+    // path-prefixed, slash-less docBaseUri, so it is covered by the
+    // M15 manual-smoke checklist instead.
+    constexpr std::string_view kDocRoot = "https://mdview-doc.example/";
+    for (const auto& [url, in_base] : sum->image_requests) {
+        if (std::string_view{url}.substr(0, kDocRoot.size()) == kDocRoot) {
+            CHECK(in_base);
+        }
+    }
 }
 
 TEST_CASE("audit: no late-remap reload on cold first-load",
