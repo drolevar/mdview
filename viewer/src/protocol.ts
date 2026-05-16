@@ -31,6 +31,11 @@ export interface LoadDocumentDocument {
 
 export interface LoadDocumentMessage {
     type:     'loadDocument';
+    // Envelope `version` is intentionally frozen at 1. Message *shape*
+    // evolves additively (new fields optional). The native decoder
+    // hard-gates version===1 and logs "version mismatch got=N want=1"
+    // on any other value — a real bump needs a coordinated native
+    // change; do not raise this casually.
     version:  1;
     id:       number;
     document: LoadDocumentDocument;

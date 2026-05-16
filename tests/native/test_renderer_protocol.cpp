@@ -255,3 +255,27 @@ TEST_CASE("setTheme inline JSON has expected shape",
     REQUIRE(j["version"] == 1);
     REQUIRE(j["theme"]   == "dark");
 }
+
+namespace {
+// debug_log::set_sink takes a plain function pointer, so the capture
+// buffer is a translation-unit static the free-function sink appends to.
+std::wstring g_captured_log;
+void capture_log_sink(const wchar_t* line, size_t len) noexcept {
+    g_captured_log.append(line, len);
+}
+}
+
+TEST_CASE("decode_renderer_message logs a distinct version-mismatch line",
+          "[renderer_protocol]") {
+    g_captured_log.clear();
+    mdview::debug_log::set_sink(&capture_log_sink);
+
+    auto r = mdview::decode_renderer_message(
+        LR"({"type":"ready","version":2})");
+
+    mdview::debug_log::set_sink(nullptr);
+
+    CHECK_FALSE(r.has_value());
+    CHECK(g_captured_log.find(L"renderer message version mismatch got=2 want=1")
+          != std::wstring::npos);
+}
