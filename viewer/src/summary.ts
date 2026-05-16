@@ -34,10 +34,16 @@ export function buildSummary(
     const imageRequests = Array.from(container.querySelectorAll('img'))
         .map(img => {
             const url = (img as HTMLImageElement).src;
+            // Path-segment aware: a sibling-prefixed URL (…/docfoo/x)
+            // must NOT count as in-base for docBaseUri …/doc. The
+            // exact base URL itself still counts as in-base.
+            const base = docBaseUri.length === 0
+                ? ''
+                : (docBaseUri.endsWith('/') ? docBaseUri : docBaseUri + '/');
             return {
                 url,
-                inDocBaseUri: docBaseUri.length > 0
-                    ? url.startsWith(docBaseUri)
+                inDocBaseUri: base.length > 0
+                    ? (url === docBaseUri || url.startsWith(base))
                     : false,
             };
         });
