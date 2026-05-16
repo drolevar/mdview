@@ -92,6 +92,39 @@ TEST_CASE("path: too-short URI rejected", "[asset_router]") {
     CHECK_FALSE(parse_app_request_path(L"https://").has_value());
 }
 
+// B5: the request path runs in `noexcept` functions that allocate
+// (std::wstring / std::format). A throw there is std::terminate ->
+// the whole TC process dies mid-render. percent_decode_in_place_ is
+// the one isolatable allocating helper; it is reached transitively
+// through the public parse_app_request_path (same access pattern the
+// other cases above use). This pins the no-throw contract + the
+// decode correctness so a future edit can't regress either. Note:
+// deterministic bad_alloc injection needs an allocator seam we don't
+// have (out of scope); the OOM-terminate prevention on the HRESULT /
+// std::wstring sites is code-review-verified, not unit-tested.
+TEST_CASE("path: percent-decode never throws on malformed escape (B5)",
+          "[asset_router]") {
+    // Malformed hex in a %-escape: percent_decode_in_place_ must
+    // return false (rejection -> nullopt), never throw/terminate.
+    // (The trailing-'%'-at-end edge is a separate pre-existing
+    // boundary quirk, not in B5's no-throw scope.)
+    std::optional<std::wstring> r;
+    CHECK_NOTHROW(r = parse_app_request_path(
+        L"https://mdview-app.example/x%E0%A4%G1"));
+    CHECK_FALSE(r.has_value());
+
+    // Bad hex digit mid-path: same contract.
+    CHECK_NOTHROW(r = parse_app_request_path(
+        L"https://mdview-app.example/x%Zz.js"));
+    CHECK_FALSE(r.has_value());
+
+    // Valid round-trip stays correct: "%20" -> ' '.
+    CHECK_NOTHROW(r = parse_app_request_path(
+        L"https://mdview-app.example/a%20b"));
+    REQUIRE(r.has_value());
+    CHECK(*r == L"/a b");
+}
+
 using mdview::should_respond_304;
 
 TEST_CASE("304 helper: returns true when If-Modified-Since exactly matches Last-Modified",

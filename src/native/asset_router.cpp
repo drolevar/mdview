@@ -54,27 +54,34 @@ const std::wstring& last_modified_header_value_() {
 }
 
 bool percent_decode_in_place_(std::wstring& s) noexcept {
-    auto hex = [](wchar_t c) -> int {
-        if (c >= L'0' && c <= L'9') return c - L'0';
-        if (c >= L'a' && c <= L'f') return c - L'a' + 10;
-        if (c >= L'A' && c <= L'F') return c - L'A' + 10;
-        return -1;
-    };
-    std::wstring out;
-    out.reserve(s.size());
-    for (std::size_t i = 0; i < s.size(); ++i) {
-        if (s[i] == L'%' && i + 2 < s.size()) {
-            const int h = hex(s[i + 1]);
-            const int l = hex(s[i + 2]);
-            if (h < 0 || l < 0) return false;
-            out.push_back(static_cast<wchar_t>((h << 4) | l));
-            i += 2;
-        } else {
-            out.push_back(s[i]);
+    // noexcept: never let bad_alloc reach std::terminate on the
+    // per-request path. A failed allocation degrades to a clean
+    // rejection (false -> nullopt -> 404) instead of killing TC.
+    try {
+        auto hex = [](wchar_t c) -> int {
+            if (c >= L'0' && c <= L'9') return c - L'0';
+            if (c >= L'a' && c <= L'f') return c - L'a' + 10;
+            if (c >= L'A' && c <= L'F') return c - L'A' + 10;
+            return -1;
+        };
+        std::wstring out;
+        out.reserve(s.size());
+        for (std::size_t i = 0; i < s.size(); ++i) {
+            if (s[i] == L'%' && i + 2 < s.size()) {
+                const int h = hex(s[i + 1]);
+                const int l = hex(s[i + 2]);
+                if (h < 0 || l < 0) return false;
+                out.push_back(static_cast<wchar_t>((h << 4) | l));
+                i += 2;
+            } else {
+                out.push_back(s[i]);
+            }
         }
+        s = std::move(out);
+        return true;
+    } catch (...) {
+        return false;
     }
-    s = std::move(out);
-    return true;
 }
 
 std::wstring build_headers_(std::wstring_view content_type,
@@ -133,29 +140,43 @@ HRESULT respond_with_bytes_(
         std::wstring_view content_type, bool include_csp) noexcept {
     using Microsoft::WRL::ComPtr;
     using Microsoft::WRL::MakeAndInitialize;
-    ComPtr<EmbeddedResourceStream> stream;
-    RETURN_IF_FAILED(MakeAndInitialize<EmbeddedResourceStream>(
-        &stream, data, size));
+    // noexcept: build_headers_ / std::wstring(reason) allocate (and
+    // build_headers_ itself is not noexcept). On OOM, return a
+    // controlled E_OUTOFMEMORY WebView2 surfaces — never std::terminate.
+    try {
+        ComPtr<EmbeddedResourceStream> stream;
+        RETURN_IF_FAILED(MakeAndInitialize<EmbeddedResourceStream>(
+            &stream, data, size));
 
-    const auto headers = build_headers_(content_type, include_csp);
-    wil::com_ptr<ICoreWebView2WebResourceResponse> response;
-    RETURN_IF_FAILED(env->CreateWebResourceResponse(
-        stream.Get(), status, std::wstring(reason).c_str(),
-        headers.c_str(), &response));
-    return args->put_Response(response.get());
+        const auto headers = build_headers_(content_type, include_csp);
+        wil::com_ptr<ICoreWebView2WebResourceResponse> response;
+        RETURN_IF_FAILED(env->CreateWebResourceResponse(
+            stream.Get(), status, std::wstring(reason).c_str(),
+            headers.c_str(), &response));
+        return args->put_Response(response.get());
+    } catch (...) {
+        debug_log::log(L"wlx: asset-router respond_with_bytes_ OOM");
+        return E_OUTOFMEMORY;
+    }
 }
 
 HRESULT respond_not_found_(
         ICoreWebView2WebResourceRequestedEventArgs* args,
         ICoreWebView2Environment* env,
         std::wstring_view path_for_log) noexcept {
-    debug_log::log(L"wlx: asset-router 404 path={}", path_for_log);
-    static constexpr char kBody[] = "Not found";
-    return respond_with_bytes_(
-        args, env,
-        reinterpret_cast<const std::byte*>(kBody), sizeof(kBody) - 1,
-        404, L"Not Found",
-        L"text/plain; charset=utf-8", /*include_csp*/ false);
+    // noexcept: log formatting allocates; degrade to E_OUTOFMEMORY
+    // instead of std::terminate on the per-request path.
+    try {
+        debug_log::log(L"wlx: asset-router 404 path={}", path_for_log);
+        static constexpr char kBody[] = "Not found";
+        return respond_with_bytes_(
+            args, env,
+            reinterpret_cast<const std::byte*>(kBody), sizeof(kBody) - 1,
+            404, L"Not Found",
+            L"text/plain; charset=utf-8", /*include_csp*/ false);
+    } catch (...) {
+        return E_OUTOFMEMORY;
+    }
 }
 
 // M11: build a 304 Not Modified response with empty body and the
@@ -167,30 +188,42 @@ HRESULT respond_304_(
         ICoreWebView2Environment* env) noexcept {
     using Microsoft::WRL::ComPtr;
     using Microsoft::WRL::MakeAndInitialize;
-    ComPtr<EmbeddedResourceStream> empty_stream;
-    RETURN_IF_FAILED(MakeAndInitialize<EmbeddedResourceStream>(
-        &empty_stream, static_cast<const std::byte*>(nullptr),
-        static_cast<std::size_t>(0)));
+    // noexcept: the header string concatenation (and the one-time
+    // last_modified_header_value_ init) allocate. On OOM return
+    // E_OUTOFMEMORY, never std::terminate on the per-request path.
+    try {
+        ComPtr<EmbeddedResourceStream> empty_stream;
+        RETURN_IF_FAILED(MakeAndInitialize<EmbeddedResourceStream>(
+            &empty_stream, static_cast<const std::byte*>(nullptr),
+            static_cast<std::size_t>(0)));
 
-    std::wstring headers =
-        L"Last-Modified: " + last_modified_header_value_() + L"\r\n"
-        L"Cache-Control: no-cache, must-revalidate\r\n"
-        L"X-Content-Type-Options: nosniff\r\n";
+        std::wstring headers =
+            L"Last-Modified: " + last_modified_header_value_() + L"\r\n"
+            L"Cache-Control: no-cache, must-revalidate\r\n"
+            L"X-Content-Type-Options: nosniff\r\n";
 
-    wil::com_ptr<ICoreWebView2WebResourceResponse> response;
-    RETURN_IF_FAILED(env->CreateWebResourceResponse(
-        empty_stream.Get(),
-        304,
-        L"Not Modified",
-        headers.c_str(),
-        &response));
-    return args->put_Response(response.get());
+        wil::com_ptr<ICoreWebView2WebResourceResponse> response;
+        RETURN_IF_FAILED(env->CreateWebResourceResponse(
+            empty_stream.Get(),
+            304,
+            L"Not Modified",
+            headers.c_str(),
+            &response));
+        return args->put_Response(response.get());
+    } catch (...) {
+        debug_log::log(L"wlx: asset-router respond_304_ OOM");
+        return E_OUTOFMEMORY;
+    }
 }
 
 }  // namespace
 
 std::optional<std::wstring>
 parse_app_request_path(std::wstring_view uri) noexcept {
+  // noexcept: the path/collapsed std::wstrings (and the one-time
+  // app_origin_prefix_ init) allocate. On OOM degrade to nullopt
+  // (-> 404), never std::terminate on the per-request path.
+  try {
     const auto& prefix = app_origin_prefix_();
     if (uri.size() < prefix.size()) return std::nullopt;
     if (uri.substr(0, prefix.size()) != prefix) return std::nullopt;
@@ -230,17 +263,26 @@ parse_app_request_path(std::wstring_view uri) noexcept {
     }
 
     return path;
+  } catch (...) {
+    return std::nullopt;
+  }
 }
 
 HRESULT respond_unavailable(
         ICoreWebView2WebResourceRequestedEventArgs* args,
         ICoreWebView2Environment* env) noexcept {
-    static constexpr char kBody[] = "Service unavailable";
-    return respond_with_bytes_(
-        args, env,
-        reinterpret_cast<const std::byte*>(kBody), sizeof(kBody) - 1,
-        503, L"Service Unavailable",
-        L"text/plain; charset=utf-8", /*include_csp*/ false);
+    // noexcept: respond_with_bytes_ allocates internally; surface a
+    // controlled E_OUTOFMEMORY rather than std::terminate.
+    try {
+        static constexpr char kBody[] = "Service unavailable";
+        return respond_with_bytes_(
+            args, env,
+            reinterpret_cast<const std::byte*>(kBody), sizeof(kBody) - 1,
+            503, L"Service Unavailable",
+            L"text/plain; charset=utf-8", /*include_csp*/ false);
+    } catch (...) {
+        return E_OUTOFMEMORY;
+    }
 }
 
 bool should_respond_304(std::wstring_view if_modified_since,
@@ -253,6 +295,11 @@ bool should_respond_304(std::wstring_view if_modified_since,
 HRESULT handle_app_request(
         ICoreWebView2WebResourceRequestedEventArgs* args,
         ICoreWebView2Environment* env) noexcept {
+  // noexcept: this is the top of the per-request path; every helper
+  // below allocates. Any bad_alloc that slips a per-helper guard ends
+  // here as a controlled E_OUTOFMEMORY, never std::terminate / a
+  // killed TC process mid-render.
+  try {
     wil::com_ptr<ICoreWebView2WebResourceRequest> req;
     RETURN_IF_FAILED(args->get_Request(&req));
     wil::unique_cotaskmem_string uri;
@@ -317,6 +364,10 @@ HRESULT handle_app_request(
         static_cast<const std::byte*>(locked),
         static_cast<std::size_t>(size),
         200, L"OK", asset->content_type, /*include_csp*/ is_html);
+  } catch (...) {
+    debug_log::log(L"wlx: asset-router handle_app_request OOM");
+    return E_OUTOFMEMORY;
+  }
 }
 
 }  // namespace mdview
