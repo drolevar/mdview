@@ -146,6 +146,13 @@ TEST_CASE("acquire returns a bounded failure on a hung runtime",
     // Short timeout so the bounded-pump exit is exercised fast. Without
     // the bound, acquire() would block in GetMessageW indefinitely.
     detail::set_acquire_timeout_for_test(300);
+    // Restore the production default even if an assertion below throws,
+    // so a failing case can't leak the short timeout into later cases.
+    struct RestoreAcquireTimeout {
+        ~RestoreAcquireTimeout() {
+            detail::set_acquire_timeout_for_test(15000);
+        }
+    } restore_acquire_timeout;
     m.ensure_started();
 
     // State is stuck at Building (no ready callback). acquire() must
@@ -156,10 +163,6 @@ TEST_CASE("acquire returns a bounded failure on a hung runtime",
         result));
     CHECK(std::get<precache_manager::InitFailedToken>(result).hr
           == E_ABORT);
-
-    // Restore the production default so later cases in this process
-    // aren't slowed (or, worse, masked) by the short test timeout.
-    detail::set_acquire_timeout_for_test(15000);
 }
 
 TEST_CASE("precache rebuilds on ProcessFailed (within budget)",
