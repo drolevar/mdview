@@ -28,6 +28,17 @@ namespace {
 std::mutex g_windows_mutex;
 std::unordered_map<HWND, std::unique_ptr<mdview::PluginWindow>> g_windows;
 
+// HWND of a PluginWindow whose create() is mid-flight. PluginWindow::create
+// runs a modal message pump (precache acquire) before it returns, and that
+// pump dispatches arbitrary queued messages on TC's UI thread — TC could
+// re-enter ListCloseWindow for this HWND before ListLoadW has inserted it
+// into g_windows. Without the sentinel that close would miss g_windows and
+// fall through to ::DestroyWindow, tearing down a still-constructing window.
+// Set under g_windows_mutex from the on_hwnd_created callback before the
+// pump; cleared under the same mutex when create() returns (emplace) or
+// fails. Guarded by g_windows_mutex.
+HWND g_constructing_hwnd = nullptr;
+
 // Subclass TC's Lister (class TLister, a Delphi VCL form) so it paints
 // our dark color in WM_ERASEBKGND / WM_PAINT instead of VCL's default
 // clBtnFace white. Without this, the cold-F3 reveal flashes white
@@ -313,14 +324,33 @@ HWND __stdcall ListLoadW(HWND ParentWin, WCHAR* FileToLoad, int ShowFlags) {
     try {
         std::wstring path = (FileToLoad != nullptr)
             ? std::wstring(FileToLoad) : std::wstring();
+        // PluginWindow::create runs a modal pump (precache acquire)
+        // before it returns. Publish the HWND under g_windows_mutex
+        // via this callback BEFORE that pump so a reentrant
+        // ListCloseWindow can detect the in-construction window and
+        // defer instead of destroying it.
         auto window = mdview::PluginWindow::create(
-            ParentWin, std::move(path), ShowFlags);
+            ParentWin, std::move(path), ShowFlags,
+            [](HWND h) {
+                std::lock_guard<std::mutex> lock(g_windows_mutex);
+                g_constructing_hwnd = h;
+            });
         HWND hwnd = window->handle();
 
         std::lock_guard<std::mutex> lock(g_windows_mutex);
+        // Hand ownership to g_windows and clear the sentinel atomically
+        // under the same lock: a close arriving after this point finds
+        // the entry; one before found the sentinel and deferred.
+        g_constructing_hwnd = nullptr;
         g_windows.emplace(hwnd, std::move(window));
         return hwnd;
     } catch (...) {
+        {
+            // create() threw mid-construction; drop the sentinel so a
+            // later close doesn't wrongly defer for a dead HWND.
+            std::lock_guard<std::mutex> lock(g_windows_mutex);
+            g_constructing_hwnd = nullptr;
+        }
         mdview::debug_log::log(L"wlx: ListLoadW failed; using fallback window");
         return mdview::create_fallback_window(
             ParentWin, L"mdview failed to initialize. See debug output for details.");
@@ -339,6 +369,22 @@ void __stdcall ListCloseWindow(HWND ListWin) {
             if (it != g_windows.end()) {
                 doomed = std::move(it->second);
                 g_windows.erase(it);
+            }
+        }
+        // Reentrant close during PluginWindow::create's modal pump:
+        // the HWND exists but hasn't been emplaced into g_windows yet
+        // (find missed above, so doomed == nullptr). Destroying it
+        // here would tear it down out from under the in-flight
+        // create(). Defer — the post-create emplace owns it and the
+        // eventual real close (or ~PluginWindow) destroys it normally.
+        if (doomed == nullptr) {
+            std::lock_guard<std::mutex> lock(g_windows_mutex);
+            if (ListWin != nullptr && ListWin == g_constructing_hwnd) {
+                mdview::debug_log::log(
+                    L"wlx: ListCloseWindow deferred (window still "
+                    L"constructing) hwnd=0x{:p}",
+                    static_cast<void*>(ListWin));
+                return;
             }
         }
         // PluginWindow's destructor calls DestroyWindow on its HWND.
