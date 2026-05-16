@@ -100,7 +100,7 @@ function run(): void {
                         > = hasMath
                             ? import('./math-chunk.js').catch((e) => {
                                 log.error('math-chunk import failed: ' +
-                                    (e instanceof Error ? e.message : String(e)));
+                                    (e instanceof Error ? e.message : String(e ?? '')));
                                 return null;
                               })
                             : Promise.resolve(null);
