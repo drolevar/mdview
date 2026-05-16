@@ -617,6 +617,8 @@ void WebView2Host::install_handlers_() {
         noexcept -> HRESULT {
             auto alive = wp.lock();
             if (!alive) return S_OK;
+            // Ignore stray accel events before adopt (parked under HWND_MESSAGE).
+            if (phase_ != Phase::Adopted) return S_OK;
 
             COREWEBVIEW2_KEY_EVENT_KIND kind{};
             if (FAILED(args->get_KeyEventKind(&kind))) return S_OK;
@@ -650,7 +652,9 @@ void WebView2Host::install_handlers_() {
             -> HRESULT {
             auto alive = wp.lock();
             if (!alive) return S_OK;
-            HWND lister = ::GetParent(parent_hwnd_);
+            // Ignore stray focus events before adopt (parked under HWND_MESSAGE).
+            if (phase_ != Phase::Adopted) return S_OK;
+            HWND lister = ::GetAncestor(parent_hwnd_, GA_PARENT);
             if (lister != nullptr) {
                 ::PostMessageW(
                     lister, WM_COMMAND,
