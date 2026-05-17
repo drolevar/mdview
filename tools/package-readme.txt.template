@@ -32,6 +32,10 @@ REQUIREMENTS
   - Microsoft Edge WebView2 Runtime (preinstalled on current
     Windows 11; otherwise:
     https://developer.microsoft.com/microsoft-edge/webview2/ ).
+  - No Visual C++ redistributable needed (runtime linked static).
+  - Windows 7 SP1 / 8.1: works, but only with the last WebView2
+    runtime those systems support (v109). That build has had no
+    security updates since October 2023. Use at your own risk.
 
 LICENSE
   MIT. Copyright (c) 2026 Andrij Abyzov.

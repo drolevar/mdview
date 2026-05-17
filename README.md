@@ -23,7 +23,12 @@ Works on 32- and 64-bit Total Commander; the installer
 (`pluginst.inf`) auto-selects the binary matching TC's bitness.
 Requires the
 [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
-(preinstalled on current Windows 11). Full details, including manual
+(preinstalled on current Windows 11). No Visual C++
+redistributable is needed; the C/C++ runtime is linked
+statically. Windows 7 SP1 and 8.1 work too, but only with the
+last WebView2 runtime they can install (v109), which has had no
+security updates since October 2023, so use it at your own risk.
+Full details, including manual
 install: [docs/installing.md](docs/installing.md).
 
 ## Features

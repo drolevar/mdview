@@ -7,6 +7,12 @@
   install the WebView2 runtime from
   <https://developer.microsoft.com/microsoft-edge/webview2/> and try
   again.
+- **No Visual C++ redistributable** is required; the C/C++
+  runtime is linked statically into the plugin.
+- **Windows 7 SP1 / 8.1** are supported, but only with the last
+  WebView2 runtime they can install (v109). That runtime has
+  received no security updates since October 2023; use it at
+  your own risk.
 
 ## Recommended: drag-and-drop install
 
