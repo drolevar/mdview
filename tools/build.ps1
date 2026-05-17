@@ -98,6 +98,15 @@ try {
         }
     }
 
+    if ($Config -eq 'release') {
+        $wlx = Get-ChildItem (Join-Path $buildDir 'src\mdview.wlx*') |
+               Select-Object -First 1
+        if ($wlx) {
+            & (Join-Path $PSScriptRoot 'check-no-redist.ps1') -Binary $wlx.FullName
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+        }
+    }
+
     if ($Install) {
         if ($Config -ne 'release') {
             Write-Warning "install-to-totalcmd is release-only; skipping -Install for $Config"
