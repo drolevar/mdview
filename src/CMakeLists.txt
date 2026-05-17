@@ -20,6 +20,7 @@ add_library(mdview_core STATIC
     native/init_error.cpp
     native/precache_manager.cpp
     native/renderer_protocol.cpp
+    native/runtime_version.cpp
     native/viewer_host.cpp
     native/viewer_paths.cpp
     native/webview2_environment.cpp

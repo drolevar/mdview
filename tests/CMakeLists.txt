@@ -26,6 +26,7 @@ add_executable(mdview_tests
     native/test_listclose_reentrancy.cpp
     native/test_summary_v2.cpp
     native/test_log_bridge.cpp
+    native/test_runtime_version.cpp
     # Compiled into the unit-test exe too so test_summary_v2 can
     # exercise the parser without spinning up an integration session.
     integration/summary.cpp)

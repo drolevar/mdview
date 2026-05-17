@@ -1,9 +1,11 @@
 #include "native/webview2_environment.hpp"
 
 #include "native/debug_log.hpp"
+#include "native/runtime_version.hpp"
 #include "native/viewer_paths.hpp"
 
 #include <wrl.h>
+#include <wil/resource.h>
 
 #include <filesystem>
 
@@ -91,6 +93,21 @@ void WebView2Environment::deliver_(HRESULT hr,
         env_ = env;
         state_ = State::Ready;
         debug_log::log(L"env ready");
+
+        // One-shot heads-up when the runtime is the frozen,
+        // unpatched pre-110 line (what Windows 7/8.1 cap at).
+        // Log-only by design (no UI, no ini). deliver_ reaches
+        // Ready once per process (leaked singleton), so this
+        // fires at most once.
+        wil::unique_cotaskmem_string ver;
+        if (SUCCEEDED(env_->get_BrowserVersionString(&ver)) &&
+            ver && is_unpatched_legacy_runtime(ver.get())) {
+            debug_log::log(
+                L"runtime: legacy WebView2 {} (<110), unpatched "
+                L"since 2023-10; expected on Windows 7/8.1 -- "
+                L"rendering works, engine is not security-serviced",
+                ver.get());
+        }
     } else {
         cached_hr_ = SUCCEEDED(hr) ? E_FAIL : hr;
         state_ = State::Failed;
