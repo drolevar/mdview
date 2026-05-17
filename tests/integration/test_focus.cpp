@@ -104,10 +104,11 @@ TEST_CASE("itm_focus: WM_COMMAND posted to parent on WebView2 focus gain",
         std::chrono::milliseconds{10000});
     REQUIRE(ready);
 
-    // Dispatch focus via WM_SETFOCUS directly — this exercises the same
-    // production code path (PluginWindow::window_proc → viewer_->focus()
-    // → MoveFocus(PROGRAMMATIC) → GotFocus event → PostMessage ITM_FOCUS)
-    // without requiring OS focus grant or SetForegroundWindow.
+    // Dispatch focus via WM_SETFOCUS directly - this exercises the same
+    // production code path (PluginWindow::window_proc -> viewer_->focus()
+    // -> MoveFocus(PROGRAMMATIC) -> GotFocus event -> PostMessage
+    // ITM_FOCUS) without requiring OS focus grant or
+    // SetForegroundWindow.
     ::SendMessage(plugin, WM_SETFOCUS, 0, 0);
 
     bool got_focus = pump_until(

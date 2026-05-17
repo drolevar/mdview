@@ -27,7 +27,6 @@ public:
     std::filesystem::path module_directory() const;
 
     // Minimum plugin interface version required for ListLoadNextW.
-    // Reconcile with external/WLX_SDK_NOTES.md before M3.
     static constexpr PluginInterfaceVersion list_load_next_threshold{2, 0};
 
     bool supports_list_load_next() const noexcept {

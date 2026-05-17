@@ -33,11 +33,11 @@ param(
 if (-not $env:VSINSTALLDIR) {
     $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
     if (-not (Test-Path $vswhere)) {
-        throw "vswhere.exe not found at $vswhere — install Visual Studio Installer."
+        throw "vswhere.exe not found at $vswhere - install Visual Studio Installer."
     }
     $vsRoot = & $vswhere -latest -property installationPath
     if (-not $vsRoot) {
-        throw "vswhere returned no installations — install Visual Studio."
+        throw "vswhere returned no installations - install Visual Studio."
     }
     # Prepend the installer dir so VsDevCmd.bat's bare `vswhere.exe`
     # invocation resolves cleanly.
@@ -49,7 +49,7 @@ if (-not $env:VSINSTALLDIR) {
 if (-not $env:VCPKG_ROOT) {
     $vcpkg = Get-Command vcpkg -ErrorAction SilentlyContinue
     if (-not $vcpkg) {
-        throw "vcpkg not on PATH — VS install missing the vcpkg component."
+        throw "vcpkg not on PATH - VS install missing the vcpkg component."
     }
     $env:VCPKG_ROOT = Split-Path $vcpkg.Source -Parent
 }

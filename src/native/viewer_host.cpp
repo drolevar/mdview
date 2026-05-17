@@ -58,7 +58,7 @@ void ViewerHost::load_document(DocumentRequest request) {
     // safely conservative (re-renders a doc that might have mermaid).
     last_doc_requires_theme_rerender_ = true;
 
-    // Assign the monotonic id and remap the doc-dir virtual host
+    // Assign the monotonic id and point the doc host at the doc dir
     // before either dispatching now or queuing for replay on ready.
     // The remap result is reflected in base_uri so the renderer sees
     // the same baseline whether it ran now or later.
@@ -107,10 +107,11 @@ void ViewerHost::load_document(DocumentRequest request) {
         }
 
         // New doc-dir (or first user-driven load on this renderer):
-        // mapping changes don't propagate to the current page's
-        // resource loaders (WebView2 docs; WebView2Feedback #2456).
-        // Reload to force a fresh navigation; replay the pending
-        // load when the post-reload Ready arrives.
+        // the current page's resource loaders have already fetched
+        // doc-relative resources against the previous doc dir and
+        // won't re-request them without a fresh navigation. Reload to
+        // force one; replay the pending load when the post-reload
+        // Ready arrives.
         pending_load_ = std::move(request);
         state_        = State::Navigated;
         debug_log::log(L"viewer-host: reloading for new doc-dir");
@@ -157,15 +158,14 @@ void ViewerHost::apply_theme(Theme theme) {
     pending_theme_.reset();
 
     // Push the theme to the renderer immediately so cheap-and-instant
-    // changes (CSS toggle, hljs stylesheet swap) happen now…
+    // changes (CSS toggle, hljs stylesheet swap) happen now...
     post_set_theme_(theme);
 
-    // …and re-issue the most recent loadDocument iff the rendered DOM
-    // has theme-baked output. Only mermaid SVGs need this — math
+    // ...and re-issue the most recent loadDocument iff the rendered
+    // DOM has theme-baked output. Only mermaid SVGs need this - math
     // (currentColor), hljs (CSS classes) and markdown text all retint
     // via CSS. Skipping the re-render for the no-mermaid case avoids
-    // double work and matches the M5 design promise (Theme integration:
-    // "no re-render on light/dark toggle" for math).
+    // double work ("no re-render on light/dark toggle" for math).
     if (state_ == State::Loaded
         && !last_loaded_doc_dir_.empty()
         && last_doc_requires_theme_rerender_) {
@@ -212,7 +212,7 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
                 *t_renderer_ready_ - t_start_).count();
         debug_log::log(L"viewer-host: renderer ready t={}ms", ready_ms);
 
-        // M6: rebind_callbacks() (which runs after adopt()) already set
+        // rebind_callbacks() (which runs after adopt()) already set
         // put_IsVisible(TRUE); no show() call here. The controller's
         // first visible frame is the post-adopt reparented surface,
         // which is dark-themed via the controller default bg path.
@@ -238,17 +238,17 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
 
         // If the callback called load_document, state moved out of
         // RendererReady (into Navigated, queued for reload). Don't
-        // double-drain — the reload's own ready will handle it.
+        // double-drain - the reload's own ready will handle it.
         if (state_ != State::RendererReady) {
             return;
         }
 
         // Drain the snapshot directly (not via load_document). The
-        // current navigation is fresh and its loaders see the latest
-        // mapping, so a reload here would be redundant. Going through
-        // load_document would itself trigger reload because state is
-        // RendererReady; that's correct for *new* user requests but
-        // not for replaying a pre-ready queued load.
+        // current navigation is fresh and its loaders will fetch from
+        // the current doc dir, so a reload here would be redundant.
+        // Going through load_document would itself trigger reload
+        // because state is RendererReady; that's correct for *new*
+        // user requests but not for replaying a pre-ready queued load.
         if (snapshot.has_value()) {
             pending_load_ = std::move(snapshot);
             post_pending_directly_();
@@ -316,10 +316,11 @@ void ViewerHost::post_pending_directly_() {
     // ran before the host's WebView2 was ready (E_UNEXPECTED, leaves
     // base_uri empty). At this point the only navigation so far is
     // the bootstrap to mdview-app.example/index.html, which doesn't
-    // touch the doc-host mapping. The renderer's first resource
-    // fetches against mdview-doc.example happen only after we post
-    // the loadDocument message below and the renderer renders its
-    // markdown — by then the mapping is live. No reload needed.
+    // fetch from the doc host. The renderer's first resource fetches
+    // against mdview-doc.example happen only after we post the
+    // loadDocument message below and the renderer renders its
+    // markdown - by then the asset-router's doc dir is set. No
+    // reload needed.
     if (!req.doc_dir.empty() && req.base_uri.empty()) {
         const HRESULT hr = host_->remap_doc_dir(req.doc_dir);
         if (FAILED(hr)) {

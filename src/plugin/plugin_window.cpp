@@ -53,8 +53,8 @@ PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags,
     // Pick class + bg brush by TC theme BEFORE CreateWindowExW. Each
     // class has its own hbrBackground (dark or system) so the splash
     // shows on the correct bg when WM_PAINT's BeginPaint cycle runs
-    // WM_ERASEBKGND → DefWindowProc. (A single class with COLOR_WINDOW+1
-    // would paint white even in dark mode.)
+    // WM_ERASEBKGND -> DefWindowProc. (A single class with
+    // COLOR_WINDOW+1 would paint white even in dark mode.)
     window->is_dark_ = (theme_from_show_flags(show_flags) == Theme::Dark);
     const wchar_t* class_name = window->is_dark_ ? kClassNameDark
                                                  : kClassNameLight;
@@ -106,7 +106,7 @@ PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags,
     // the renderer's `ready` message was consumed) or EnvFailed. On
     // success, acquire() also drives put_ParentWindow + theme + raster
     // scale onto the real Lister HWND before returning. Callbacks are
-    // not yet wired — that's our job below via rebind_callbacks.
+    // not yet wired - that's our job below via rebind_callbacks.
     const Theme theme = theme_from_show_flags(show_flags);
     const float scale =
         static_cast<float>(::GetDpiForWindow(hwnd)) / 96.0f;
@@ -132,7 +132,7 @@ PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags,
     // inside acquire() right after we adopt the current one) sets its
     // default-bg to the right color from the start. This closes the
     // light-flash-before-dark window observed on TC-dark cold/recycle
-    // F3. The current acquire is unaffected — its bg was set when the
+    // F3. The current acquire is unaffected - its bg was set when the
     // build started, before TC told us about the dark theme.
     precache_manager::instance().note_theme(theme);
 
@@ -176,11 +176,11 @@ PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags,
     // Queue the first load BEFORE the synthetic-ready dispatch. With
     // viewer state == Navigated, load_document parks the request in
     // pending_load_; the synthetic ready that follows drains it via
-    // post_pending_directly_, avoiding the late-remap reload path
-    // (M4 audit). If we instead dispatched ready first, the viewer
-    // would already be in RendererReady when load_document arrives,
-    // and a new doc-dir would force host_->reload() — costing ~37 ms
-    // and surfacing two `ready` events through the message handler.
+    // post_pending_directly_, avoiding the late-remap reload path.
+    // If we instead dispatched ready first, the viewer would already
+    // be in RendererReady when load_document arrives, and a new
+    // doc-dir would force host_->reload() - costing ~37 ms and
+    // surfacing two `ready` events through the message handler.
     pw->load_next(window->file_to_load_, show_flags);
 
     // The renderer's real `ready` message was consumed during the
@@ -197,7 +197,7 @@ PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags,
 PluginWindow::PluginWindow(HWND hwnd, std::wstring file_to_load)
     : hwnd_(hwnd),
       file_to_load_(std::move(file_to_load)),
-      status_text_(L"Loading…") {
+      status_text_(L"Loading\u2026") {
 }
 
 PluginWindow::~PluginWindow() {
@@ -224,7 +224,7 @@ bool PluginWindow::load_next(std::wstring file_to_load,
         // load_document picks it up via request.theme. After ready, the
         // call is a no-op when the theme is unchanged (idempotency guard
         // in ViewerHost), so it's safe to call on every ListLoadNextW.
-        // ThemeChanged-driven re-renders skip this — theme is already
+        // ThemeChanged-driven re-renders skip this - theme is already
         // current there.
         if (show_flags) {
             const Theme t = theme_from_show_flags(*show_flags);
@@ -233,7 +233,7 @@ bool PluginWindow::load_next(std::wstring file_to_load,
                 viewer_->apply_theme(t);
             }
             // Update precache's last-known theme too, so any future
-            // recycle build (kicked by the next F3 close → reopen
+            // recycle build (kicked by the next F3 close -> reopen
             // cycle) starts with the right default-bg.
             precache_manager::instance().note_theme(t);
         }
@@ -252,8 +252,8 @@ bool PluginWindow::load_next(std::wstring file_to_load,
         if (result.error != DocumentError::None) {
             // Post the error as document content so once the WebView2
             // surface comes up the renderer shows the error message.
-            // The default status_text_ ("Loading…") covers the brief
-            // pre-renderer-ready window.
+            // The default status_text_ (the "Loading" splash) covers
+            // the brief pre-renderer-ready window.
             if (viewer_) {
                 DocumentRequest req;
                 req.file_path    = file_to_load;
@@ -290,7 +290,7 @@ bool PluginWindow::send_command(int command, int parameter) noexcept {
         // listplug.h: lc_newparams = 2. The lcp_darkmode (128) and
         // lcp_darkmodenative (256) bits in parameter indicate dark mode.
         // Other lc_* commands (lc_copy, lc_selectall, lc_setpercent)
-        // are logged and ignored for M4.
+        // are logged and ignored.
         if (command == lc_newparams) {
             const bool dark =
                 (parameter & lcp_darkmode) != 0 ||

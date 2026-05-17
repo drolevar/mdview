@@ -1,7 +1,7 @@
 // Math tokenization: custom inline/block rules. We tried
 // @vscode/markdown-it-katex but its top-level require("katex") pulls
-// KaTeX into the main bundle (~266 KB growth, verified 2026-05-11) even
-// when its render rules are overridden. The custom rules below emit
+// KaTeX into the main bundle (~266 KB growth) even when its render
+// rules are overridden. The custom rules below emit
 // `math_inline` / `math_block` tokens carrying the original TeX;
 // markdown.ts attaches the renderer rules that emit placeholders.
 // math-chunk.ts loads KaTeX lazily and renders.
@@ -37,7 +37,7 @@ function mathInline(state: StateInline, silent: boolean): boolean {
     const pos = state.pos;
 
     if (src.charCodeAt(pos) !== CC_DOLLAR) return false;
-    // Reject `$$` — block rule handles those.
+    // Reject `$$` - block rule handles those.
     if (pos + 1 < max && src.charCodeAt(pos + 1) === CC_DOLLAR) return false;
 
     // Opening `$` must not be followed by whitespace or a digit.

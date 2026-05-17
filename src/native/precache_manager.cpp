@@ -192,7 +192,7 @@ precache_manager::AcquireResult precache_manager::acquire(
     // so the WebView2 callbacks driving the state machine get a chance
     // to fire. The deadline is the only escape hatch for a *hung*
     // runtime (controller-create callback never fires, no
-    // ProcessFailed, no EnvFailed) — without it this loop, running on
+    // ProcessFailed, no EnvFailed) - without it this loop, running on
     // TC's UI thread, would freeze the whole app forever. A slow-but-
     // eventually-Parked precache still exits via the
     // state_ != State::Building check long before the deadline, so the
@@ -271,7 +271,7 @@ HWND precache_manager::create_message_only_parent_() noexcept {
         const ATOM atom = ::RegisterClassExW(&wc);
         if (atom == 0) {
             const DWORD err = ::GetLastError();
-            // ERROR_CLASS_ALREADY_EXISTS is fine — another DllMain
+            // ERROR_CLASS_ALREADY_EXISTS is fine - another DllMain
             // path may have already registered.
             if (err != ERROR_CLASS_ALREADY_EXISTS) {
                 debug_log::log(

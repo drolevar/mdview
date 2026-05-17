@@ -1,5 +1,5 @@
 // Perf regression gate. Runs a fixed set of fixtures through the
-// integration Session and dumps M10-probe log lines. Hard
+// integration Session and dumps the perf-probe log lines. Hard
 // assertion catches catastrophic regressions on the stress
 // fixture's initial-paint time. Tagged [perf] so it doesn't run
 // on every PR -- CI can opt in.
@@ -75,17 +75,17 @@ void run_fixture(const FixtureSpec& f) {
     dump_perf_lines(s.captured_log());
 
     if (f.path_or_name.find(L"18_perf_stress.md") != std::wstring::npos) {
-        // M10 regression gate: stress fixture's first-paint wall
-        // time must stay under 2500ms in the debug integration
-        // build. M8 baseline was ~3,500ms (release) and debug runs
-        // hotter -- typical measured run is ~900-1500ms here, so
-        // 2500ms is a "catastrophic regression" bound (~2x normal
-        // debug perf). Tight wins won't trip this; if it fires,
-        // something broke. The release-build numbers are tracked
-        // separately via manual smoke + dbgview.
+        // Regression gate: stress fixture's first-paint wall time
+        // must stay under 2500ms in the debug integration build.
+        // Baseline was ~3,500ms (release) and debug runs hotter --
+        // typical measured run is ~900-1500ms here, so 2500ms is a
+        // "catastrophic regression" bound (~2x normal debug perf).
+        // Tight wins won't trip this; if it fires, something broke.
+        // The release-build numbers are tracked separately via
+        // manual smoke + dbgview.
         // Native `render=Nms` from `viewer-host: first-load complete;
         // ctrl=Xms nav=Yms render=Zms total=Tms` -- WLX-observed wall
-        // time (renderer-ready → first paint). Includes a few ms of
+        // time (renderer-ready -> first paint). Includes a few ms of
         // nav/serialization beyond the renderer's self-reported
         // summary.durationMs.
         int render_ms = -1;

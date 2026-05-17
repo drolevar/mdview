@@ -31,10 +31,6 @@ namespace mdview {
 // controller parked under an HWND_MESSAGE parent. Its job is to amortize
 // the ~600-800 ms environment + controller creation cost across plugin
 // load (so cold F3 only pays for adoption + reparent + navigation).
-//
-// Task 3 (this file) lays down the state machine and a factory seam for
-// unit tests. The production path (real WebView2Host creation, modal
-// pump in acquire(), reparent on adopt) lands in Tasks 4-6.
 class precache_manager {
 public:
     // Process-lifetime singleton. The instance is never destroyed;
@@ -53,11 +49,10 @@ public:
     using AcquireResult =
         std::variant<std::unique_ptr<IWebView2Host>, InitFailedToken>;
 
-    // Block (via a modal message pump — implementation lands in
-    // Task 5) until the precache reaches Parked or EnvFailed. On
-    // Parked, transfer ownership of the adopted host to the caller and
-    // immediately schedule a new precache build. On EnvFailed, return
-    // InitFailedToken{hr}.
+    // Block (via a modal message pump) until the precache reaches
+    // Parked or EnvFailed. On Parked, transfer ownership of the
+    // adopted host to the caller and immediately schedule a new
+    // precache build. On EnvFailed, return InitFailedToken{hr}.
     AcquireResult acquire(HWND lister_hwnd,
                           Theme theme,
                           float raster_scale) noexcept;
@@ -65,7 +60,7 @@ public:
     // Hint about the most recently observed TC theme. PluginWindow calls
     // this from ListLoadW (and lc_newparams handlers) so subsequent
     // precache builds set their pre-CSS default background to the right
-    // color before reparent — closing the brief "light flash before
+    // color before reparent - closing the brief "light flash before
     // dark" window on cold F3 in TC-dark mode. Cold-start precache
     // (built before any F3) still uses Theme::System (white default).
     void note_theme(Theme theme) noexcept;
@@ -76,7 +71,7 @@ public:
     //    (see note_theme).
     //  - cold_start: true for the very first build per process. When
     //    true, no other controller exists yet, so it's safe to set
-    //    the shared Profile's PreferredColorScheme during the build —
+    //    the shared Profile's PreferredColorScheme during the build -
     //    eliminating the cold-F3 light-content flash. For subsequent
     //    (recycle) builds, an active controller exists, so the build
     //    must NOT touch Profile (would clobber the live controller).
@@ -124,7 +119,7 @@ private:
 
     // Hosts queued for deferred destruction. Filled by
     // on_precache_process_failed_ / on_env_init_failed_ when a host's
-    // own std::function callback is currently on our call stack —
+    // own std::function callback is currently on our call stack -
     // destroying the host inline would free the function object whose
     // operator() is still executing. PostMessage to
     // hwnd_message_parent_ schedules a msg_only_proc_ visit that

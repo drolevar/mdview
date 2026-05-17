@@ -112,10 +112,10 @@ TEST_CASE("math worker path activates on docs with >8 placeholders",
 
 TEST_CASE("math: theme change does not re-render math",
           "[integration][math][theme]") {
-    // Per the M5 design ("Theme integration"): KaTeX uses currentColor,
-    // so a math-only doc retints via CSS without re-rendering. The
-    // renderer emits `requiresThemeRerender` on every `rendered` ack;
-    // ViewerHost::apply_theme gates the ThemeChanged event on it.
+    // KaTeX uses currentColor, so a math-only doc retints via CSS
+    // without re-rendering. The renderer emits `requiresThemeRerender`
+    // on every `rendered` ack; ViewerHost::apply_theme gates the
+    // ThemeChanged event on it.
     Session s;
     REQUIRE(s.load(L"15_math_basic.md"));
     auto first = s.wait_for_summary();
@@ -124,7 +124,7 @@ TEST_CASE("math: theme change does not re-render math",
     s.reset_log();
     s.send_command(lc_newparams, lcp_darkmode);
 
-    // No rendered summary should follow within the wait window —
+    // No rendered summary should follow within the wait window -
     // math is CSS-themed in place, no loadDocument re-issue.
     auto second = s.wait_for_summary(std::chrono::milliseconds{1500});
     CHECK_FALSE(second.has_value());

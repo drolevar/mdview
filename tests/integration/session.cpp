@@ -24,7 +24,7 @@ namespace {
 // cmake/TcmdPlugin.cmake: 64-bit -> mdview.wlx64, ARM64 ->
 // mdview.wlxa64, 32-bit -> mdview.wlx. The integration exe and the
 // WLX are produced by the same CMake preset, so the exe's own
-// bitness always matches the WLX it must load — a compile-time
+// bitness always matches the WLX it must load - a compile-time
 // selector is correct here.
 #if defined(_M_ARM64) || defined(__aarch64__)
 constexpr const wchar_t* kWlxName = L"mdview.wlxa64";
@@ -72,11 +72,11 @@ Session::Session() {
     current_ = this;
     try {
         sink_event_ = ::CreateEventW(nullptr, FALSE, FALSE, nullptr);
-        // M8: post-embedded-assets the WLX must never read viewer/ from
-        // disk. The CMake viewer_stage target still drops viewer/ next
-        // to the WLX in the build tree (harmless legacy). Remove
-        // it before loading the DLL so any accidental disk read would
-        // fail loudly rather than silently fall back to a stale copy.
+        // The WLX serves viewer assets from embedded RCDATA and must
+        // never read viewer/ from disk. Remove any viewer/ left next
+        // to the WLX (e.g. from an old staged install) before loading
+        // the DLL so an accidental disk read fails loudly rather than
+        // silently falling back to a stale copy.
         const auto wlx_path = resolve_wlx_path();
         if (!wlx_path.empty()) {
             std::error_code ec;
@@ -198,7 +198,7 @@ void Session::load_dll_() {
         ::GetProcAddress(dll_, "MdviewTest_SetLogSink"));
     if (!fn_set_log_sink_) {
         throw std::runtime_error(
-            "WLX missing MdviewTest_SetLogSink export — "
+            "WLX missing MdviewTest_SetLogSink export - "
             "rebuild with current changes");
     }
     fn_set_log_sink_(&Session::on_log_line_);
@@ -286,7 +286,7 @@ Session::wait_for_summary(std::chrono::milliseconds timeout) {
         },
         timeout, sink_event_);
 
-    // Snapshot regardless of timeout outcome — tests that exercise the
+    // Snapshot regardless of timeout outcome - tests that exercise the
     // env-failed / fast-failure paths intentionally wait for no
     // summary but still need captured_log() to see the lines that
     // *did* fire.

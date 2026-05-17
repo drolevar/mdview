@@ -1,10 +1,10 @@
-// B2 (M15 Task 10): the ListLoadW/g_windows registration-window
-// reentrancy guard.
+// Tests the ListLoadW/g_windows registration-window reentrancy
+// guard.
 //
 // Hazard: ListLoadW calls PluginWindow::create, which runs a modal
 // message pump (precache acquire) BEFORE it returns. During that pump
 // TC's UI thread can dispatch a reentrant ListCloseWindow for the
-// just-created HWND — but ListLoadW has not yet inserted it into
+// just-created HWND - but ListLoadW has not yet inserted it into
 // g_windows. ListCloseWindow's g_windows.find then misses and its
 // fallback ::DestroyWindow tears down a still-constructing window
 // (use-after-free on the partially-built PluginWindow).
@@ -20,7 +20,7 @@
 //
 // g_windows / g_constructing_hwnd / ListLoadW / ListCloseWindow are
 // file-static in plugin/wlx_exports.cpp, which is linked ONLY into the
-// mdview_wlx DLL — never into mdview_core / mdview_tests. The
+// mdview_wlx DLL - never into mdview_core / mdview_tests. The
 // integration Session harness drives the real DLL exports but spins up
 // a REAL WebView2 precache and exposes no seam to (a) hold acquire's
 // pump open deterministically nor (b) inject a reentrant
@@ -29,17 +29,17 @@
 // fully deterministic end-to-end reentrancy test is infeasible through
 // either harness.
 //
-// Coverage here, per the task's honest-fallback path:
+// Coverage here:
 //   * The load-bearing half (pre-pump publish) is tested deterministically
 //     against the real PluginWindow::create via the MDVIEW_FORCE_ENV_FAILURE
-//     seam, which returns before precache acquire — so the callback
+//     seam, which returns before precache acquire - so the callback
 //     ordering relative to the pump boundary is asserted without a real
 //     pump.
 //   * The ListCloseWindow short-circuit decision is locked by a
 //     truth-table test of the predicate in isolation.
-//   * The true cross-export reentrant-close-during-real-pump is the
-//     manual-smoke ship-gate line in the M15 plan Task 12 Step 2
-//     ("B2: reentrant close during the cold-F3 modal pause → no crash").
+//   * The true cross-export reentrant-close-during-real-pump is
+//     covered by manual smoke (reentrant close during the cold-F3
+//     modal pause must not crash).
 
 #include "plugin/listclose_defer.hpp"
 #include "plugin/plugin_window.hpp"
@@ -91,9 +91,9 @@ TEST_CASE(
     // Force the env-failure short-circuit: PluginWindow::create then
     // creates the real HWND, fires on_hwnd_created, and returns BEFORE
     // precache_manager::acquire (the modal pump). This deterministically
-    // exercises the exact ordering the guard depends on — the HWND is
+    // exercises the exact ordering the guard depends on - the HWND is
     // handed to the caller before any pump could dispatch a reentrant
-    // ListCloseWindow — without standing up a real WebView2 precache.
+    // ListCloseWindow - without standing up a real WebView2 precache.
     ScopedEnvVar guard{L"MDVIEW_FORCE_ENV_FAILURE", L"1"};
 
     HWND parent = ::CreateWindowExW(
@@ -112,7 +112,7 @@ TEST_CASE(
         [&](HWND h) {
             ++cb_count;
             cb_hwnd = h;
-            // The HWND must already be a live window when published —
+            // The HWND must already be a live window when published -
             // a reentrant close arriving here has a real HWND to act on.
             cb_window_valid_at_callback = (::IsWindow(h) != FALSE);
         });
@@ -129,7 +129,7 @@ TEST_CASE(
     CHECK(::IsWindow(window->handle()) != FALSE);
 
     // Default-constructed callback path (every other caller) must still
-    // compile and work — no callback, no crash, window still created.
+    // compile and work - no callback, no crash, window still created.
     auto window2 = mdview::PluginWindow::create(
         parent, L"C:/nonexistent/forced-env-fail-2.md", 0);
     CHECK(window2 != nullptr);

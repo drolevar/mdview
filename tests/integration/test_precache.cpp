@@ -57,7 +57,7 @@ TEST_CASE("F3 completes under budget and exercises precache adopt path",
 
 TEST_CASE("subsequent F3 reuses env, fresh controller is recycled",
           "[integration][precache]") {
-    // First Session — drives the initial F3 and exits (~Session
+    // First Session - drives the initial F3 and exits (~Session
     // calls close()). After Session destructs, precache_manager has
     // started a new build for the next F3.
     {
@@ -74,7 +74,7 @@ TEST_CASE("subsequent F3 reuses env, fresh controller is recycled",
     pump_until([] { return false; },
                std::chrono::milliseconds{2000});
 
-    // Second Session — should see a fresh adopt, no fresh env init.
+    // Second Session - should see a fresh adopt, no fresh env init.
     Session s2;
     s2.reset_log();
     const auto t0 = std::chrono::steady_clock::now();
@@ -135,7 +135,7 @@ TEST_CASE("env init failure shows install URL via format_init_error",
     CHECK(log_contains(s.captured_log(),
                        L"plugin_window: MDVIEW_FORCE_ENV_FAILURE=1"));
 
-    // adopt() must NOT have run — the whole point of the env-failed
+    // adopt() must NOT have run - the whole point of the env-failed
     // path is that precache_manager::acquire was never called.
     CHECK_FALSE(log_contains(s.captured_log(),
                              L"webview2-host: adopt to lister="));

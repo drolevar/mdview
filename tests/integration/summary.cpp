@@ -55,8 +55,8 @@ parse_summary_json(const std::wstring& payload) {
                     ? m["chunkLoadMs"].get<int>()
                     : -1)
                 : -1;
-            s.mermaid_placeholders_seen = m.value("placeholdersSeen", 0);  // M10
-            s.mermaid_foreground_count  = m.value("foregroundCount", 0);   // schema v5
+            s.mermaid_placeholders_seen = m.value("placeholdersSeen", 0);
+            s.mermaid_foreground_count  = m.value("foregroundCount", 0);
             if (m.contains("diagrams") && m["diagrams"].is_array()) {
                 for (auto& d : m["diagrams"]) {
                     DiagramRecord r;
@@ -76,10 +76,10 @@ parse_summary_json(const std::wstring& payload) {
             }
         }
 
-        // Schema v2/v3: optional math field. Tolerates four shapes —
-        // missing (v1), explicit null (v2/v3 with no math), v2 object
-        // (workerUsed / workerWallMs absent → default false / -1), and
-        // v3 fully populated object.
+        // Optional math field. Tolerates four shapes for back-compat:
+        // missing, explicit null (no math), object without
+        // workerUsed / workerWallMs (default false / -1), and a fully
+        // populated object.
         if (auto math_it = j.find("math");
             math_it != j.end() && !math_it->is_null()
             && math_it->is_object()) {

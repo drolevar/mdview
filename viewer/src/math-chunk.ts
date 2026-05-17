@@ -227,7 +227,8 @@ function accumulate(
     }
 }
 
-// Synchronous fallback — preserves the M8 behavior exactly.
+// Synchronous in-thread fallback (worker-spawn failure / timeout /
+// small-doc short-circuit).
 function renderOneSync(
         el:     HTMLElement,
         kind:   'inline' | 'display',

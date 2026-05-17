@@ -32,10 +32,10 @@ TEST_CASE("encoding::decode strips UTF-8 BOM and decodes ASCII",
 
 TEST_CASE("encoding::decode strips UTF-8 BOM and decodes multi-byte",
           "[encoding]") {
-    // U+00E9 'é' = 0xC3 0xA9 in UTF-8.
+    // U+00E9 (small e with acute) = 0xC3 0xA9 in UTF-8.
     auto in = bytes_from({0xEF, 0xBB, 0xBF, 0xC3, 0xA9});
     auto s = encoding::decode(in);
-    REQUIRE(s == L"é");
+    REQUIRE(s == L"\u00e9");
 }
 
 TEST_CASE("encoding::decode falls through to CP_ACP when UTF-8 BOM "
@@ -83,8 +83,9 @@ TEST_CASE("encoding::decode falls back to CP_ACP for invalid UTF-8 "
     // 0xE9 alone is invalid UTF-8 (high-byte without continuation).
     auto in = bytes_from({0xE9});
     auto s = encoding::decode(in);
-    // On CP1252 systems the result is L"é". On other ANSI
-    // codepages the result differs; assert non-empty and length 1.
+    // On CP1252 systems the result is U+00E9 (small e with acute).
+    // On other ANSI codepages the result differs; assert non-empty
+    // and length 1.
     REQUIRE(s.size() == 1);
 }
 

@@ -6,7 +6,7 @@ function post(level: LogLevel, text: string): void {
         window.chrome.webview.postMessage(msg);
     } catch {
         // chrome.webview unavailable (e.g. running outside WebView2 for
-        // unit testing). Drop silently — the renderer can't usefully do
+        // unit testing). Drop silently - the renderer can't usefully do
         // anything else here.
     }
 }
@@ -19,7 +19,7 @@ export const log = {
 
 // Forward uncaught JS errors so they surface in dbgview alongside the
 // native log stream. Today these only reach the host via postRenderError
-// which is gated on document-render — async failures during worker
+// which is gated on document-render - async failures during worker
 // callbacks or theme changes are otherwise silent.
 export function installGlobalErrorForwarders(): void {
     window.addEventListener('error', (ev) => {

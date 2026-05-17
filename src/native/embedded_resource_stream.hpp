@@ -18,7 +18,7 @@ namespace mdview {
 //       &s, data, size));
 //
 // Read/Seek/Stat are implemented; everything else returns E_NOTIMPL
-// or a sensible no-op. Not thread-safe — WebView2 dispatches a given
+// or a sensible no-op. Not thread-safe - WebView2 dispatches a given
 // stream's reads from a single thread.
 class EmbeddedResourceStream
     : public Microsoft::WRL::RuntimeClass<

@@ -26,7 +26,7 @@ std::wstring mb_to_wide(UINT codepage, DWORD flags,
                         std::span<const std::byte> bytes) {
     if (bytes.empty()) return {};
     if (bytes.size() > static_cast<size_t>(INT_MAX)) {
-        // Defensive: MultiByteToWideChar takes int. M3's DocumentLoader
+        // Defensive: MultiByteToWideChar takes int. DocumentLoader
         // caps at 32 MB so this is effectively unreachable, but it
         // documents the contract for future callers.
         return {};
@@ -80,7 +80,7 @@ std::wstring decode(std::span<const std::byte> bytes) {
         auto body = bytes.subspan(3);
         auto s = mb_to_wide(CP_UTF8, MB_ERR_INVALID_CHARS, body);
         if (!s.empty() || body.empty()) return s;
-        // BOM lied — fall through.
+        // BOM lied - fall through.
         return mb_to_wide(CP_ACP, 0, body);
     }
 

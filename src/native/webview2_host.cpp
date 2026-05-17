@@ -142,9 +142,8 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                             const std::wstring doc_filter =
                                 std::wstring(L"https://") +
                                 kDocHostName + L"/*";
-                            // M10 audit retrofit: migrate to the
-                            // WithRequestSourceKinds overload introduced
-                            // in WebView2 SDK 1.0.1722.45. The old
+                            // Use the WithRequestSourceKinds overload
+                            // (WebView2 SDK 1.0.1722.45+). The old
                             // AddWebResourceRequestedFilter is deprecated;
                             // the new variant requires explicit
                             // RequestSourceKinds (we want the default:
@@ -230,11 +229,11 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
 
                         // Doc host (kDocHostName) is served by the
                         // WebResourceRequested asset-router (see
-                        // asset_router handle_doc_request) — the same
-                        // path that reliably serves the app host.
-                        // Nothing to pre-map; set_current_doc_dir
-                        // (called from remap_doc_dir per load) points
-                        // it at the document's directory.
+                        // asset_router handle_doc_request) - the same
+                        // path that serves the app host. Nothing to
+                        // pre-map; set_current_doc_dir (called from
+                        // remap_doc_dir per load) points it at the
+                        // document's directory.
 
                         // Apply controller-local default-bg always.
                         apply_default_bg_to_controller_();
@@ -242,7 +241,7 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                         // same Environment; setting PreferredColorScheme
                         // during a build clobbers the active (adopted)
                         // controller. So we only set it on the cold-start
-                        // build, where no other controller exists yet —
+                        // build, where no other controller exists yet -
                         // this lets the renderer pre-render dark content
                         // and eliminates the cold-F3 light-flash.
                         if (cold_start_profile_safe_) {
@@ -394,10 +393,10 @@ HRESULT WebView2Host::remap_doc_dir(
         const std::filesystem::path& doc_dir) noexcept {
     if (!webview_) return E_UNEXPECTED;
     // The doc host is served by the WebResourceRequested asset-router
-    // (handle_doc_request), not SetVirtualHostNameToFolderMapping —
-    // the virtual-host mapping silently fails for cross-origin
-    // fetches from the app-host page (broke every doc-relative <img>
-    // since M8). Just point the router at the new doc dir.
+    // (handle_doc_request), not a virtual-host folder mapping - the
+    // mapping silently fails for cross-origin fetches from the
+    // app-host page (which broke every doc-relative <img>). Just
+    // point the router at the new doc dir.
     mdview::set_current_doc_dir(doc_dir);
     debug_log::log(L"wlx: doc-dir set dir={}", doc_dir.wstring());
     return S_OK;

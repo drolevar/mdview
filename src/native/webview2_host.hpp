@@ -30,7 +30,7 @@ public:
     // renderer to send `{"type":"ready"}`. The controller is created
     // hidden (put_IsVisible(FALSE)); adopt() reparents to the real
     // Lister HWND but leaves it hidden. rebind_callbacks() reveals it
-    // once the message handler is wired (the M6 race fix).
+    // once the message handler is wired (the race fix).
     //
     // `initial_theme` is the most-recently-observed TC theme at build
     // time; the controller's DefaultBackgroundColor is set from it
@@ -52,7 +52,7 @@ public:
     // `cold_start` true means this is the very first precache build per
     // process, and no other controller exists yet. In that case the
     // build also sets the WebView2 Profile's PreferredColorScheme so
-    // the renderer pre-renders content with the right theme — avoids
+    // the renderer pre-renders content with the right theme - avoids
     // the cold-F3 light-content flash. For subsequent (recycle) builds
     // this must be false, since touching the shared Profile would
     // clobber the active adopted controller.
@@ -91,7 +91,7 @@ private:
     void apply_settings_();
     void install_handlers_();
 
-    // put_DefaultBackgroundColor only — controller-local, safe to call
+    // put_DefaultBackgroundColor only - controller-local, safe to call
     // at any phase (including during the precache build, before adopt).
     void apply_default_bg_to_controller_() noexcept;
 
@@ -128,8 +128,8 @@ private:
     Theme                                      pending_color_scheme_ = Theme::System;
     // Set to true by create_under_message_only when this is the very
     // first precache build per process. Allows the build path to set
-    // the shared Profile.PreferredColorScheme — otherwise unsafe because
-    // it would clobber an active adopted controller.
+    // the shared Profile.PreferredColorScheme - otherwise unsafe
+    // because it would clobber an active adopted controller.
     bool                                       cold_start_profile_safe_ = false;
 };
 

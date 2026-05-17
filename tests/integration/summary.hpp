@@ -26,9 +26,9 @@ struct MathErrorRecord {
     std::string message;
 };
 
-// Mirrors the schema v3 `math` field in viewer/src/protocol.ts. The
-// `inline` and `display` JS names collide with C++ keywords / could
-// be confusing, so we suffix-disambiguate on the C++ side.
+// Mirrors the `math` field in viewer/src/protocol.ts. The `inline`
+// and `display` JS names collide with C++ keywords / could be
+// confusing, so we suffix-disambiguate on the C++ side.
 struct MathSummary {
     bool chunk_loaded   = false;
     int  chunk_load_ms  = -1;   // -1 sentinel = JSON null / absent
@@ -48,7 +48,7 @@ struct MathSummary {
 struct ImageRequestRecord {
     std::string url;
     bool        in_doc_base_uri = false;
-    bool        loaded          = false;   // schema v6; false pre-v6
+    bool        loaded          = false;   // false if absent on wire
 };
 
 struct RenderedSummary {
@@ -63,21 +63,21 @@ struct RenderedSummary {
     std::vector<CodeFenceRecord> code_fences;
     bool   mermaid_chunk_loaded = false;
     int    mermaid_chunk_load_ms = -1;
-    // M10: total placeholders discovered in the DOM at first-paint
-    // time. Mirrors the math.placeholders_seen pattern (M9). Lets
-    // tests assert "doc has N diagrams" even when the initial summary
-    // only carries the first foreground chunk's outcomes.
+    // Total placeholders discovered in the DOM at first-paint time.
+    // Mirrors math.placeholders_seen. Lets tests assert "doc has N
+    // diagrams" even when the initial summary only carries the first
+    // foreground chunk's outcomes.
     int    mermaid_placeholders_seen = 0;
-    // Schema v5: size of the foreground (first POOL_SIZE) slice,
-    // snapshotted in the renderer before background chunks push into
-    // diagrams[]. Deterministic, unlike mermaid_diagrams.size() which
-    // races the background idle-fill during the awaited math pass.
-    // Defaults to 0 for pre-v5 payloads.
+    // Size of the foreground (first POOL_SIZE) slice, snapshotted in
+    // the renderer before background chunks push into diagrams[].
+    // Deterministic, unlike mermaid_diagrams.size() which races the
+    // background idle-fill during the awaited math pass. Defaults to
+    // 0 if absent on wire.
     int    mermaid_foreground_count = 0;
     std::vector<DiagramRecord>   mermaid_diagrams;
 
-    // nullopt in schema v1 payloads and in v2 payloads where the doc
-    // contained no math (wire shape: `"math": null`).
+    // nullopt when the math field is absent, or present-but-null
+    // because the doc contained no math (wire shape: `"math": null`).
     std::optional<MathSummary> math;
 
     std::vector<ImageRequestRecord> image_requests;

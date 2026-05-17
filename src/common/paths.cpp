@@ -17,7 +17,7 @@ std::filesystem::path module_directory(HMODULE module_handle) {
         if (copied < buffer.size()) {
             break;
         }
-        // Buffer too small — grow and retry.
+        // Buffer too small - grow and retry.
         if (buffer.size() >= 32 * 1024) {
             throw std::runtime_error("module_directory: path exceeds 32 KiB");
         }
