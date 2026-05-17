@@ -3,9 +3,8 @@
 ## Requirements
 
 - **Total Commander**, 32-bit or 64-bit.
-- **Microsoft Edge WebView2 Runtime.** Preinstalled on current
-  Windows 11. If a `.md` file opens to an error about the runtime,
-  install the Evergreen runtime from
+- **Microsoft Edge WebView2 Runtime.** If a `.md` file opens to an error about the runtime,
+  install the WebView2 runtime from
   <https://developer.microsoft.com/microsoft-edge/webview2/> and try
   again.
 
@@ -13,8 +12,7 @@
 
 1. Download the latest `mdview-X.Y.Z.zip` from the
    [Releases](https://github.com/drolevar/mdview/releases) page.
-2. In Total Commander, open the `.zip` (Ctrl+PageDown on it) or drag
-   it onto a panel.
+2. In Total Commander, open the `.zip`.
 3. Total Commander detects the bundled `pluginst.inf` and prompts to
    install the plugin. Accept.
 4. Total Commander copies the matching binary into its plugin
