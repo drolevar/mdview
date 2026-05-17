@@ -59,13 +59,13 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/build/windows-msvc-${{ matrix.arch }}-debug/vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ matrix.arch }}-debug-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          key: vcpkg-${{ runner.os }}-${{ matrix.arch }}-debug-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'CMakePresets.json') }}
 
       - name: Cache vcpkg installed (release)
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/build/windows-msvc-${{ matrix.arch }}-release/vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ matrix.arch }}-release-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          key: vcpkg-${{ runner.os }}-${{ matrix.arch }}-release-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'CMakePresets.json') }}
 
       - name: Configure (debug)
         run: cmake --preset windows-msvc-${{ matrix.arch }}-debug
@@ -141,6 +141,12 @@ jobs:
 
       - name: Build (release)
         run: cmake --build --preset windows-msvc-${{ matrix.arch }}-release
+
+      - name: Assert no VC++ redist dependency (release)
+        shell: pwsh
+        run: |
+          $wlx = (Get-ChildItem "build/windows-msvc-${{ matrix.arch }}-release/src/mdview.wlx*" | Select-Object -First 1).FullName
+          ./tools/check-no-redist.ps1 -Binary $wlx
 
       - name: Stage release WLX
         shell: pwsh
