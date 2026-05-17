@@ -1,0 +1,9 @@
+{
+  "name": "win7-spike",
+  "version-string": "0.0.0",
+  "description": "M16 static-CRT WebView2 Win7 feasibility spike",
+  "dependencies": [
+    "wil",
+    "webview2"
+  ]
+}
