@@ -486,7 +486,7 @@ private:
             log_f(L"step10: put_RasterizationScale({:.3f}) hr={}", scale, hr_hex(hr));
             all_ok = all_ok && SUCCEEDED(hr);
             if (FAILED(hr)) {
-                log_f(L"step10: put_RasterizationScale FAILED — will proceed without scale");
+                log_f(L"step10: put_RasterizationScale FAILED \u2014 will proceed without scale");
             }
         } else {
             result_.c3_available = false;

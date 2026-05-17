@@ -1,9 +1,9 @@
 # cmake/GenerateViewerResources.cmake
 #
 # Script-mode CMake that emits two artifacts from viewer/dist:
-#   * ${OUTPUT_RC}  — Windows resource script. One RCDATA entry per
+#   * ${OUTPUT_RC}  - Windows resource script. One RCDATA entry per
 #                     embedded asset; resource IDs start at 2000.
-#   * ${OUTPUT_CPP} — C++ source defining the runtime asset table
+#   * ${OUTPUT_CPP} - C++ source defining the runtime asset table
 #                     consumed by native/embedded_assets.hpp.
 #
 # Invoked from CMakeLists.txt via:
@@ -14,7 +14,7 @@
 #
 # Entries are sorted by URL path so the runtime table is
 # binary-searchable. The CSP-relevant content_type field is filled
-# from a fixed extension → MIME map (see mime_for_extension below).
+# from a fixed extension -> MIME map (see mime_for_extension below).
 
 if(NOT DEFINED ASSET_DIR OR NOT DEFINED OUTPUT_RC OR NOT DEFINED OUTPUT_CPP)
     message(FATAL_ERROR
@@ -24,7 +24,7 @@ endif()
 
 if(NOT EXISTS "${ASSET_DIR}")
     message(FATAL_ERROR
-        "ASSET_DIR (${ASSET_DIR}) does not exist — "
+        "ASSET_DIR (${ASSET_DIR}) does not exist - "
         "did you run `npm run build` in viewer/?")
 endif()
 
@@ -38,7 +38,7 @@ list(FILTER ALL_FILES EXCLUDE REGEX "(^|/)\\.")     # any other dotfile
 
 if(NOT ALL_FILES)
     message(FATAL_ERROR
-        "ASSET_DIR (${ASSET_DIR}) has no embeddable files — "
+        "ASSET_DIR (${ASSET_DIR}) has no embeddable files - "
         "did you run `npm run build` in viewer/?")
 endif()
 
@@ -46,7 +46,7 @@ endif()
 # enabling binary-search lookup at runtime.
 list(SORT ALL_FILES)
 
-# Extension → MIME, queried at generate-time. Unknown extension is
+# Extension -> MIME, queried at generate-time. Unknown extension is
 # a warning so we notice if Vite ever emits a new format.
 function(mime_for_extension EXT OUT)
     string(TOLOWER "${EXT}" EXT)

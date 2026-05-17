@@ -33,7 +33,7 @@ export interface LoadDocumentDocument {
 // live render target (before the first loadDocument, or between
 // docs). A valid in-range integer the native decoder accepts
 // (get_int_in_range) and distinct from every real id (real ids are
-// positive, monotonic) — lets the host tell the error is not tied
+// positive, monotonic) - lets the host tell the error is not tied
 // to a live render.
 export const NO_DOC_ID = -1;
 
@@ -42,14 +42,14 @@ export interface LoadDocumentMessage {
     // Envelope `version` is intentionally frozen at 1. Message *shape*
     // evolves additively (new fields optional). The native decoder
     // hard-gates version===1 and logs "version mismatch got=N want=1"
-    // on any other value — a real bump needs a coordinated native
+    // on any other value - a real bump needs a coordinated native
     // change; do not raise this casually.
     version:  1;
     id:       number;
     document: LoadDocumentDocument;
     options:  ViewerOptions;
-    theme?:   ThemeName;     // M4; absent treated as 'system'
-    summary?: boolean;       // M4; integration harness only
+    theme?:   ThemeName;     // absent treated as 'system'
+    summary?: boolean;       // integration harness only
 }
 
 export interface SetThemeMessage {
@@ -81,16 +81,15 @@ export interface RenderedSummary {
     mermaid: {
         chunkLoaded:      boolean;
         chunkLoadMs:      number | null;
-        // M10: total placeholders discovered in the DOM at
-        // first-paint time. With progressive render (Task 5),
-        // diagrams[] may carry only the first chunk's outcomes
-        // while placeholdersSeen reports the doc total.
+        // Total placeholders discovered in the DOM at first-paint
+        // time. With progressive render, diagrams[] may carry only
+        // the first chunk's outcomes while placeholdersSeen reports
+        // the doc total.
         placeholdersSeen: number;
-        // Schema v5: size of the foreground (first POOL_SIZE)
-        // slice, snapshotted before background chunks push into
-        // diagrams[]. Deterministic regardless of how many
-        // background idle ticks fired during the awaited math
-        // pass; diagrams.length is not.
+        // Size of the foreground (first POOL_SIZE) slice, snapshotted
+        // before background chunks push into diagrams[] - stable,
+        // unlike diagrams.length which races background idle ticks
+        // during the awaited math pass.
         foregroundCount: number;
         diagrams: Array<{
             id:           string;
@@ -129,9 +128,9 @@ export interface RenderedSummary {
     imageRequests: Array<{
         url:           string;
         inDocBaseUri:  boolean;
-        // Schema v6: img.complete && naturalWidth > 0 — true only
-        // when the image actually decoded. Distinguishes a rendered
-        // doc image from one blocked/404'd (classification cannot).
+        // img.complete && naturalWidth > 0 - true only when the
+        // image actually decoded. Distinguishes a rendered doc image
+        // from one blocked/404'd (classification alone cannot).
         loaded:        boolean;
     }>;
 }
@@ -191,7 +190,7 @@ export function postRendered(
     // requiresThemeRerender is always emitted (independent of the
     // summary opt-in) so the host can gate ThemeChanged -> re-render
     // on it in production too. True iff the rendered DOM contains
-    // theme-baked output that CSS can't retint — currently only
+    // theme-baked output that CSS can't retint - currently only
     // mermaid SVG.
     const msg: Record<string, unknown> = {
         type: 'rendered', version: 1, id, elapsedMs,

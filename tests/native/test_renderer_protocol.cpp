@@ -91,7 +91,7 @@ TEST_CASE("decode_renderer_message rejects rendered without id",
 
 TEST_CASE("decode_renderer_message rejects rendered with id out of range",
           "[renderer_protocol]") {
-    // 2^33 — well past INT_MAX
+    // 2^33 - well past INT_MAX
     constexpr std::wstring_view payload =
         LR"({"type":"rendered","version":1,"id":8589934592,"elapsedMs":42})";
     auto result = mdview::decode_renderer_message(payload);

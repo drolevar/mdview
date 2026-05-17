@@ -188,7 +188,7 @@ TEST_CASE("precache rebuilds on ProcessFailed (within budget)",
 
     // Simulating ProcessFailed on the first host triggers a rebuild.
     // Note: simulate_process_failed calls on_process_failed which calls
-    // pending_host_.reset() — destroying this TestHost from within its
+    // pending_host_.reset() - destroying this TestHost from within its
     // own callback. On MSVC, std::function::operator() reads the target
     // once at entry; the call is complete before storage is released.
     created[0]->simulate_process_failed(1);

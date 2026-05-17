@@ -10,7 +10,7 @@ namespace mdview {
 // Throws std::runtime_error if registration fails on the first call.
 // `hbr_background` is the brush the OS fills with on initial show
 // (before any WM_PAINT runs). Pass nullptr if the window paints its
-// own background in WM_PAINT and you want no auto-fill — the typical
+// own background in WM_PAINT and you want no auto-fill - the typical
 // COLOR_WINDOW+1 default would otherwise flash light against a
 // dark-mode parent.
 void ensure_window_class_registered(

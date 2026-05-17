@@ -60,10 +60,10 @@ TEST_CASE("ensure_started pins the module",
     m.ensure_started();
 
     // After PIN, the same address still resolves to the same HMODULE.
-    // There is no public API to query "is this module pinned?" — a
+    // There is no public API to query "is this module pinned?" - a
     // behavioural test would require a host exe that calls FreeLibrary
     // and verifies the DLL stays loaded; that is covered by manual
-    // smoke (Task 12).
+    // smoke.
     HMODULE pinned = nullptr;
     ::GetModuleHandleExW(
         GET_MODULE_HANDLE_EX_FLAG_PIN |

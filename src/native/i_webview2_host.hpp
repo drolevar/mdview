@@ -13,18 +13,18 @@ namespace mdview {
 // Abstraction over WebView2 controller lifecycle for testability.
 // Production: WebView2Host. Tests: a mock implementing this interface.
 //
-// M6: the create/show pair was replaced by a three-phase build:
-//   1. WebView2Host::create_under_message_only() (static factory) —
+// Lifecycle is a three-phase build:
+//   1. WebView2Host::create_under_message_only() (static factory) -
 //      builds env + controller under an HWND_MESSAGE parent, navigates
 //      to the app, waits for renderer 'ready'. Owned by precache_manager
 //      during this phase; the host is hidden the whole time.
-//   2. adopt() — reparent the controller to the real Lister HWND,
+//   2. adopt() - reparent the controller to the real Lister HWND,
 //      push theme + raster scale. Pure reparent: no callbacks.
-//      Does NOT make the controller visible — visibility is
+//      Does NOT make the controller visible - visibility is
 //      deferred to rebind_callbacks() so the renderer-message
 //      handler is installed before WebView2 can dispatch (the
-//      load-bearing M6 race fix).
-//   3. rebind_callbacks() — replace the manager-owned precache
+//      load-bearing race fix).
+//   3. rebind_callbacks() - replace the manager-owned precache
 //      callbacks with the caller's (PluginWindow / ViewerHost). Called
 //      after adopt completes.
 class IWebView2Host {
@@ -36,12 +36,12 @@ public:
 
     // Reparent the controller to `new_parent` and apply theme + raster
     // scale. Does NOT make the controller visible (rebind_callbacks()
-    // does, after the message handler is wired — M6 race fix). Must be
-    // called once on a host that has
-    // reached the Parked phase (post-renderer-ready under the
-    // message-only parent). Multiple adopt() calls or adopt() on a
-    // non-Parked host log and abort. Does not wire callbacks — caller
-    // chains rebind_callbacks() once adopt returns.
+    // does, after the message handler is wired - race fix). Must be
+    // called once on a host that has reached the Parked phase
+    // (post-renderer-ready under the message-only parent). Multiple
+    // adopt() calls or adopt() on a non-Parked host log and abort.
+    // Does not wire callbacks - caller chains rebind_callbacks() once
+    // adopt returns.
     virtual void adopt(HWND  new_parent,
                        RECT  new_bounds,
                        Theme theme,
@@ -68,20 +68,17 @@ public:
     // (the precache phase routes its own messages internally).
     virtual void post_to_renderer(std::wstring_view json) = 0;
 
-    // Remaps the "mdview-doc.example" virtual host to point at the
-    // directory containing the document being loaded. Called once per
-    // load_document. On older WebView2 runtimes that don't expose
-    // ICoreWebView2_3, returns E_NOINTERFACE and the caller falls
-    // back to an empty base URI.
+    // Points the doc host (mdview-doc.example) at the directory
+    // containing the document being loaded. Called once per
+    // load_document; records the dir for the asset-router's
+    // handle_doc_request to serve from. Returns S_OK once the
+    // controller exists.
     virtual HRESULT remap_doc_dir(
         const std::filesystem::path& doc_dir) noexcept = 0;
 
-    // Reloads the current top-level page. Required after remap_doc_dir
-    // when there is already a live page: WebView2 caches mapping state
-    // for the resource loaders of the current page, and a Set on an
-    // already-mapped host doesn't propagate to those loaders without
-    // a fresh navigation. See WebView2Feedback #2456 and the
-    // SetVirtualHostNameToFolderMapping docs.
+    // Reloads the current top-level page. Called from the
+    // load_document path after remap_doc_dir when a page is already
+    // live, so a newly-loaded document's resources are fetched fresh.
     virtual void reload() noexcept = 0;
 
     // Pushes TC's theme to WebView2 itself (Controller default
@@ -89,7 +86,7 @@ public:
     // paint background, scrollbar coloring, native form controls, and
     // what `prefers-color-scheme` matches in CSS. Independent of the
     // renderer-side data-theme attribute the JS app toggles. Safe to
-    // call before adopt — implementations stash the latest value and
+    // call before adopt - implementations stash the latest value and
     // apply once the controller exists.
     virtual void set_color_scheme(Theme theme) noexcept = 0;
 };

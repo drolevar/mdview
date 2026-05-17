@@ -9,7 +9,7 @@ TEST_CASE("utf16 to utf8 round trip on ASCII", "[utf]") {
 }
 
 TEST_CASE("utf16 to utf8 with non-ASCII", "[utf]") {
-    const std::wstring input = L"café";              // café
+    const std::wstring input = L"caf\u00e9";  // 'caf' + U+00E9 (e-acute)
     const std::string expected = "caf\xC3\xA9";           // UTF-8 bytes
     REQUIRE(mdview::utf16_to_utf8(input) == expected);
     REQUIRE(mdview::utf8_to_utf16(expected) == input);

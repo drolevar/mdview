@@ -76,7 +76,7 @@ TEST_CASE("mermaid placeholdersSeen reports doc total at first paint",
     // diagrams.size() here is racy: the array is shared by
     // reference and grows live while runMathPass is awaited (the
     // stress fixture's ~480 math instances make that await long
-    // enough for background idle ticks to fire — especially on a
+    // enough for background idle ticks to fire - especially on a
     // hidden CI window where requestIdleCallback isn't throttled
     // by paint contention). foreground_count does not move.
     CHECK(summary->mermaid_placeholders_seen >= 80);

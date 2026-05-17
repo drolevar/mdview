@@ -16,12 +16,12 @@ export interface DiagramOutcome {
 export interface MermaidPassData {
     chunkLoaded:      boolean;
     chunkLoadMs:      number | null;
-    // M10: total placeholders discovered in the DOM (regardless of
-    // how many actually rendered before first-paint). Mirrors the
-    // math.placeholdersSeen pattern from M9.
+    // Total placeholders discovered in the DOM (regardless of how
+    // many actually rendered before first-paint). Mirrors
+    // math.placeholdersSeen.
     placeholdersSeen: number;
     // Count of diagrams in the foreground (first POOL_SIZE) slice,
-    // snapshotted when the pass is built — before any background
+    // snapshotted when the pass is built - before any background
     // chunk pushes into `diagrams`. `diagrams` is shared by
     // reference and grows live as background chunks drain, so its
     // length at summary-build time is non-deterministic (it depends
@@ -120,11 +120,10 @@ async function renderOneDiagram(
     }
 }
 
-// M10: bounded concurrency for mermaid renders. Measured pool=4 is
-// the sweet spot in WebView2 -- pool=8 regresses on the stress
-// fixture. See docs/tc_mdview_m10_mermaid_progressive_design.md
-// section 2.1 for the probe data. Exported so app.ts can match the
-// slice boundary when splitting foreground from background chunks.
+// Bounded concurrency for mermaid renders. Measured pool=4 is the
+// sweet spot in WebView2 -- pool=8 regresses on the stress fixture.
+// Exported so app.ts can match the slice boundary when splitting
+// foreground from background chunks.
 export const POOL_SIZE = 4;
 
 // Renders up to POOL_SIZE diagrams concurrently. Caller pre-slices.

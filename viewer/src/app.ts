@@ -78,8 +78,8 @@ function run(): void {
         void (async () => {
             try {
                 while (true) {
-                    // M10: cancel any background mermaid fill from
-                    // the previous doc. This is a no-op if no doc was
+                    // Cancel any background mermaid fill from the
+                    // previous doc. This is a no-op if no doc was
                     // active or the background already drained. After
                     // abort, the in-flight chunk completes silently;
                     // its outcomes don't reach the old pass.diagrams
@@ -284,7 +284,7 @@ function run(): void {
             // Truncate so a long KaTeX/network error doesn't produce
             // an absurd hover tooltip on every placeholder.
             const tip = msg.length > 200
-                ? msg.slice(0, 200) + '…'
+                ? msg.slice(0, 200) + '\u2026'
                 : msg;
             for (const el of Array.from(inlineEls)) {
                 el.classList.add('mdview-math-failed');
@@ -339,9 +339,9 @@ function run(): void {
     //  (a) postRenderError -> structured `renderError` to the host
     //      (behavior channel; render-lifecycle id; native decodes it).
     //  (b) log.ts installGlobalErrorForwarders -> {type:'log'} to
-    //      dbgview (visibility channel; see log.ts:20-23 — it exists
-    //      precisely because (a) is render-gated and misses
-    //      async/worker/theme failures).
+    //      dbgview (visibility channel; it exists precisely because
+    //      (a) is render-gated and misses async/worker/theme
+    //      failures).
     // Before any doc / between docs latestId is NO_DOC_ID so the host
     // can tell the error is not tied to a live render.
     window.addEventListener('error', (ev) => {

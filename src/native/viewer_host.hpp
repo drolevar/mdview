@@ -19,25 +19,26 @@ struct DocumentRequest {
     std::wstring          display_name;
     bool                  quick_view_mode = false;
 
-    // M3 Task 13: decoded UTF-16 markdown body. Forwarded to the
-    // renderer as LoadDocumentMessage::markdown. Empty when the
-    // first-load path didn't read content (M2 legacy) — a renderer
-    // that receives an empty body shows an empty preview.
+    // Decoded UTF-16 markdown body, forwarded to the renderer as
+    // LoadDocumentMessage::markdown. Empty when the first-load path
+    // didn't read content - a renderer that receives an empty body
+    // shows an empty preview.
     std::wstring          markdown;
 
-    // M3 Task 11: monotonic id assigned by ViewerHost on dispatch;
-    // doc_dir is the folder behind the mdview-doc.example mapping;
-    // base_uri is set to https://mdview-doc.example/ on a successful
-    // remap, cleared otherwise.
+    // Monotonic id assigned on dispatch. doc_dir is the folder the
+    // asset-router serves mdview-doc.example resources from; base_uri
+    // is https://mdview-doc.example/ once doc_dir is recorded, empty
+    // otherwise.
     int                   doc_id = 0;
     std::filesystem::path doc_dir;
     std::wstring          base_uri;
 
-    // M4: theme delivered with this document. Defaults to System;
+    // Theme delivered with this document. Defaults to System;
     // ViewerHost::load_document fills it from current/pending_theme.
     Theme theme = Theme::System;
 
-    // M4: integration harness opt-in for renderer summary on rendered ack.
+    // Integration-harness opt-in for the renderer summary on the
+    // rendered ack.
     bool  summary_requested = false;
 };
 
@@ -58,12 +59,10 @@ public:
     ViewerHost(const ViewerHost&)            = delete;
     ViewerHost& operator=(const ViewerHost&) = delete;
 
-    // M6: the host arrives pre-built and pre-adopted. ViewerHost no
-    // longer drives env/controller creation — that work was done by
-    // precache_manager (or PluginWindow's transitional wrapper) before
-    // this call. The renderer's `ready` signal was consumed during the
-    // precache phase; ViewerHost transitions straight into a ready-to-
-    // render state on this call and drains any queued load_document.
+    // Host arrives pre-built and pre-adopted (precache_manager drove
+    // env/controller creation, not ViewerHost). The renderer's
+    // `ready` was consumed during precache, so this goes straight to
+    // ready-to-render and drains any queued load_document.
     void create(std::unique_ptr<IWebView2Host> host,
                 LifecycleCallback on_event);
     void resize(RECT bounds);
@@ -97,19 +96,15 @@ private:
     Theme               current_theme_   = Theme::System;
     std::optional<Theme> pending_theme_;  // delivered before first ready
 
-    // M5 audit: gate the ThemeChanged event (which triggers a
-    // loadDocument re-issue) on whether the last rendered DOM has
-    // theme-baked output. Math (currentColor), hljs (CSS classes) and
-    // markdown text all retint via CSS; only mermaid SVG needs a
-    // re-render. Default true so a theme change in the race window
-    // between load_document and the first `rendered` ack still
-    // re-renders a mermaid doc — safe fallback when we don't yet know.
+    // ThemeChanged re-issues loadDocument only if the last render has
+    // theme-baked output: math/hljs/markdown retint via CSS, only
+    // mermaid SVG needs a re-render. Default true so a theme change
+    // racing the first `rendered` ack still re-renders a mermaid doc.
     bool last_doc_requires_theme_rerender_ = true;
 
-    // Lifecycle timing for the precache/cold-start investigation.
-    // t_start_ is set in create(); the optionals fire on first reach
-    // of the corresponding state. The summary emits once per host
-    // lifetime on the first RenderedMessage.
+    // Lifecycle timing. t_start_ is set in create(); the optionals
+    // fire on first reach of the corresponding state. The summary
+    // emits once per host lifetime on the first RenderedMessage.
     std::chrono::steady_clock::time_point                t_start_{};
     std::optional<std::chrono::steady_clock::time_point> t_host_created_;
     std::optional<std::chrono::steady_clock::time_point> t_renderer_ready_;

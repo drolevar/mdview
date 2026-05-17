@@ -35,8 +35,8 @@ export function buildSummary(
         .map(img => {
             const el = img as HTMLImageElement;
             const url = el.src;
-            // Path-segment aware: a sibling-prefixed URL (…/docfoo/x)
-            // must NOT count as in-base for docBaseUri …/doc. The
+            // Path-segment aware: a sibling-prefixed URL (.../docfoo/x)
+            // must NOT count as in-base for docBaseUri .../doc. The
             // exact base URL itself still counts as in-base.
             const base = docBaseUri.length === 0
                 ? ''

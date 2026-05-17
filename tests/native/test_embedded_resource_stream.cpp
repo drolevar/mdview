@@ -69,7 +69,7 @@ TEST_CASE("stream Seek SET / CUR / END",
     REQUIRE(s->Seek(mv, STREAM_SEEK_CUR, &np) == S_OK);
     CHECK(np.QuadPart == 3);
 
-    // END with -2 → position 1
+    // END with -2 -> position 1
     mv.QuadPart = -2;
     REQUIRE(s->Seek(mv, STREAM_SEEK_END, &np) == S_OK);
     CHECK(np.QuadPart == 1);

@@ -14,7 +14,7 @@ std::atomic<LogSink> g_sink_{nullptr};
 
 void emit(std::wstring_view message) noexcept {
     // noexcept: the buffer allocates. Logging is best-effort and
-    // non-critical — on OOM drop the line rather than std::terminate.
+    // non-critical - on OOM drop the line rather than std::terminate.
     try {
         std::wstring buf;
         buf.reserve(message.size() + 16);
@@ -40,7 +40,7 @@ constexpr size_t kSummaryChunkChars = 3500;  // safely under OutputDebugStringW'
 
 void emit_chunked_summary(int id, std::wstring_view summary_json) noexcept {
     // noexcept: substr() allocates a temporary per chunk. Best-effort
-    // diagnostic — drop on OOM rather than std::terminate.
+    // diagnostic - drop on OOM rather than std::terminate.
     try {
         if (summary_json.size() <= kSummaryChunkChars) {
             log(L"viewer: rendered id={} summary={}",

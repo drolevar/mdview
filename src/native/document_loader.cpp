@@ -66,7 +66,7 @@ DocumentResult DocumentLoader::load(
     buf.resize(total);
 
     try {
-        // encoding::decode handles empty input as empty wstring (Task 8 contract).
+        // encoding::decode handles empty input as empty wstring.
         result.content = encoding::decode(buf);
     } catch (...) {
         LOG_CAUGHT_EXCEPTION();

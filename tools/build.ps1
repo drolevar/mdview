@@ -21,6 +21,10 @@
 .PARAMETER Clean
     Delete the build directory before configuring.
 
+.PARAMETER SkipAsciiCheck
+    Skip the non-ASCII source guard (tools\find-non-ascii.ps1).
+    Sources are ASCII-only; the guard fails the build otherwise.
+
 .EXAMPLE
     .\tools\build.ps1                       # debug build
     .\tools\build.ps1 -Test                 # debug build + tests
@@ -39,7 +43,8 @@ param(
 
     [switch]$Test,
     [switch]$Install,
-    [switch]$Clean
+    [switch]$Clean,
+    [switch]$SkipAsciiCheck
 )
 
 $ErrorActionPreference = 'Stop'
@@ -65,6 +70,15 @@ $buildDir = "build\$preset"
 
 Push-Location $repoRoot
 try {
+    if (-not $SkipAsciiCheck) {
+        & (Join-Path $PSScriptRoot 'find-non-ascii.ps1') -Path $repoRoot
+        if ($LASTEXITCODE -ne 0) {
+            throw "Non-ASCII characters found in tracked sources " +
+                  "(listed above). Sources are ASCII-only; fix them " +
+                  "or re-run with -SkipAsciiCheck."
+        }
+    }
+
     if ($Clean -and (Test-Path $buildDir)) {
         Remove-Item -Recurse -Force $buildDir
     }

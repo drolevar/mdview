@@ -34,7 +34,7 @@ public:
 
     HWND handle() const noexcept { return hwnd_; }
 
-    // Replace the splash with new text (M1: just used internally).
+    // Replace the splash with new text.
     void set_status_text(std::wstring text);
 
     // Reads `file_to_load` via DocumentLoader and dispatches to the
@@ -42,7 +42,7 @@ public:
     // dark-mode bits per the ListLoadW/ListLoadNextW ShowFlags
     // contract; applied before the load so the first paint reflects
     // TC's theme. The internal ThemeChanged re-render path passes
-    // nullopt because the theme is already current — re-applying a
+    // nullopt because the theme is already current - re-applying a
     // stale ShowFlags would silently revert. Returns true on success;
     // on read/decode failure, paints a status message and returns false.
     bool load_next(std::wstring file_to_load,
@@ -78,9 +78,9 @@ private:
     // Tracks TC's reported dark-mode state (lcp_darkmode /
     // lcp_darkmodenative bits, delivered via ShowFlags on load and via
     // lc_newparams on runtime toggle). Distinct from any OS dark-mode
-    // setting: TC and Windows are independent — a user may run TC in
+    // setting: TC and Windows are independent - a user may run TC in
     // dark mode under a light-mode Win11. on_paint reads this to keep
-    // the "Loading…" splash from flashing system-white before WebView2
+    // the "Loading" splash from flashing system-white before WebView2
     // becomes visible.
     bool is_dark_ = false;
 };

@@ -173,7 +173,7 @@ TEST_CASE("ViewerHost reloads when a new load_document arrives after ready, "
 }
 
 // "reports init failed on env failure" was removed: env/controller
-// failures no longer surface through ViewerHost — the host arrives
+// failures no longer surface through ViewerHost - the host arrives
 // pre-built and pre-adopted from precache_manager, which now owns
 // the InitFailed signal at the PluginWindow level. The
 // LifecycleEvent::Kind::InitFailed enum value is retained for binary
@@ -451,8 +451,8 @@ TEST_CASE("ViewerHost retries remap at drain and posts without reload "
     // Post-reload ready: drain fires post_pending_directly_, which
     // re-runs remap (count 2, succeeds) and posts immediately. The
     // renderer hasn't issued any cross-origin requests against the
-    // doc host yet — its first paint only happens after consuming
-    // the loadDocument message we just posted — so no second reload
+    // doc host yet - its first paint only happens after consuming
+    // the loadDocument message we just posted - so no second reload
     // is needed.
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
     REQUIRE(mp->remap_count  == 2);
@@ -522,7 +522,7 @@ TEST_CASE("ViewerHost::apply_theme fires ThemeChanged event when "
     vh.dispatch_renderer_message(LR"({"type":"ready","version":1})");
     REQUIRE(mp->posted.size() == 1);
 
-    // No `rendered` ack yet — last_doc_requires_theme_rerender_ is
+    // No `rendered` ack yet - last_doc_requires_theme_rerender_ is
     // at its safe default (true), so the event fires.
     vh.apply_theme(mdview::Theme::Dark);
 
@@ -535,8 +535,8 @@ TEST_CASE("ViewerHost::apply_theme fires ThemeChanged event when "
 TEST_CASE("ViewerHost::apply_theme skips ThemeChanged when last render "
           "had no theme-baked output",
           "[viewer_host][theme]") {
-    // M5 design: math (currentColor), hljs (CSS classes) and markdown
-    // text retint via CSS — only mermaid SVG requires re-render. The
+    // math (currentColor), hljs (CSS classes) and markdown text
+    // retint via CSS - only mermaid SVG requires re-render. The
     // renderer signals this via the `requiresThemeRerender` field on
     // the `rendered` ack; ViewerHost gates ThemeChanged on it.
     auto mock = std::make_unique<MockHost>();
@@ -570,7 +570,7 @@ TEST_CASE("ViewerHost::apply_theme skips ThemeChanged when last render "
     vh.apply_theme(mdview::Theme::Dark);
 
     // setTheme still posted (CSS retint is cheap and instant), but
-    // no ThemeChanged event fired — no loadDocument re-issue.
+    // no ThemeChanged event fired - no loadDocument re-issue.
     REQUIRE(mp->posted.size() == 2);
     REQUIRE(mp->posted[1].find(L"setTheme") != std::wstring::npos);
     REQUIRE(theme_changed_count == 0);
@@ -648,7 +648,7 @@ TEST_CASE("ViewerHost: load_document resets theme-rerender flag",
     vh.apply_theme(mdview::Theme::Dark);
     REQUIRE(theme_changed_count == 0);
 
-    // Doc 2: same doc-dir → fast-post path (no reload). Goes
+    // Doc 2: same doc-dir -> fast-post path (no reload). Goes
     // straight back to State::Loaded with the flag reset to true.
     mdview::DocumentRequest b;
     b.file_path = LR"(D:\d\b.md)";

@@ -31,7 +31,7 @@ std::unordered_map<HWND, std::unique_ptr<mdview::PluginWindow>> g_windows;
 
 // HWND of a PluginWindow whose create() is mid-flight. PluginWindow::create
 // runs a modal message pump (precache acquire) before it returns, and that
-// pump dispatches arbitrary queued messages on TC's UI thread — TC could
+// pump dispatches arbitrary queued messages on TC's UI thread - TC could
 // re-enter ListCloseWindow for this HWND before ListLoadW has inserted it
 // into g_windows. Without the sentinel that close would miss g_windows and
 // fall through to ::DestroyWindow, tearing down a still-constructing window.
@@ -48,7 +48,7 @@ HWND g_constructing_hwnd = nullptr;
 //
 // Per-window subclass (not per-class) so other Lister plugins are
 // unaffected. The subclass survives until the Lister is destroyed
-// (WM_NCDESTROY) — at which point we restore the original WndProc
+// (WM_NCDESTROY) - at which point we restore the original WndProc
 // and clear the prop. DLL is pinned, so the proc pointer stays valid.
 
 constexpr const wchar_t* kListerOrigProcProp = L"mdview.lister.orig_wndproc";
@@ -110,17 +110,17 @@ HBRUSH get_lister_dark_brush_() noexcept {
 void install_lister_dark_subclass_(HWND lister) noexcept {
     // Diagnostic + cold-F3 white-flash mitigations. TC's TLister is a
     // Lazarus VCL form with Color=clWhite hardcoded and GCLP_HBRBACKGROUND
-    // = NULL — DWM's initial backing store gets COLOR_WINDOW (white on
+    // = NULL - DWM's initial backing store gets COLOR_WINDOW (white on
     // Win11-light) before any of our paint code runs. Layered defenses:
-    //   (1) DWM transitions disabled — kills Win11 fade-in animation
+    //   (1) DWM transitions disabled - kills Win11 fade-in animation
     //       that briefly shows the initial surface.
     //   (2) Immersive dark mode on title bar / NC frame.
-    //   (3) Class brush patched dark — DWM uses it on future Listers
+    //   (3) Class brush patched dark - DWM uses it on future Listers
     //       (including the recycle precache path) and for any erase
     //       cycle DefWindowProc handles.
-    //   (4) WndProc subclass — intercepts WM_PAINT / WM_ERASEBKGND /
+    //   (4) WndProc subclass - intercepts WM_PAINT / WM_ERASEBKGND /
     //       WM_PRINTCLIENT to paint dark over any newly-exposed strip.
-    //   (5) Direct framebuffer stamp via GetDC + FillRect — writes
+    //   (5) Direct framebuffer stamp via GetDC + FillRect - writes
     //       dark pixels straight into the surface before WS_VISIBLE,
     //       in case DWM hasn't read the class brush yet.
     // Together these reduce the cold-F3 flash to barely-perceptible
@@ -191,7 +191,7 @@ mdview::Theme read_windows_app_theme() noexcept {
 // precaches use the real ListLoadW show_flags via note_theme.
 mdview::Theme parse_tc_dark_mode_from_ini(const std::string& plugin_ini_path) noexcept {
     // noexcept: std::filesystem::path construction allocates. On OOM
-    // fall back to the documented default (Light) — a wrong guess only
+    // fall back to the documented default (Light) - a wrong guess only
     // costs one cold-F3 flash; never std::terminate at plugin load.
     try {
     // TC's ListDefaultParamStruct.DefaultIniName points at the *plugin*
@@ -383,7 +383,7 @@ void __stdcall ListCloseWindow(HWND ListWin) {
         // the HWND exists but hasn't been emplaced into g_windows yet
         // (find missed above, so doomed == nullptr). Destroying it
         // here would tear it down out from under the in-flight
-        // create(). Defer — the post-create emplace owns it and the
+        // create(). Defer - the post-create emplace owns it and the
         // eventual real close (or ~PluginWindow) destroys it normally.
         if (doomed == nullptr) {
             std::lock_guard<std::mutex> lock(g_windows_mutex);

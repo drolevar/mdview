@@ -17,8 +17,8 @@ constexpr bool is_runtime_missing(HRESULT hr) noexcept {
 }
 
 // Returns a user-facing wide-string message for an init failure.
-// Runtime-missing → multiline message including the install URL.
-// Other HRESULTs → "WebView2 initialization failed (HRESULT 0x........)."
+// Runtime-missing -> multiline message including the install URL.
+// Other HRESULTs -> "WebView2 initialization failed (HRESULT 0x........)."
 std::wstring format_init_error(HRESULT hr);
 
 // Returns a user-facing wide-string status message for a document

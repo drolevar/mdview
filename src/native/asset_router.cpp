@@ -56,11 +56,11 @@ std::filesystem::path current_doc_dir_() {
 }
 
 // Last-Modified derived from the WLX's PE COFF link timestamp. Stable
-// per build; changes on each rebuild → naturally invalidates V8's
+// per build; changes on each rebuild - naturally invalidates V8's
 // bytecode cache when assets actually change. V8 stores this validator
 // alongside the compiled module; on subsequent fetches of the same
 // URL across fresh controllers, V8 reuses the cached compilation if
-// Last-Modified matches — saving the ~300ms-per-chunk reparse cost
+// Last-Modified matches - saving the ~300ms-per-chunk reparse cost
 // that otherwise hits every cold F3.
 const std::wstring& last_modified_header_value_() {
     static const std::wstring s = []() {
@@ -122,12 +122,12 @@ std::wstring build_headers_(std::wstring_view content_type,
     // HTML: no-store so a stale CSP can never be reused. Everything
     // else (JS / CSS / fonts) is embedded RCDATA and stable for the
     // WLX's lifetime, so `no-cache, must-revalidate` lets Chromium
-    // cache the body while always revalidating — it sends
+    // cache the body while always revalidating - it sends
     // `If-Modified-Since` on repeat fetches, and `handle_app_request`
     // short-circuits with 304 when the value matches our stored
     // Last-Modified. That skips the ~30 IStream::Read COM round-trips
-    // per warm render (M11 Task 3). V8's bytecode cache uses the same
-    // Last-Modified validator independently to skip recompile.
+    // per warm render. V8's bytecode cache uses the same Last-Modified
+    // validator independently to skip recompile.
     if (include_csp) {
         h += L"Cache-Control: no-store\r\n";
     } else {
@@ -141,10 +141,10 @@ std::wstring build_headers_(std::wstring_view content_type,
     }
     h += L"X-Content-Type-Options: nosniff\r\n";
     if (include_csp) {
-        // Empirically validated 2026-05-13. style-src needs
-        // 'unsafe-inline' for Mermaid v11; base-uri needs doc-host
-        // because app.ts sets <base href> to mdview-doc URLs. All
-        // other directives stayed strict against every smoke fixture.
+        // Empirically validated. style-src needs 'unsafe-inline' for
+        // Mermaid v11; base-uri needs doc-host because app.ts sets
+        // <base href> to mdview-doc URLs. All other directives stayed
+        // strict against every smoke fixture.
         h += L"Content-Security-Policy: "
              L"default-src 'self'; "
              L"script-src 'self'; "
@@ -171,7 +171,7 @@ HRESULT respond_with_bytes_(
     using Microsoft::WRL::MakeAndInitialize;
     // noexcept: build_headers_ / std::wstring(reason) allocate (and
     // build_headers_ itself is not noexcept). On OOM, return a
-    // controlled E_OUTOFMEMORY WebView2 surfaces — never std::terminate.
+    // controlled E_OUTOFMEMORY WebView2 surfaces - never std::terminate.
     try {
         ComPtr<EmbeddedResourceStream> stream;
         RETURN_IF_FAILED(MakeAndInitialize<EmbeddedResourceStream>(
@@ -208,8 +208,8 @@ HRESULT respond_not_found_(
     }
 }
 
-// M11: build a 304 Not Modified response with empty body and the
-// same Last-Modified validator. Chromium serves cached bytes after
+// Build a 304 Not Modified response with empty body and the same
+// Last-Modified validator. Chromium serves cached bytes after
 // receiving this; V8's separate bytecode cache continues to validate
 // via Last-Modified independently.
 HRESULT respond_304_(
@@ -264,8 +264,9 @@ std::wstring_view doc_content_type_(const std::filesystem::path& p) {
 }
 
 // True iff `full` is `base` itself or lexically nested under it,
-// compared component-wise (not a raw string prefix, so "…/doc" does
-// not match "…/docfoo"). Both paths must already be normalized.
+// compared component-wise (not a raw string prefix, so ".../doc"
+// does not match ".../docfoo"). Both paths must already be
+// normalized.
 bool path_within_(const std::filesystem::path& base,
                   const std::filesystem::path& full) {
     auto bi = base.begin();
@@ -305,7 +306,7 @@ parse_app_request_path(std::wstring_view uri) noexcept {
     }
 
     // Reject ".." anywhere (any-position; we don't try to fold them
-    // out — server-side path traversal is never legitimate here).
+    // out - server-side path traversal is never legitimate here).
     if (path.find(L"..") != std::wstring::npos) return std::nullopt;
 
     // Collapse duplicate slashes.
@@ -432,10 +433,10 @@ HRESULT handle_app_request(
         asset->content_type.find(L"text/html") !=
         std::wstring_view::npos;
 
-    // M11: If-Modified-Since short-circuit. Chromium sends this on
-    // repeat fetches now that non-HTML responses are
+    // If-Modified-Since short-circuit. Chromium sends this on repeat
+    // fetches now that non-HTML responses are
     // `no-cache, must-revalidate`. HTML stays `no-store` so it never
-    // ships an IMS — skip the check there. Header absent / mismatch
+    // ships an IMS - skip the check there. Header absent / mismatch
     // / failure all fall through to the normal 200 response.
     if (!is_html) {
         wil::com_ptr<ICoreWebView2HttpRequestHeaders> req_headers;
@@ -496,7 +497,7 @@ void set_current_doc_dir(std::filesystem::path dir) noexcept {
 HRESULT handle_doc_request(
         ICoreWebView2WebResourceRequestedEventArgs* args,
         ICoreWebView2Environment* env) noexcept {
-  // noexcept: mirrors handle_app_request — any bad_alloc that slips
+  // noexcept: mirrors handle_app_request - any bad_alloc that slips
   // a per-helper guard ends here as a controlled E_OUTOFMEMORY,
   // never std::terminate / a killed TC process mid-render.
   try {
@@ -521,7 +522,7 @@ HRESULT handle_doc_request(
         std::wstring_view(*path).substr(1));
     const std::filesystem::path target = doc_dir / rel;
 
-    // Containment check (defense in depth — ".." already rejected
+    // Containment check (defense in depth - ".." already rejected
     // in the parser). weakly_canonical resolves symlinks/.. without
     // requiring the path to exist; on any filesystem_error -> 404.
     std::error_code ec;

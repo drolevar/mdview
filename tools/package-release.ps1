@@ -32,15 +32,15 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot   # tools/ -> repo root
 
 if (-not (Test-Path -LiteralPath $Wlx64)) {
-    throw "x64 WLX not found at '$Wlx64' — pass the built mdview.wlx64."
+    throw "x64 WLX not found at '$Wlx64' - pass the built mdview.wlx64."
 }
 if (-not (Test-Path -LiteralPath $Wlx32)) {
-    throw "x86 WLX not found at '$Wlx32' — pass the built mdview.wlx."
+    throw "x86 WLX not found at '$Wlx32' - pass the built mdview.wlx."
 }
 
 $version = (& (Join-Path $repoRoot 'tools\get-version.ps1')).Trim()
 if (-not $version) {
-    throw "get-version.ps1 returned empty — cannot name the artifact."
+    throw "get-version.ps1 returned empty - cannot name the artifact."
 }
 
 # Stage copies under a temp dir with the canonical names the zip
@@ -73,7 +73,7 @@ try {
         # output stays the final zip path (callers do `$zip = & ...`).
         & $UpxExe @upxArgs 2>&1 | Out-Host
         if ($LASTEXITCODE -ne 0) {
-            throw "UPX exited $LASTEXITCODE on $target — refusing to ship a possibly corrupt artifact."
+            throw "UPX exited $LASTEXITCODE on $target - refusing to ship a possibly corrupt artifact."
         }
         $after = (Get-Item -LiteralPath $target).Length
         Write-Host ("UPX: {0} {1:N2} MB -> {2:N2} MB ({3:N1}%)" -f `

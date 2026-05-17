@@ -27,7 +27,7 @@ bool log_has(const std::vector<std::wstring>& lines,
 //   2. Every asset needed by the renderer to reach Ready+rendered
 //      state was served from embedded RCDATA.
 // The "filter installed" log line is the concrete wiring marker we
-// can also assert — every controller-created callback emits it. The
+// can also assert - every controller-created callback emits it. The
 // per-asset "200 path=..." lines are racy under test ordering: only
 // the FIRST Session of the test exe sees the cold-build serves, while
 // later Sessions only see the recycle-build serves which race against
@@ -44,7 +44,7 @@ TEST_CASE("embedded assets serve cold F3 with no loose viewer",
     CHECK(log_has(log, L"asset-router filter installed"));
 }
 
-// End-to-end coverage for the M11 304 Not Modified short-circuit in
+// End-to-end coverage for the 304 Not Modified short-circuit in
 // asset_router.cpp. The first load fetches all assets as 200; the
 // second load (navigating to a different doc-dir, which forces
 // ViewerHost::load_document down host_->reload() rather than the

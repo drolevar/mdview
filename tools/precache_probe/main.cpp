@@ -1,7 +1,7 @@
 // precache_probe.exe
 //
 // Empirical feasibility check for Architecture A (controller precache)
-// from docs/tc_mdview_webview2_precache_research.md §7.1 Stage 2.
+// from docs/tc_mdview_webview2_precache_research.md sec 7.1 Stage 2.
 //
 // Sequence:
 //   1. CoInitialize STA.

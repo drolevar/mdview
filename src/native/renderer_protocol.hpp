@@ -42,11 +42,11 @@ struct RenderErrorMessage {
 };
 
 struct LoadDocumentMessage {
-    int                   id = 0;       // monotonic, per design §7
+    int                   id = 0;       // monotonic
     std::filesystem::path path;
     std::wstring          display_name;
-    std::wstring          base_uri;     // empty in M2; M3 fills
-    std::wstring          markdown;     // empty in M2; M3 fills
+    std::wstring          base_uri;     // empty if no doc dir
+    std::wstring          markdown;
     ViewerOptions         options;
     Theme                 theme            = Theme::System;
     bool                  summary_requested = false;
@@ -67,7 +67,7 @@ std::optional<RendererMessage>
 decode_renderer_message(std::wstring_view json) noexcept;
 
 // Side-channel renderer log bridge. Independent of the
-// version-stamped renderer-state protocol above — log messages are
+// version-stamped renderer-state protocol above - log messages are
 // informational and have no schema versioning.
 enum class LogLevel { Error, Warn, Debug };
 
