@@ -30,12 +30,10 @@ install: [docs/installing.md](docs/installing.md).
 
 - GitHub-flavored Markdown (tables, task lists, strikethrough,
   autolink)
-- **Mermaid** diagrams, rendered progressively so large documents
-  paint fast
-- **TeX math** via KaTeX, rendered off-thread in a web worker
+- **Mermaid** diagrams
+- **TeX math** via KaTeX
 - Syntax highlighting for fenced code blocks
-- Follows Total Commander's light/dark theme, live
-- Single self-contained `.wlx`/`.wlx64` — no loose asset tree
+- Follows Total Commander's light/dark theme
 
 ## Build from source
 
