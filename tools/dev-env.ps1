@@ -69,15 +69,20 @@ if (-not $env:VCPKG_ROOT) {
 }
 
 # --- UPX ---
-# Resolve upx.exe path for tools/package-release.ps1. Order:
+# The WLX MUST be packed with the PATCHED UPX (keeps PETLSHAK for
+# DLLs); stock UPX corrupts the WLX's loader-set TLS index and the
+# packed plugin crashes on Win7. CI uses the SHA-pinned release
+# (drolevar/upx petlshak-721259e5, upstream PR upx/upx#18855);
+# locally use the patched build. Resolve order:
 #   1. $env:UPX_EXECUTABLE if already set (respect caller's choice).
-#   2. Project-known location at D:\Projects\procfs\_inspect\upx\upx-5.1.1-win64\upx.exe.
-#   3. Any upx.exe on PATH.
+#   2. The local patched build at upx\build\patched\upx.exe.
+#   3. Any upx.exe on PATH -- NOTE a stock upx here yields a
+#      Win7-broken package; dev convenience only, CI is canonical.
 # If none found, leave $env:UPX_EXECUTABLE unset; package-release.ps1
 # then throws (refusing to ship an unpacked release artifact) unless
 # it is run with -UpxMode none.
 if (-not $env:UPX_EXECUTABLE) {
-    $upxCandidate = 'D:\Projects\procfs\_inspect\upx\upx-5.1.1-win64\upx.exe'
+    $upxCandidate = 'D:\Projects\mdview\upx\build\patched\upx.exe'
     if (Test-Path -LiteralPath $upxCandidate) {
         $env:UPX_EXECUTABLE = $upxCandidate
     } else {

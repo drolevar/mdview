@@ -200,23 +200,23 @@ jobs:
           name: mdview-x86-release
           path: artifacts/x86
 
-      # Cache the pinned UPX zip keyed by its immutable version+SHA
-      # so the third-party releases-CDN fetch happens once, not every
-      # run (removes a transient-network spurious-red on the release
-      # packaging job). The key changes only if the pin changes.
+      # Patched UPX: keeps PETLSHAK for DLLs so the WLX's loader-set
+      # TLS index survives decompression. Stock UPX corrupts it and
+      # the packed WLX crashes on Win7. Built from drolevar/upx@
+      # 721259e5 (upstream PR upx/upx#18855). Cached by zip SHA so
+      # the fetch happens once; key changes only if the pin changes.
       - name: Cache UPX
         uses: actions/cache@v5
         with:
           path: upx-dl
-          key: upx-5.1.1-win64-fa5380bca4c2718547aaa0134bc0d8a7fa27e102f0ac6371573d60d1c21d64de
+          key: upx-petlshak-721259e5-3cea4918c67d378b490f6f9161866ce512f35135bbbb281f17c27b2d4cf404b2
 
-      - name: Provision UPX (pinned, SHA256-verified)
+      - name: Provision UPX (pinned patched build, SHA256-verified)
         shell: pwsh
         run: |
-          $ver  = '5.1.1'
-          $zip  = "upx-$ver-win64.zip"
-          $url  = "https://github.com/upx/upx/releases/download/v$ver/$zip"
-          $want = 'fa5380bca4c2718547aaa0134bc0d8a7fa27e102f0ac6371573d60d1c21d64de'
+          $zip  = 'upx-petlshak-721259e5-win64.zip'
+          $url  = "https://github.com/drolevar/upx/releases/download/petlshak-721259e5/$zip"
+          $want = '3cea4918c67d378b490f6f9161866ce512f35135bbbb281f17c27b2d4cf404b2'
           New-Item -ItemType Directory -Force upx-dl | Out-Null
           $zipPath = "upx-dl/$zip"
           if (-not (Test-Path $zipPath)) {
