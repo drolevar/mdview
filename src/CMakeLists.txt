@@ -27,6 +27,7 @@ add_library(mdview_core STATIC
     native/webview2_externalize.cpp
     native/webview2_host.cpp
     platform/win32_window.cpp
+    platform/dpi_compat.cpp
     plugin/plugin_window.cpp
     plugin/fallback_window.cpp
     # Auto-generated from viewer/dist by GenerateViewerResources.cmake.
@@ -44,7 +45,16 @@ target_link_libraries(mdview_core PUBLIC
     Shlwapi)
 
 target_compile_definitions(mdview_core PUBLIC
-    WIL_LOCK_EXCEPTION_MODE)
+    WIL_LOCK_EXCEPTION_MODE
+    # Windows 7 floor. _WIN32_WINNT gates the Win SDK (Win10 APIs
+    # we call become undeclared and are runtime-bound, see
+    # dpi_compat). _STL_WIN32_WINNT is a separate knob the MSVC STL
+    # needs: it ignores _WIN32_WINNT and otherwise unconditionally
+    # imports Win8 APIs (CreateFile2, GetSystemTimePreciseAsFileTime)
+    # that fail to load on Win7. PUBLIC so wlx + test exes inherit;
+    # the standalone probes do not link core.
+    _WIN32_WINNT=0x0601
+    _STL_WIN32_WINNT=0x0600)
 
 mdview_set_warnings(mdview_core)
 

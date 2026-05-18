@@ -8,6 +8,7 @@
 #include "native/precache_manager.hpp"
 #include "native/theme.hpp"
 #include "platform/win32_window.hpp"
+#include "platform/dpi_compat.hpp"
 
 #include <listplug.h>   // vendored under external/totalcmd-wlx-sdk/src/
 
@@ -109,7 +110,7 @@ PluginWindow::create(HWND parent, std::wstring file_to_load, int show_flags,
     // not yet wired - that's our job below via rebind_callbacks.
     const Theme theme = theme_from_show_flags(show_flags);
     const float scale =
-        static_cast<float>(::GetDpiForWindow(hwnd)) / 96.0f;
+        static_cast<float>(dpi_for_window(hwnd)) / 96.0f;
 
     // Integration-test failure injection: MDVIEW_FORCE_ENV_FAILURE=1
     // short-circuits acquire and paints the install-URL status text

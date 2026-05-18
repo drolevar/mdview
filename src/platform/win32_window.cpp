@@ -1,5 +1,7 @@
 #include "platform/win32_window.hpp"
 
+#include "platform/dpi_compat.hpp"
+
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -50,14 +52,10 @@ void ensure_window_class_registered(
 }
 
 wil::unique_hfont create_ui_font_for_window(HWND hwnd) noexcept {
-    UINT dpi = ::GetDpiForWindow(hwnd);
-    if (dpi == 0) {
-        dpi = 96;
-    }
+    const UINT dpi = dpi_for_window(hwnd);  // never 0; Win7 -> system DPI
 
     NONCLIENTMETRICSW ncm{};
-    ncm.cbSize = sizeof(ncm);
-    if (::SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0, dpi)) {
+    if (nonclient_metrics_for_dpi(ncm, dpi)) {
         if (HFONT font = ::CreateFontIndirectW(&ncm.lfMessageFont)) {
             return wil::unique_hfont{font};
         }
