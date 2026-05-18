@@ -30,14 +30,28 @@ param(
     [string]$Arch = 'amd64'
 )
 
+# Windows 7 floor: build with the VS2022 (v17.x) MSVC toolset.
+# VS2026's 14.50 STL unconditionally imports Win8 APIs; 14.4x
+# (VS2022) is the last STL that targets Windows 7. Select VS2022
+# explicitly (not vswhere -latest) so a machine that also has
+# VS2026 cannot silently mis-build a non-Win7 binary. VS2022
+# carries only 14.4x, so selecting it is the pin; the overlay
+# triplet keeps vcpkg's port builds on the same toolset.
+$RequiredVsRange = '[17.0,18.0)'   # Visual Studio 2022
+$ToolsetFamily   = '14.4x'         # last Win7-capable MSVC STL
+
 if (-not $env:VSINSTALLDIR) {
     $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
     if (-not (Test-Path $vswhere)) {
         throw "vswhere.exe not found at $vswhere - install Visual Studio Installer."
     }
-    $vsRoot = & $vswhere -latest -property installationPath
+    $vsRoot = & $vswhere -products * -version $RequiredVsRange `
+        -latest -property installationPath
     if (-not $vsRoot) {
-        throw "vswhere returned no installations - install Visual Studio."
+        throw "Visual Studio 2022 (v17.x) not found. mdview's Windows 7 " +
+              "floor requires the VS2022 MSVC toolset ($ToolsetFamily); " +
+              "VS2026's 14.50 STL drops Windows 7. Install VS2022 or " +
+              "its v14.4x build tools."
     }
     # Prepend the installer dir so VsDevCmd.bat's bare `vswhere.exe`
     # invocation resolves cleanly.
@@ -54,7 +68,7 @@ if (-not $env:VCPKG_ROOT) {
     $env:VCPKG_ROOT = Split-Path $vcpkg.Source -Parent
 }
 
-# --- UPX (M12) ---
+# --- UPX ---
 # Resolve upx.exe path for tools/package-release.ps1. Order:
 #   1. $env:UPX_EXECUTABLE if already set (respect caller's choice).
 #   2. Project-known location at D:\Projects\procfs\_inspect\upx\upx-5.1.1-win64\upx.exe.
