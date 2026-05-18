@@ -13,7 +13,10 @@ permissions:
 jobs:
   build:
     name: build-${{ matrix.arch }}
-    runs-on: windows-2025
+    # This image is VS2026; the Windows 7 floor comes from the
+    # toolset: '14.44' pin below, not the runner. Named explicitly
+    # because the bare windows-2025 alias is being retired.
+    runs-on: windows-2025-vs2026
     strategy:
       fail-fast: false
       matrix:
@@ -175,7 +178,9 @@ jobs:
   package:
     name: package
     needs: [build]
-    runs-on: windows-2025
+    # Pure packager (UPX + zip); no toolset. Pinned to the
+    # non-retired image label for the same reason as build.
+    runs-on: windows-2025-vs2026
     steps:
       - name: Checkout
         uses: actions/checkout@v6
