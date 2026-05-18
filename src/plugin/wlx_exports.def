@@ -1,7 +1,9 @@
 EXPORTS
     ListSetDefaultParams
     ListGetDetectString
+    ListLoad
     ListLoadW
+    ListLoadNext
     ListLoadNextW
     ListSendCommand
     ListCloseWindow

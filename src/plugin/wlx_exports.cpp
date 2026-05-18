@@ -365,6 +365,27 @@ HWND __stdcall ListLoadW(HWND ParentWin, WCHAR* FileToLoad, int ShowFlags) {
     }
 }
 
+static std::wstring widen_ansi_path_(const char* s) {
+    if (s == nullptr || *s == '\0') return std::wstring();
+    const int n = ::MultiByteToWideChar(CP_ACP, 0, s, -1, nullptr, 0);
+    if (n <= 1) return std::wstring();
+    std::wstring w(static_cast<size_t>(n - 1), L'\0');
+    ::MultiByteToWideChar(CP_ACP, 0, s, -1, w.data(), n);
+    return w;
+}
+
+// TC's plugin-validity check (notably 32-bit, manual install) needs
+// the mandatory ANSI ListLoad/ListLoadNext; a Unicode-only plugin
+// runs fine but is rejected as "not a valid plugin" at install.
+// These widen the system-codepage path and delegate to the Unicode
+// path - runtime is unchanged, Unicode TC still calls ListLoadW.
+// Not extern "C" (listplug.h declares them with C++ linkage, see
+// ListLoadNextW); export names come from wlx_exports.def.
+HWND __stdcall ListLoad(HWND ParentWin, char* FileToLoad, int ShowFlags) {
+    std::wstring w = widen_ansi_path_(FileToLoad);
+    return ListLoadW(ParentWin, w.empty() ? nullptr : w.data(), ShowFlags);
+}
+
 void __stdcall ListCloseWindow(HWND ListWin) {
     mdview::precache_manager::instance().ensure_started();
     mdview::debug_log::log(L"wlx: ListCloseWindow hwnd=0x{:p}",
@@ -431,6 +452,13 @@ int __stdcall ListLoadNextW(
         LOG_CAUGHT_EXCEPTION();
         return LISTPLUGIN_ERROR;
     }
+}
+
+int __stdcall ListLoadNext(HWND ParentWin, HWND PluginWin,
+                           char* FileToLoad, int ShowFlags) {
+    std::wstring w = widen_ansi_path_(FileToLoad);
+    return ListLoadNextW(ParentWin, PluginWin,
+                         w.empty() ? nullptr : w.data(), ShowFlags);
 }
 
 // Per TC dev-build changelog 2020-01-22 ("Tell Lister plugins with
