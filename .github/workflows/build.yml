@@ -13,7 +13,7 @@ permissions:
 jobs:
   build:
     name: build-${{ matrix.arch }}
-    runs-on: windows-2025-vs2026
+    runs-on: windows-2025
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +31,10 @@ jobs:
         uses: drolevar/msvc-dev-cmd@42a75f472a092656b3978a23e6719e068f5f02d4
         with:
           arch: ${{ matrix.arch }}
+          # Pin MSVC to 14.44 (last Win7-capable STL; 14.50
+          # unconditionally imports Win8 APIs). Matches the
+          # overlay triplet and dev-env.ps1.
+          toolset: '14.44'
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -59,13 +63,13 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/build/windows-msvc-${{ matrix.arch }}-debug/vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ matrix.arch }}-debug-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'CMakePresets.json') }}
+          key: vcpkg-${{ runner.os }}-${{ matrix.arch }}-debug-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'CMakePresets.json', 'triplets/x64-windows-static.cmake', 'triplets/x86-windows-static.cmake') }}
 
       - name: Cache vcpkg installed (release)
         uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/build/windows-msvc-${{ matrix.arch }}-release/vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ matrix.arch }}-release-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'CMakePresets.json') }}
+          key: vcpkg-${{ runner.os }}-${{ matrix.arch }}-release-${{ steps.vcpkg.outputs.fingerprint }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'CMakePresets.json', 'triplets/x64-windows-static.cmake', 'triplets/x86-windows-static.cmake') }}
 
       - name: Configure (debug)
         run: cmake --preset windows-msvc-${{ matrix.arch }}-debug
@@ -148,6 +152,12 @@ jobs:
           $wlx = (Get-ChildItem "build/windows-msvc-${{ matrix.arch }}-release/src/mdview.wlx*" | Select-Object -First 1).FullName
           ./tools/check-no-redist.ps1 -Binary $wlx
 
+      - name: Assert Win7 import floor (release)
+        shell: pwsh
+        run: |
+          $wlx = (Get-ChildItem "build/windows-msvc-${{ matrix.arch }}-release/src/mdview.wlx*" | Select-Object -First 1).FullName
+          ./tools/check-win7-imports.ps1 -Binary $wlx
+
       - name: Stage release WLX
         shell: pwsh
         run: |
@@ -165,7 +175,7 @@ jobs:
   package:
     name: package
     needs: [build]
-    runs-on: windows-2025-vs2026
+    runs-on: windows-2025
     steps:
       - name: Checkout
         uses: actions/checkout@v6

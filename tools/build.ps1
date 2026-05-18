@@ -104,6 +104,8 @@ try {
         if ($wlx) {
             & (Join-Path $PSScriptRoot 'check-no-redist.ps1') -Binary $wlx.FullName
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            & (Join-Path $PSScriptRoot 'check-win7-imports.ps1') -Binary $wlx.FullName
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
         }
     }
 
