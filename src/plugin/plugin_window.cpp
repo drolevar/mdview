@@ -328,7 +328,7 @@ bool PluginWindow::search_text(std::wstring query,
         const bool bw = (lcs_flags & lcs_backwards)  != 0;
         const bool ff = (lcs_flags & lcs_findfirst)  != 0;
         viewer_->begin_find();
-        viewer_->post_find(query, cs, ww, bw, ff);
+        const int fid = viewer_->post_find(query, cs, ww, bw, ff);
 
         // ~500 ms: a per-keystroke bound. A genuinely wedged
         // renderer is separately recovered by the ProcessFailed
@@ -340,7 +340,7 @@ bool PluginWindow::search_text(std::wstring query,
         const ULONGLONG deadline =
             ::GetTickCount64() + kFindTimeoutMs;
         while (true) {
-            if (auto r = viewer_->take_find_result(); r.has_value()) {
+            if (auto r = viewer_->take_find_result(fid); r.has_value()) {
                 return *r;
             }
             const ULONGLONG now = ::GetTickCount64();

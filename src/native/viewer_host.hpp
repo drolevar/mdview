@@ -11,6 +11,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <utility>
 
 namespace mdview {
 
@@ -78,9 +79,9 @@ public:
     // lcs_*: viewer_host is native-core and SDK-free (the plugin layer
     // decodes the TC bitmask).
     void begin_find();
-    void post_find(std::wstring_view query, bool case_sensitive,
+    int  post_find(std::wstring_view query, bool case_sensitive,
                    bool whole_word, bool backwards, bool find_first);
-    std::optional<bool> take_find_result();
+    std::optional<bool> take_find_result(int expected_id);
 
     void close();
 
@@ -107,7 +108,11 @@ private:
     int                            doc_id_ = 0;  // monotonic, ++ per load_document
     Theme               current_theme_   = Theme::System;
     std::optional<Theme> pending_theme_;  // delivered before first ready
-    std::optional<bool> find_result_;   // latched FindResultMessage
+    // Latched FindResultMessage with the id it answered. search_text
+    // only accepts the result whose id matches its own request, so a
+    // timed-out search's late result can't leak into the next one.
+    std::optional<std::pair<int, bool>> find_result_;
+    int                                 find_seq_ = 0;
 
     // ThemeChanged re-issues loadDocument only if the last render has
     // theme-baked output: math/hljs/markdown retint via CSS, only

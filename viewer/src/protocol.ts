@@ -176,6 +176,7 @@ export function isSetTheme(m: unknown): m is SetThemeMessage {
 export interface FindMessage {
     type:          'find';
     version:       1;
+    id:            number;
     query:         string;
     caseSensitive: boolean;
     wholeWord:     boolean;
@@ -188,6 +189,7 @@ export function isFind(m: unknown): m is FindMessage {
     const o = m as Record<string, unknown>;
     if (o['type'] !== 'find')   return false;
     if (o['version'] !== 1)     return false;
+    if (typeof o['id'] !== 'number') return false;
     return typeof o['query'] === 'string'
         && typeof o['caseSensitive'] === 'boolean'
         && typeof o['wholeWord']     === 'boolean'
@@ -195,9 +197,9 @@ export function isFind(m: unknown): m is FindMessage {
         && typeof o['findFirst']     === 'boolean';
 }
 
-export function postFindResult(found: boolean): void {
+export function postFindResult(id: number, found: boolean): void {
     window.chrome.webview.postMessage({
-        type: 'findResult', version: 1, found,
+        type: 'findResult', version: 1, id, found,
     });
 }
 

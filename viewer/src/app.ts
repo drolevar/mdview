@@ -325,7 +325,7 @@ function run(): void {
                         => boolean;
                 }).find(m.query, m.caseSensitive, m.backwards,
                         false, m.wholeWord, false, false);
-                postFindResult(found);
+                postFindResult(m.id, found);
                 return;
             }
 

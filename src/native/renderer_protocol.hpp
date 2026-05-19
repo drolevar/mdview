@@ -53,6 +53,7 @@ struct LoadDocumentMessage {
 };
 
 struct FindResultMessage {
+    int  id    = 0;
     bool found = false;
 };
 
@@ -70,7 +71,7 @@ std::wstring encode_load_document(const LoadDocumentMessage& msg);
 // renderer_protocol is native-core and must not depend on the WLX
 // SDK (listplug.h). The lcs_* -> bool decode is done by the plugin
 // layer (PluginWindow::search_text), which already uses listplug.h.
-std::wstring encode_find(std::wstring_view query,
+std::wstring encode_find(std::wstring_view query, int find_id,
                          bool case_sensitive, bool whole_word,
                          bool backwards, bool find_first);
 

@@ -189,18 +189,23 @@ void ViewerHost::set_rasterization_scale(float scale) noexcept {
 
 void ViewerHost::begin_find() { find_result_.reset(); }
 
-void ViewerHost::post_find(std::wstring_view query,
-                           bool case_sensitive, bool whole_word,
-                           bool backwards, bool find_first) {
+int ViewerHost::post_find(std::wstring_view query,
+                          bool case_sensitive, bool whole_word,
+                          bool backwards, bool find_first) {
+    const int id = ++find_seq_;
     if (host_) host_->post_to_renderer(
-        encode_find(query, case_sensitive, whole_word,
+        encode_find(query, id, case_sensitive, whole_word,
                     backwards, find_first));
+    return id;
 }
 
-std::optional<bool> ViewerHost::take_find_result() {
-    auto r = find_result_;
-    find_result_.reset();
-    return r;
+std::optional<bool> ViewerHost::take_find_result(int expected_id) {
+    if (find_result_ && find_result_->first == expected_id) {
+        const bool v = find_result_->second;
+        find_result_.reset();
+        return v;
+    }
+    return std::nullopt;
 }
 
 void ViewerHost::close() {
@@ -313,7 +318,7 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
         return;
     }
     if (auto* fr = std::get_if<FindResultMessage>(&*msg)) {
-        find_result_ = fr->found;
+        find_result_ = std::make_pair(fr->id, fr->found);
         return;
     }
 }
