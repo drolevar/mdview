@@ -165,3 +165,20 @@ main#document .mdview-alert-warning   { border-left-color: var(--alert-warning-a
 main#document .mdview-alert-warning   > .mdview-alert-title { color: var(--alert-warning-acc); }
 main#document .mdview-alert-caution   { border-left-color: var(--alert-caution-acc); }
 main#document .mdview-alert-caution   > .mdview-alert-title { color: var(--alert-caution-acc); }
+
+main#document .header-anchor {
+    margin-left: 0.35em;
+    color: var(--link);
+    text-decoration: none;
+    opacity: 0;
+    transition: opacity 0.1s ease-in-out;
+}
+main#document h1:hover  .header-anchor,
+main#document h2:hover  .header-anchor,
+main#document h3:hover  .header-anchor,
+main#document h4:hover  .header-anchor,
+main#document h5:hover  .header-anchor,
+main#document h6:hover  .header-anchor,
+main#document .header-anchor:focus {
+    opacity: 1;
+}

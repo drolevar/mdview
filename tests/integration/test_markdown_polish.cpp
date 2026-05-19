@@ -20,3 +20,21 @@ TEST_CASE("markdown polish: github alerts render as typed callouts",
     // real blockquote remains.
     CHECK(sum->blockquote == 1);
 }
+
+TEST_CASE("markdown polish: github-compatible heading slugs",
+          "[integration][markdown_polish][anchors]") {
+    Session s;
+    REQUIRE(s.load(L"21_heading_anchors.md"));
+    auto sum = s.wait_for_summary();
+    REQUIRE(sum.has_value());
+    REQUIRE(sum->heading_ids.size() == 5);
+    // GitHub reference algorithm outputs (incl. duplicate suffixing).
+    CHECK(sum->heading_ids[0] == "hello-world");
+    CHECK(sum->heading_ids[1] == "section-two");
+    CHECK(sum->heading_ids[2] == "hello-world-1");
+    CHECK(sum->heading_ids[3] == "crlf--tabs");
+    CHECK(sum->heading_ids[4] == "mixedcase_underscore");
+    // The 5 injected heading permalinks are excluded from the
+    // document-link count; this fixture has no body links.
+    CHECK(sum->link == 0);
+}

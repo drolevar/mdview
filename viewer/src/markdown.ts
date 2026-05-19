@@ -29,7 +29,28 @@ md.use(taskLists, { enabled: false });
 md.use(footnote);
 md.use(deflist);
 md.use(attrs);
-md.use(anchor, { permalink: false });
+// GitHub-compatible heading slug (mirrors github-slugger): lowercase,
+// strip all but letters/numbers/marks/connector-punct/space/hyphen,
+// then each remaining space -> a single hyphen (NO run-collapsing -
+// GitHub does not collapse, e.g. "A & B" -> "a--b"). markdown-it-anchor
+// applies the duplicate suffix. ASCII source: the Unicode classes are
+// ASCII regex escapes.
+export function githubSlugify(s: string): string {
+    return s.trim().toLowerCase()
+        .replace(/[^\p{L}\p{N}\p{M}\p{Pc} -]/gu, '')
+        .replace(/ /g, '-');
+}
+
+md.use(anchor, {
+    slugify: githubSlugify,
+    permalink: anchor.permalink.linkInsideHeader({
+        symbol: '#',
+        placement: 'after',
+        // Keyboard-focusable (approved default): NOT aria-hidden, so
+        // it stays in the tab order; CSS reveals it on hover/focus.
+        ariaHidden: false,
+    }),
+});
 registerMathRules(md);
 
 type AlertType = 'note' | 'tip' | 'important' | 'warning' | 'caution';

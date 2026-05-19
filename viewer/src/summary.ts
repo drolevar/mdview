@@ -22,7 +22,9 @@ export function buildSummary(
         listOrdered:  container.querySelectorAll(':scope > ol').length,
         listUnordered: container.querySelectorAll(':scope > ul').length,
         image:        container.querySelectorAll('img').length,
-        link:         container.querySelectorAll('a').length,
+        // Generated heading permalinks are chrome, not document links.
+        link:         container.querySelectorAll(
+            'a:not(.header-anchor)').length,
         hr:           container.querySelectorAll(':scope > hr').length,
     };
 
@@ -89,7 +91,10 @@ export function buildSummary(
         imageRequests,
         markdownPolish: {
             alerts: { ...alertCounts },
-            headingIds: [],
+            headingIds: Array.from(
+                container.querySelectorAll(
+                    'h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]'))
+                .map(h => h.id),
         },
     };
 }
