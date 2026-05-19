@@ -1,7 +1,7 @@
 #requires -Version 7
 <#
 .SYNOPSIS
-    Build the M16 Win7 feasibility spike: a standalone WebView2 .exe
+    Build the Win7 feasibility spike: a standalone WebView2 .exe
     with the C/C++ runtime AND WebView2 loader linked STATICALLY
     (no VC++ redist, no WebView2Loader.dll), using the CURRENT MSVC
     toolset. Single-arch-per-process: run once per arch in a fresh

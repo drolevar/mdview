@@ -2,8 +2,8 @@
 <#
 .SYNOPSIS
     Fail if a built binary has any Visual C++ redistributable or
-    dynamic UCRT dependency. M16 ships a fully static CRT; this is
-    the regression gate (ship checklist + CI).
+    dynamic UCRT dependency. The WLX ships a fully static CRT; this
+    is the regression gate (ship checklist + CI).
 
     Self-locates dumpbin.exe: it is only on PATH inside a VS dev
     shell, but this gate is also invoked standalone (ship

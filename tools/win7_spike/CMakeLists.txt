@@ -1,10 +1,9 @@
-# Standalone, on purpose: NOT add_subdirectory'd by the main build.
-# The in-tree probes inherit the project's *-windows-static-md
-# triplet (static libs, DYNAMIC /MD CRT) - which is exactly what
-# this spike must NOT use. Configured directly via build-spike.ps1
-# with a *-windows-static triplet + MSVC_RUNTIME_LIBRARY=MultiThreaded
-# so the C/C++ runtime AND the WebView2 loader are linked statically
-# (no VC++ redist, no WebView2Loader.dll).
+# Standalone feasibility probe: its own vcpkg manifest, NOT
+# add_subdirectory'd by the main build and not part of the product.
+# Configured directly via build-spike.ps1 with a *-windows-static
+# triplet + MSVC_RUNTIME_LIBRARY=MultiThreaded so the C/C++ runtime
+# AND the WebView2 loader link statically (no VC++ redist, no
+# WebView2Loader.dll) - the deployment shape it exists to validate.
 cmake_minimum_required(VERSION 3.27)
 cmake_policy(SET CMP0091 NEW)   # MSVC_RUNTIME_LIBRARY abstraction
 

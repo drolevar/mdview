@@ -1,4 +1,4 @@
-// win7_spike - feasibility probe for M16.
+// win7_spike - static-CRT WebView2 Windows 7 feasibility probe.
 //
 // Question it answers: does a binary built with the CURRENT MSVC
 // toolset, with the C/C++ runtime linked STATICALLY (/MT, no VC++
@@ -148,7 +148,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR cmdLine, int nShow) {
     wc.lpszClassName = L"Win7SpikeWnd";
     RegisterClassW(&wc);
     g_hwnd = CreateWindowExW(
-        0, wc.lpszClassName, L"mdview M16 Win7 spike",
+        0, wc.lpszClassName, L"mdview Win7 spike",
         WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
         1000, 700, nullptr, nullptr, hInst, nullptr);
     ShowWindow(g_hwnd, nShow ? nShow : SW_SHOW);
