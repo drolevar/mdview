@@ -1,11 +1,12 @@
 import { applyInitialTheme, setTheme, getResolvedTheme }
                                               from './theme.js';
-import { render as renderMarkdown }           from './markdown.js';
+import { renderDocument, isMarkdownFormat }    from './render-dispatch.js';
 import {
     isLoadDocument, isSetTheme, isFind,
     postReady, postRendered, postRenderError, postFindResult,
     NO_DOC_ID,
 } from './protocol.js';
+import type { DocFormat }                      from './protocol.js';
 import type { MermaidPassData, BackgroundHandle }
                                               from './mermaid-chunk.js';
 import { POOL_SIZE }                          from './mermaid-chunk.js';
@@ -14,12 +15,12 @@ import { buildSummary }                       from './summary.js';
 import { log, installGlobalErrorForwarders }  from './log.js';
 import 'katex/dist/katex.min.css';
 
-let lastMermaidPass: MermaidPassData = {
+const EMPTY_MERMAID_PASS: MermaidPassData = {
     chunkLoaded: false, chunkLoadMs: null,
     placeholdersSeen: 0, foregroundCount: 0, diagrams: [],
 };
 
-let lastMathPass: MathPassData = {
+const EMPTY_MATH_PASS: MathPassData = {
     chunkLoaded: false, chunkLoadMs: null,
     workerUsed: false, workerWallMs: null,
     placeholdersSeen: { inline: 0, display: 0 },
@@ -27,6 +28,9 @@ let lastMathPass: MathPassData = {
     display: { rendered: 0, failed: 0 },
     errors:  [],
 };
+
+let lastMermaidPass: MermaidPassData = EMPTY_MERMAID_PASS;
+let lastMathPass:    MathPassData    = EMPTY_MATH_PASS;
 
 let backgroundHandle: BackgroundHandle | null = null;
 
@@ -68,6 +72,7 @@ function run(): void {
 
     let latestId      = NO_DOC_ID;
     let latestContent = '';
+    let latestFormat: DocFormat = 'markdown';
     let rendering     = false;
     let latestSummaryRequested = false;
     let latestDocBaseUri       = '';
@@ -93,7 +98,8 @@ function run(): void {
                     const start     = performance.now();
                     let succeeded = false;
                     try {
-                        container.innerHTML = renderMarkdown(latestContent);
+                        container.innerHTML =
+                            renderDocument(latestFormat, latestContent);
                         succeeded = true;
                     } catch (err) {
                         const e = err as Error;
@@ -108,39 +114,48 @@ function run(): void {
                     }
 
                     if (succeeded) {
-                        // Kick off the math-chunk import speculatively
-                        // BEFORE the mermaid pass so the KaTeX worker
-                        // can boot in parallel with mermaid. By the
-                        // time runMathPass awaits this promise, the
-                        // module + worker are already warm. Only fire
-                        // if the rendered DOM actually contains math
-                        // placeholders -- math-less docs don't need it.
-                        const hasMath = container.querySelector(
-                            '.mdview-math-inline, .mdview-math-display')
-                            !== null;
-                        const mathChunkP: Promise<
-                            typeof import('./math-chunk.js') | null
-                        > = hasMath
-                            ? import('./math-chunk.js').catch((e) => {
-                                log.error('math-chunk import failed: ' +
-                                    (e instanceof Error ? e.message : String(e ?? '')));
-                                return null;
-                              })
-                            : Promise.resolve(null);
+                        if (isMarkdownFormat(latestFormat)) {
+                            // Kick off the math-chunk import speculatively
+                            // BEFORE the mermaid pass so the KaTeX worker
+                            // can boot in parallel with mermaid. By the
+                            // time runMathPass awaits this promise, the
+                            // module + worker are already warm. Only fire
+                            // if the rendered DOM actually contains math
+                            // placeholders -- math-less docs don't need it.
+                            const hasMath = container.querySelector(
+                                '.mdview-math-inline, .mdview-math-display')
+                                !== null;
+                            const mathChunkP: Promise<
+                                typeof import('./math-chunk.js') | null
+                            > = hasMath
+                                ? import('./math-chunk.js').catch((e) => {
+                                    log.error('math-chunk import failed: ' +
+                                        (e instanceof Error ? e.message : String(e ?? '')));
+                                    return null;
+                                  })
+                                : Promise.resolve(null);
 
-                        // Mermaid pass: after markdown HTML is in the
-                        // DOM, look for placeholders and lazy-load the
-                        // chunk only if any are present.
-                        lastMermaidPass = await runMermaidPass(
-                            getResolvedTheme());
-                        lastMathPass = await runMathPass(mathChunkP);
+                            // Mermaid pass: after markdown HTML is in the
+                            // DOM, look for placeholders and lazy-load the
+                            // chunk only if any are present.
+                            lastMermaidPass = await runMermaidPass(
+                                getResolvedTheme());
+                            lastMathPass = await runMathPass(mathChunkP);
+                        } else {
+                            // Non-Markdown (HTML, not yet wired): no
+                            // mermaid/math placeholders; reset the
+                            // passes to their empty defaults.
+                            lastMermaidPass = EMPTY_MERMAID_PASS;
+                            lastMathPass    = EMPTY_MATH_PASS;
+                        }
                         const elapsed = Math.round(
                             performance.now() - start);
                         // Only mermaid bakes theme into rendered output
                         // (SVG); math (currentColor), hljs (CSS classes)
                         // and markdown text all retint via CSS.
                         const requiresThemeRerender =
-                            lastMermaidPass.chunkLoaded
+                            isMarkdownFormat(latestFormat)
+                            && lastMermaidPass.chunkLoaded
                             && lastMermaidPass.diagrams.length > 0;
                         if (summaryAtStart) {
                             // Wait for <img>s to settle so the
@@ -343,6 +358,8 @@ function run(): void {
 
             latestId      = m.id;
             latestContent = m.document.markdown;
+            latestFormat = m.document.format === 'html'
+                ? 'html' : 'markdown';
             if (baseEl) {
                 if (m.document.baseUri) {
                     baseEl.href = m.document.baseUri;
