@@ -113,8 +113,19 @@ bool percent_decode_in_place_(std::wstring& s) noexcept {
     }
 }
 
+// Which CSP block (if any) the response carries. The app-host SPA
+// and a doc-host HTML preview live in different origins with
+// different threat models, so they each need their own profile.
+// Everything else (JS/CSS/font subresources, images, 404s, 503s)
+// emits no CSP at all.
+enum class CspProfile {
+    None,
+    AppHost,
+    DocHostHtml,
+};
+
 std::wstring build_headers_(std::wstring_view content_type,
-                            bool include_csp) {
+                            CspProfile csp) {
     std::wstring h;
     h += L"Content-Type: ";
     h += content_type;
@@ -128,7 +139,8 @@ std::wstring build_headers_(std::wstring_view content_type,
     // Last-Modified. That skips the ~30 IStream::Read COM round-trips
     // per warm render. V8's bytecode cache uses the same Last-Modified
     // validator independently to skip recompile.
-    if (include_csp) {
+    const bool html = (csp != CspProfile::None);
+    if (html) {
         h += L"Cache-Control: no-store\r\n";
     } else {
         h += L"Cache-Control: no-cache, must-revalidate\r\n";
@@ -140,11 +152,13 @@ std::wstring build_headers_(std::wstring_view content_type,
         h += L"\r\n";
     }
     h += L"X-Content-Type-Options: nosniff\r\n";
-    if (include_csp) {
-        // Empirically validated. style-src needs 'unsafe-inline' for
-        // Mermaid v11; base-uri needs doc-host because app.ts sets
-        // <base href> to mdview-doc URLs. All other directives stayed
-        // strict against every smoke fixture.
+    if (csp == CspProfile::AppHost) {
+        // SPA origin. script-src stays 'self' for the renderer's own
+        // bundles; frame-src allows embedding the doc host for the
+        // HTML/XHTML preview iframe; style-src needs 'unsafe-inline'
+        // for Mermaid v11 (inline <style> in generated SVGs);
+        // base-uri keeps the doc-host token because app.ts sets
+        // <base href> to mdview-doc URLs for relative image resolution.
         h += L"Content-Security-Policy: "
              L"default-src 'self'; "
              L"script-src 'self'; "
@@ -156,7 +170,34 @@ std::wstring build_headers_(std::wstring_view content_type,
              L"object-src 'none'; "
              L"base-uri 'self' https://mdview-doc.example; "
              L"form-action 'none'; "
+             L"frame-src https://mdview-doc.example; "
              L"frame-ancestors 'none'\r\n";
+    } else if (csp == CspProfile::DocHostHtml) {
+        // Previewed HTML/XHTML, served into a sandboxed iframe.
+        // script-src 'none' is the hard guarantee that an arbitrary
+        // local HTML file's <script> can never execute. style-src
+        // allows the page's own inline + linked CSS; img/font are
+        // same-origin (the doc host) plus data: for inline images.
+        // base-uri 'self' prevents a malicious <base> from rerouting
+        // relative URLs out of the doc origin. frame-ancestors lists
+        // every legitimate embedder: the SPA at mdview-app for the
+        // primary preview iframe, AND the doc host itself so that a
+        // frameset's sub-frames (which load sibling .htm into <frame>
+        // children of the frameset doc) are permitted - their direct
+        // ancestor is the frameset doc at mdview-doc, not mdview-app.
+        h += L"Content-Security-Policy: "
+             L"default-src 'self'; "
+             L"script-src 'none'; "
+             L"style-src 'self' 'unsafe-inline'; "
+             L"img-src 'self' data:; "
+             L"font-src 'self'; "
+             L"connect-src 'none'; "
+             L"object-src 'none'; "
+             L"base-uri 'self'; "
+             L"form-action 'none'; "
+             L"frame-src 'self'; "
+             L"frame-ancestors https://mdview-app.example "
+             L"https://mdview-doc.example\r\n";
     }
     return h;
 }
@@ -166,7 +207,7 @@ HRESULT respond_with_bytes_(
         ICoreWebView2Environment* env,
         const std::byte* data, std::size_t size,
         int status, std::wstring_view reason,
-        std::wstring_view content_type, bool include_csp) noexcept {
+        std::wstring_view content_type, CspProfile csp) noexcept {
     using Microsoft::WRL::ComPtr;
     using Microsoft::WRL::MakeAndInitialize;
     // noexcept: build_headers_ / std::wstring(reason) allocate (and
@@ -177,7 +218,7 @@ HRESULT respond_with_bytes_(
         RETURN_IF_FAILED(MakeAndInitialize<EmbeddedResourceStream>(
             &stream, data, size));
 
-        const auto headers = build_headers_(content_type, include_csp);
+        const auto headers = build_headers_(content_type, csp);
         wil::com_ptr<ICoreWebView2WebResourceResponse> response;
         RETURN_IF_FAILED(env->CreateWebResourceResponse(
             stream.Get(), status, std::wstring(reason).c_str(),
@@ -202,7 +243,7 @@ HRESULT respond_not_found_(
             args, env,
             reinterpret_cast<const std::byte*>(kBody), sizeof(kBody) - 1,
             404, L"Not Found",
-            L"text/plain; charset=utf-8", /*include_csp*/ false);
+            L"text/plain; charset=utf-8", CspProfile::None);
     } catch (...) {
         return E_OUTOFMEMORY;
     }
@@ -260,6 +301,11 @@ std::wstring_view doc_content_type_(const std::filesystem::path& p) {
     if (ext == L".bmp")  return L"image/bmp";
     if (ext == L".ico")  return L"image/x-icon";
     if (ext == L".avif") return L"image/avif";
+    if (ext == L".css")  return L"text/css; charset=utf-8";
+    if (ext == L".htm" || ext == L".html")
+        return L"text/html; charset=utf-8";
+    if (ext == L".xhtml")
+        return L"application/xhtml+xml; charset=utf-8";
     return L"application/octet-stream";
 }
 
@@ -392,7 +438,7 @@ HRESULT respond_unavailable(
             args, env,
             reinterpret_cast<const std::byte*>(kBody), sizeof(kBody) - 1,
             503, L"Service Unavailable",
-            L"text/plain; charset=utf-8", /*include_csp*/ false);
+            L"text/plain; charset=utf-8", CspProfile::None);
     } catch (...) {
         return E_OUTOFMEMORY;
     }
@@ -476,7 +522,8 @@ HRESULT handle_app_request(
         args, env,
         static_cast<const std::byte*>(locked),
         static_cast<std::size_t>(size),
-        200, L"OK", asset->content_type, /*include_csp*/ is_html);
+        200, L"OK", asset->content_type,
+        is_html ? CspProfile::AppHost : CspProfile::None);
   } catch (...) {
     debug_log::log(L"wlx: asset-router handle_app_request OOM");
     return E_OUTOFMEMORY;
@@ -554,8 +601,17 @@ HRESULT handle_doc_request(
         return respond_not_found_(args, env, *path);
     }
 
-    const auto headers =
-        build_headers_(content_type, /*include_csp*/ false);
+    // HTML/XHTML previews carry a strict CSP that pins script-src
+    // 'none' and frame-ancestors to the app host - the single
+    // security boundary for arbitrary local HTML rendered into the
+    // sandboxed iframe. Other doc-host responses (images, CSS,
+    // fonts) are subresources of that frame and need no CSP.
+    const bool html_preview =
+        content_type.starts_with(L"text/html") ||
+        content_type.starts_with(L"application/xhtml+xml");
+    const auto headers = build_headers_(
+        content_type,
+        html_preview ? CspProfile::DocHostHtml : CspProfile::None);
     wil::com_ptr<ICoreWebView2WebResourceResponse> response;
     RETURN_IF_FAILED(env->CreateWebResourceResponse(
         stream.get(), 200, L"OK", headers.c_str(), &response));

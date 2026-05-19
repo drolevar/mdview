@@ -34,6 +34,25 @@ let lastMathPass:    MathPassData    = EMPTY_MATH_PASS;
 
 let backgroundHandle: BackgroundHandle | null = null;
 
+// Joins the doc-host base URI (already %-encoded, trailing slash)
+// with the doc filename to produce the iframe's src URL. The base
+// is consumed verbatim; only the filename is encoded so that
+// reserved characters in a real filename (#, ?, spaces) become
+// path bytes and don't truncate the URL into a fragment or query.
+function computeDocUrl(baseUri: string, fileName: string): string {
+    if (baseUri.length === 0) return '';
+    const base = baseUri.endsWith('/') ? baseUri : baseUri + '/';
+    return base + encodeURIComponent(fileName);
+}
+
+// Strips directory components from a path string. Accepts forward
+// and backward slashes (the native side hands us Windows-shaped
+// paths). An empty input yields an empty filename.
+function fileNameOf(path: string): string {
+    const i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+    return i >= 0 ? path.slice(i + 1) : path;
+}
+
 // Integration-harness only: summary.imageRequests[].loaded reflects
 // img.complete && naturalWidth > 0, but <img> fetches are async and
 // the render path does not await them. On the summary path we wait
@@ -76,6 +95,7 @@ function run(): void {
     let rendering     = false;
     let latestSummaryRequested = false;
     let latestDocBaseUri       = '';
+    let latestPath             = '';
 
     const renderLatest = (): void => {
         if (rendering) return;
@@ -95,11 +115,23 @@ function run(): void {
                     const idAtStart = latestId;
                     const summaryAtStart = latestSummaryRequested;
                     const baseUriAtStart = latestDocBaseUri;
+                    const pathAtStart    = latestPath;
                     const start     = performance.now();
                     let succeeded = false;
                     try {
+                        const docUrl = isMarkdownFormat(latestFormat)
+                            ? ''
+                            : computeDocUrl(baseUriAtStart,
+                                            fileNameOf(pathAtStart));
                         container.innerHTML =
-                            renderDocument(latestFormat, latestContent);
+                            renderDocument(latestFormat,
+                                           latestContent,
+                                           docUrl);
+                        // Lets styles.css gate full-bleed layout
+                        // on the previewed-doc format (HTML iframe
+                        // fills the lister window; Markdown keeps
+                        // its reading-width cap).
+                        container.dataset.format = latestFormat;
                         succeeded = true;
                     } catch (err) {
                         const e = err as Error;
@@ -142,11 +174,34 @@ function run(): void {
                                 getResolvedTheme());
                             lastMathPass = await runMathPass(mathChunkP);
                         } else {
-                            // Non-Markdown (HTML, not yet wired): no
-                            // mermaid/math placeholders; reset the
-                            // passes to their empty defaults.
+                            // HTML preview: no mermaid/math
+                            // placeholders to scan. Await the iframe
+                            // load (or error) so the summary can
+                            // report iframeLoaded faithfully; bounded
+                            // so a stuck doc-host fetch can't stall.
                             lastMermaidPass = EMPTY_MERMAID_PASS;
                             lastMathPass    = EMPTY_MATH_PASS;
+                            const iframe = container.querySelector(
+                                'iframe.mdview-html-iframe') as
+                                HTMLIFrameElement | null;
+                            if (iframe) {
+                                await new Promise<void>((resolve) => {
+                                    let done = false;
+                                    let timer = 0;
+                                    const r = (loaded: boolean) => {
+                                        if (done) return;
+                                        done = true;
+                                        window.clearTimeout(timer);
+                                        if (loaded) iframe.dataset.mdviewLoaded = '1';
+                                        resolve();
+                                    };
+                                    iframe.addEventListener('load',  () => r(true),
+                                        { once: true });
+                                    iframe.addEventListener('error', () => r(false),
+                                        { once: true });
+                                    timer = window.setTimeout(() => r(false), 5000);
+                                });
+                            }
                         }
                         const elapsed = Math.round(
                             performance.now() - start);
@@ -169,6 +224,7 @@ function run(): void {
                                 lastMermaidPass,
                                 lastMathPass,
                                 baseUriAtStart,
+                                latestFormat,
                             );
                             postRendered(idAtStart, elapsed,
                                 requiresThemeRerender, summary);
@@ -369,6 +425,7 @@ function run(): void {
             }
             latestSummaryRequested = m.summary === true;
             latestDocBaseUri       = m.document.baseUri ?? '';
+            latestPath             = m.document.path ?? '';
             renderLatest();
         });
 

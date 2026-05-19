@@ -11,11 +11,13 @@ add_executable(mdview_integration_tests
     test_embedded_assets.cpp
     test_focus.cpp
     test_highlight.cpp
+    test_html.cpp
     test_lifecycle.cpp
     test_markdown_polish.cpp
     test_math.cpp
     test_mermaid.cpp
     test_m10_perf.cpp
+    test_navigation_block.cpp
     test_precache.cpp
     test_search.cpp
     test_theme.cpp

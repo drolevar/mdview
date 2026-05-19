@@ -86,6 +86,10 @@ struct RenderedSummary {
         int note = 0, tip = 0, important = 0, warning = 0, caution = 0;
     } alerts;
     std::vector<std::string> heading_ids;
+
+    std::string document_format;          // "" if absent (pre-v9)
+    std::string iframe_url;                // "" if null or absent
+    bool        iframe_loaded = false;     // false if null or absent
 };
 
 std::optional<RenderedSummary>

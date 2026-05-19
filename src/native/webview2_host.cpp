@@ -755,6 +755,59 @@ void WebView2Host::install_handlers_() {
         if (wv2) wv2->remove_DOMContentLoaded(dom_tok);
     });
 
+    // Per-iframe navigation gate. The webview-level NavigationStarting
+    // only fires for the top-level frame; sub-frame navigations (iframe
+    // src, frame target, frameset child loads) need the same allow-or-
+    // externalize check applied via FrameCreated + per-frame
+    // NavigationStarting. The per-frame token is owned by the frame's
+    // lifetime; we only revoke the FrameCreated subscription on the
+    // webview.
+    auto wv4 = webview_.try_query<ICoreWebView2_4>();
+    EventRegistrationToken frame_created_tok{};
+    if (wv4) {
+        auto frame_created_cb = Microsoft::WRL::Callback<
+            ICoreWebView2FrameCreatedEventHandler>(
+            [wp](ICoreWebView2*,
+                 ICoreWebView2FrameCreatedEventArgs* args)
+            noexcept -> HRESULT {
+                auto alive = wp.lock();
+                if (!alive) return S_OK;
+                wil::com_ptr<ICoreWebView2Frame> frame;
+                LOG_IF_FAILED(args->get_Frame(&frame));
+                if (!frame) return S_OK;
+                auto frame2 = frame.try_query<ICoreWebView2Frame2>();
+                if (!frame2) return S_OK;
+                auto frame_nav_cb = Microsoft::WRL::Callback<
+                    ICoreWebView2FrameNavigationStartingEventHandler>(
+                    [wp](ICoreWebView2Frame*,
+                         ICoreWebView2NavigationStartingEventArgs* na)
+                    noexcept -> HRESULT {
+                        auto a = wp.lock();
+                        if (!a) return S_OK;
+                        wil::unique_cotaskmem_string uri;
+                        LOG_IF_FAILED(na->get_Uri(&uri));
+                        if (!uri) return S_OK;
+                        if (detail::is_internal_uri(
+                                std::wstring_view{uri.get()})) {
+                            return S_OK;
+                        }
+                        LOG_IF_FAILED(na->put_Cancel(TRUE));
+                        detail::externalize_uri(uri.get());
+                        return S_OK;
+                    });
+                EventRegistrationToken frame_nav_tok{};
+                LOG_IF_FAILED(frame2->add_NavigationStarting(
+                    frame_nav_cb.Get(), &frame_nav_tok));
+                return S_OK;
+            });
+        THROW_IF_FAILED(wv4->add_FrameCreated(
+            frame_created_cb.Get(), &frame_created_tok));
+    }
+    auto revoke_frame_created = wil::scope_exit(
+        [wv4, frame_created_tok]() noexcept {
+            if (wv4) wv4->remove_FrameCreated(frame_created_tok);
+        });
+
     revokers_.emplace_back(msg_tok,
         [wv](EventRegistrationToken t) { wv->remove_WebMessageReceived(t); });
     revoke_msg.release();
@@ -792,6 +845,12 @@ void WebView2Host::install_handlers_() {
             if (wv2) wv2->remove_DOMContentLoaded(t);
         });
     revoke_dom.release();
+
+    revokers_.emplace_back(frame_created_tok,
+        [wv4](EventRegistrationToken t) {
+            if (wv4) wv4->remove_FrameCreated(t);
+        });
+    revoke_frame_created.release();
 }
 
 }

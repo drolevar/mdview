@@ -47,6 +47,22 @@ main#document {
     word-wrap: break-word;
 }
 
+/* HTML / XHTML preview goes full-bleed: the previewed doc IS the
+   page (own styling, own layout), so the reading-width cap and
+   padding that frame Markdown content would just crop the iframe. */
+main#document[data-format="html"] {
+    max-width: none;
+    margin:    0;
+    padding:   0;
+}
+
+.mdview-html-iframe {
+    display: block;
+    width:   100%;
+    height:  100vh;
+    border:  0;
+}
+
 main#document h1 { font-size: 2.0rem; line-height: 1.25; margin-top: 0; }
 main#document h2 { font-size: 1.6rem; line-height: 1.30; }
 main#document h3 { font-size: 1.3rem; }

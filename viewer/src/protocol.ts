@@ -62,7 +62,7 @@ export interface SetThemeMessage {
 }
 
 export interface RenderedSummary {
-    summarySchema: 7;
+    summarySchema: 9;
     durationMs:    number;
     theme:         'light' | 'dark';
     blockCount: {
@@ -136,7 +136,7 @@ export interface RenderedSummary {
         // from one blocked/404'd (classification alone cannot).
         loaded:        boolean;
     }>;
-    // Schema v7. Additive; pre-v7 readers tolerate absence.
+    // Additive; older readers tolerate absence.
     markdownPolish: {
         alerts: {
             note:      number;
@@ -149,6 +149,16 @@ export interface RenderedSummary {
         // harness assert GitHub-compatible slug output deterministically.
         headingIds: string[];
     };
+    // Additive; older readers tolerate absence.
+    documentFormat: DocFormat;          // 'markdown' | 'html'
+    // Set when documentFormat === 'html'; the iframe's src URL
+    // (the previewed doc's doc-host URL). Absent / null for
+    // markdown.
+    iframeUrl:      string | null;
+    // Set when documentFormat === 'html'; true iff the iframe's
+    // load event fired within the await window. Absent / null
+    // for markdown.
+    iframeLoaded:   boolean | null;
 }
 
 export function isLoadDocument(m: unknown): m is LoadDocumentMessage {

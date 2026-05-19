@@ -1,4 +1,4 @@
-import type { RenderedSummary }   from './protocol.js';
+import type { RenderedSummary, DocFormat } from './protocol.js';
 import type { MermaidPassData }   from './mermaid-chunk.js';
 import type { MathPassData }      from './math-chunk.js';
 import { fenceRecords, alertCounts } from './markdown.js';
@@ -10,6 +10,7 @@ export function buildSummary(
     mermaidPass: MermaidPassData,
     mathPass: MathPassData,
     docBaseUri: string,
+    docFormat: DocFormat,
 ): RenderedSummary {
     const blockCount = {
         paragraph:    container.querySelectorAll(':scope > p').length,
@@ -48,8 +49,8 @@ export function buildSummary(
                 inDocBaseUri: base.length > 0
                     ? (url === docBaseUri || url.startsWith(base))
                     : false,
-                // Schema v6: did the image actually decode? A blocked
-                // or 404'd image still has src + inDocBaseUri set, so
+                // Did the image actually decode? A blocked or 404'd
+                // image still has src + inDocBaseUri set, so
                 // classification alone can't catch a broken doc image.
                 loaded: el.complete && el.naturalWidth > 0,
             };
@@ -66,7 +67,7 @@ export function buildSummary(
         || mathPass.chunkLoaded;
 
     return {
-        summarySchema: 7,
+        summarySchema: 9,
         durationMs,
         theme,
         blockCount,
@@ -96,5 +97,23 @@ export function buildSummary(
                     'h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]'))
                 .map(h => h.id),
         },
+        documentFormat: docFormat,
+        iframeUrl: (() => {
+            const f = container.querySelector(
+                'iframe.mdview-html-iframe') as HTMLIFrameElement | null;
+            return f ? f.src : null;
+        })(),
+        iframeLoaded: (() => {
+            const f = container.querySelector(
+                'iframe.mdview-html-iframe') as HTMLIFrameElement | null;
+            if (!f) return null;
+            // app.ts sets dataset.mdviewLoaded='1' only on the
+            // actual load event; absent on error or timeout.
+            // contentWindow / contentDocument can't be used here
+            // because the doc-host iframe is cross-origin to the
+            // SPA and contentWindow returns a truthy WindowProxy
+            // for any in-DOM iframe regardless of load state.
+            return f.dataset.mdviewLoaded === '1';
+        })(),
     };
 }

@@ -151,6 +151,15 @@ parse_summary_json(const std::wstring& payload) {
                 }
             }
         }
+        s.document_format = j.value("documentFormat", std::string{});
+        if (auto it = j.find("iframeUrl");
+            it != j.end() && !it->is_null() && it->is_string()) {
+            s.iframe_url = it->get<std::string>();
+        }
+        if (auto it = j.find("iframeLoaded");
+            it != j.end() && !it->is_null() && it->is_boolean()) {
+            s.iframe_loaded = it->get<bool>();
+        }
         return s;
     } catch (...) {
         return std::nullopt;

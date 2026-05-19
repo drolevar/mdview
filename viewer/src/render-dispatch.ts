@@ -1,30 +1,61 @@
 import { render as renderMarkdown } from './markdown.js';
-import { sanitize }                 from './sanitize.js';
 import type { DocFormat }           from './protocol.js';
 
-type Trust = 'trusted' | 'mustSanitize';
+type Trust = 'native' | 'rendered';
 interface FormatEntry {
-    pipeline: (text: string) => string;   // -> HTML string
+    pipeline: (text: string, baseUri: string) => string;
     trust:    Trust;
 }
 
-// markdown-it runs with html:false (raw HTML escaped) -> the
-// Markdown pipeline is safe by construction => 'trusted'. The
-// seam applies the central sanitizer ONLY to 'mustSanitize'
-// entries, so a future format cannot accidentally bypass it.
-const MARKDOWN_ENTRY: FormatEntry = { pipeline: renderMarkdown, trust: 'trusted' };
+// markdown-it runs with html:false (raw HTML escaped) and we
+// inject the rendered HTML into the SPA's container. Safe by
+// construction.
+const MARKDOWN_ENTRY: FormatEntry = {
+    pipeline: (text, _baseUri) => renderMarkdown(text),
+    trust:    'rendered',
+};
+
+// HTML preview lives in an iframe at the doc-host origin; the
+// browser handles framesets, sibling navigation, anchors, and
+// resource loading natively. CSP (set per-response by the
+// asset-router on doc-host HTML responses) is the single
+// security boundary - scripts blocked, no external network,
+// forms inert, base-uri pinned. The existing is_internal_uri
+// / externalize_uri navigation hand-off (mdview-app + mdview-doc
+// allow; everything else cancels + ShellExecutes) covers external
+// links via add_FrameNavigationStarting. No sandbox attribute:
+// it would inherit into frameset sub-frames, and the sandboxed
+// navigation flag limits each frame to navigating self +
+// descendants only - which rejects the cross-sibling target=name
+// nav a frameset's TOC relies on (clicking <a target="chapter">
+// in toc.htm to load into the sibling chapter frame). CSP already
+// covers everything sandbox would for an inert doc-preview frame.
+const HTML_ENTRY: FormatEntry = {
+    pipeline: (_text, baseUri) =>
+        `<iframe class="mdview-html-iframe" `
+        + `src="${escapeAttr(baseUri)}" `
+        + `referrerpolicy="no-referrer" `
+        + `loading="eager">`
+        + `</iframe>`,
+    trust: 'native',
+};
 
 const REGISTRY: Partial<Record<DocFormat, FormatEntry>> = {
     markdown: MARKDOWN_ENTRY,
-    html:     { pipeline: (t) => t, trust: 'mustSanitize' },
+    html:     HTML_ENTRY,
 };
 
-export function renderDocument(format: DocFormat, text: string): string {
+function escapeAttr(s: string): string {
+    return s.replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
+}
+
+export function renderDocument(format: DocFormat,
+                               text:   string,
+                               baseUri: string): string {
     const entry = REGISTRY[format] ?? MARKDOWN_ENTRY;
-    const html = entry.pipeline(text);
-    // 'mustSanitize' formats pass through the single central
-    // sanitizer; 'trusted' output is safe by construction.
-    return entry.trust === 'mustSanitize' ? sanitize(html) : html;
+    return entry.pipeline(text, baseUri);
 }
 
 export function isMarkdownFormat(format: DocFormat): boolean {
