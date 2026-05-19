@@ -6,5 +6,8 @@ EXPORTS
     ListLoadNext
     ListLoadNextW
     ListSendCommand
+    ListSearchText
+    ListSearchTextW
+    ListSearchDialog
     ListCloseWindow
     MdviewTest_SetLogSink

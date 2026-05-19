@@ -279,3 +279,38 @@ TEST_CASE("decode_renderer_message logs a distinct version-mismatch line",
     CHECK(g_captured_log.find(L"renderer message version mismatch got=2 want=1")
           != std::wstring::npos);
 }
+
+TEST_CASE("encode_find builds the find JSON and escapes the query",
+          "[renderer_protocol][find]") {
+    // encode_find takes explicit bools - the lcs_* bitmask decode is
+    // the plugin layer's job (PluginWindow::search_text), so native-
+    // core does NOT depend on the TC WLX SDK. Here: caseSensitive=true,
+    // wholeWord=false, backwards=false, findFirst=true.
+    auto j = mdview::encode_find(L"a\"b", true, false, false, true);
+    auto u = mdview::utf16_to_utf8(j);
+    auto p = nlohmann::json::parse(u);
+    CHECK(p["type"]        == "find");
+    CHECK(p["version"]     == 1);
+    CHECK(p["query"]       == "a\"b");
+    CHECK(p["caseSensitive"] == true);
+    CHECK(p["wholeWord"]   == false);
+    CHECK(p["backwards"]   == false);
+    CHECK(p["findFirst"]   == true);
+}
+
+TEST_CASE("decode_renderer_message accepts findResult",
+          "[renderer_protocol][find]") {
+    auto m = mdview::decode_renderer_message(
+        LR"({"type":"findResult","version":1,"found":true})");
+    REQUIRE(m.has_value());
+    auto* fr = std::get_if<mdview::FindResultMessage>(&*m);
+    REQUIRE(fr != nullptr);
+    CHECK(fr->found == true);
+}
+
+TEST_CASE("decode_renderer_message rejects findResult without found",
+          "[renderer_protocol][find]") {
+    auto m = mdview::decode_renderer_message(
+        LR"({"type":"findResult","version":1})");
+    CHECK_FALSE(m.has_value());
+}

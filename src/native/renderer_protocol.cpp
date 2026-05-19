@@ -60,6 +60,20 @@ std::wstring encode_load_document(const LoadDocumentMessage& msg) {
     return utf8_to_utf16(utf8);
 }
 
+std::wstring encode_find(std::wstring_view query,
+                         bool case_sensitive, bool whole_word,
+                         bool backwards, bool find_first) {
+    nlohmann::json j;
+    j["type"]          = "find";
+    j["version"]       = 1;
+    j["query"]         = utf16_to_utf8(std::wstring(query));
+    j["caseSensitive"] = case_sensitive;
+    j["wholeWord"]     = whole_word;
+    j["backwards"]     = backwards;
+    j["findFirst"]     = find_first;
+    return utf8_to_utf16(j.dump());
+}
+
 std::optional<RendererMessage>
 decode_renderer_message(std::wstring_view json) noexcept {
     if (json.empty()) {
@@ -129,6 +143,14 @@ decode_renderer_message(std::wstring_view json) noexcept {
                 it != j.end() && it->is_boolean()) {
                 m.requires_theme_rerender = it->get<bool>();
             }
+            return RendererMessage{m};
+        }
+        if (type == "findResult") {
+            if (!j.contains("found") || !j["found"].is_boolean()) {
+                return std::nullopt;
+            }
+            FindResultMessage m;
+            m.found = j["found"].get<bool>();
             return RendererMessage{m};
         }
         return std::nullopt;

@@ -17,6 +17,7 @@ add_executable(mdview_integration_tests
     test_mermaid.cpp
     test_m10_perf.cpp
     test_precache.cpp
+    test_search.cpp
     test_theme.cpp
 )
 

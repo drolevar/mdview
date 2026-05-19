@@ -2,8 +2,8 @@ import { applyInitialTheme, setTheme, getResolvedTheme }
                                               from './theme.js';
 import { render as renderMarkdown }           from './markdown.js';
 import {
-    isLoadDocument, isSetTheme,
-    postReady, postRendered, postRenderError,
+    isLoadDocument, isSetTheme, isFind,
+    postReady, postRendered, postRenderError, postFindResult,
     NO_DOC_ID,
 } from './protocol.js';
 import type { MermaidPassData, BackgroundHandle }
@@ -308,6 +308,26 @@ function run(): void {
     window.chrome.webview.addEventListener('message',
         (e: MessageEvent) => {
             const m = e.data;
+
+            if (isFind(m)) {
+                if (m.findFirst) {
+                    // Start a fresh search from the document top.
+                    window.getSelection()?.removeAllRanges();
+                }
+                // window.find(text, caseSensitive, backwards,
+                //   wrapAround, wholeWord, searchInFrames, showDialog)
+                // wrapAround=false: find-next past the last match
+                // returns false so TC shows its native "not found".
+                const found = (window as unknown as {
+                    find: (s: string, cs: boolean, bw: boolean,
+                           wrap: boolean, whole: boolean,
+                           frames: boolean, dialog: boolean)
+                        => boolean;
+                }).find(m.query, m.caseSensitive, m.backwards,
+                        false, m.wholeWord, false, false);
+                postFindResult(found);
+                return;
+            }
 
             if (isSetTheme(m)) {
                 setTheme(m.theme);

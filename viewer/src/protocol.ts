@@ -173,6 +173,34 @@ export function isSetTheme(m: unknown): m is SetThemeMessage {
     return t === 'light' || t === 'dark' || t === 'system';
 }
 
+export interface FindMessage {
+    type:          'find';
+    version:       1;
+    query:         string;
+    caseSensitive: boolean;
+    wholeWord:     boolean;
+    backwards:     boolean;
+    findFirst:     boolean;
+}
+
+export function isFind(m: unknown): m is FindMessage {
+    if (typeof m !== 'object' || m === null) return false;
+    const o = m as Record<string, unknown>;
+    if (o['type'] !== 'find')   return false;
+    if (o['version'] !== 1)     return false;
+    return typeof o['query'] === 'string'
+        && typeof o['caseSensitive'] === 'boolean'
+        && typeof o['wholeWord']     === 'boolean'
+        && typeof o['backwards']     === 'boolean'
+        && typeof o['findFirst']     === 'boolean';
+}
+
+export function postFindResult(found: boolean): void {
+    window.chrome.webview.postMessage({
+        type: 'findResult', version: 1, found,
+    });
+}
+
 export type LogLevel = 'error' | 'warn' | 'debug';
 
 export interface LogMessage {

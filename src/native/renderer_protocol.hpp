@@ -52,14 +52,27 @@ struct LoadDocumentMessage {
     bool                  summary_requested = false;
 };
 
+struct FindResultMessage {
+    bool found = false;
+};
+
 using RendererMessage = std::variant<
     ReadyMessage,
     RenderedMessage,
-    RenderErrorMessage>;
+    RenderErrorMessage,
+    FindResultMessage>;
 
 // Native -> renderer. Returns a wstring suitable for PostWebMessageAsJson.
 // Throws std::runtime_error on a UTF conversion failure (rare).
 std::wstring encode_load_document(const LoadDocumentMessage& msg);
+
+// Native -> renderer. Takes explicit bools, NOT TC's lcs_* bitmask:
+// renderer_protocol is native-core and must not depend on the WLX
+// SDK (listplug.h). The lcs_* -> bool decode is done by the plugin
+// layer (PluginWindow::search_text), which already uses listplug.h.
+std::wstring encode_find(std::wstring_view query,
+                         bool case_sensitive, bool whole_word,
+                         bool backwards, bool find_first);
 
 // Renderer -> native. Returns std::nullopt for malformed JSON, unknown
 // types, missing/mismatched version, or missing required fields.

@@ -37,6 +37,8 @@ public:
 
     int send_command(int command, int parameter);
 
+    int search_text(const std::wstring& query, int search_parameter);
+
     void close();
 
     std::optional<RenderedSummary>
@@ -78,12 +80,14 @@ private:
     using Fn_ListLoadW            = HWND  (__stdcall*)(HWND, wchar_t*, int);
     using Fn_ListLoadNextW        = int   (__stdcall*)(HWND, HWND, wchar_t*, int);
     using Fn_ListSendCommand      = int   (__stdcall*)(HWND, int, int);
+    using Fn_ListSearchTextW      = int   (__stdcall*)(HWND, WCHAR*, int);
     using Fn_ListCloseWindow      = void  (__stdcall*)(HWND);
     using Fn_MdviewTest_SetLogSink = void (*)(mdview::debug_log::LogSink) noexcept;
     Fn_ListSetDefaultParams  fn_set_params_   = nullptr;
     Fn_ListLoadW             fn_load_         = nullptr;
     Fn_ListLoadNextW         fn_load_next_    = nullptr;
     Fn_ListSendCommand       fn_send_cmd_     = nullptr;
+    Fn_ListSearchTextW       fn_search_       = nullptr;
     Fn_ListCloseWindow       fn_close_        = nullptr;
     Fn_MdviewTest_SetLogSink fn_set_log_sink_ = nullptr;
 

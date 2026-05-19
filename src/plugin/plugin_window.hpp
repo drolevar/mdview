@@ -52,6 +52,13 @@ public:
     // command was understood and applied (or harmlessly ignored).
     bool send_command(int command, int parameter) noexcept;
 
+    // Routed from the WLX ListSearchText/W export. Posts a find to
+    // the renderer and runs a bounded modal pump (the precache-
+    // acquire pattern) until the renderer answers or the deadline
+    // elapses. Returns true iff the text was found. A wedged
+    // renderer degrades to "not found" rather than hanging Lister.
+    bool search_text(std::wstring query, int lcs_flags) noexcept;
+
     // Routed from WebView2Host's on_renderer_message_ callback.
     void on_renderer_message(std::wstring_view json);
 

@@ -187,6 +187,22 @@ void ViewerHost::set_rasterization_scale(float scale) noexcept {
     if (host_) host_->set_rasterization_scale(scale);
 }
 
+void ViewerHost::begin_find() { find_result_.reset(); }
+
+void ViewerHost::post_find(std::wstring_view query,
+                           bool case_sensitive, bool whole_word,
+                           bool backwards, bool find_first) {
+    if (host_) host_->post_to_renderer(
+        encode_find(query, case_sensitive, whole_word,
+                    backwards, find_first));
+}
+
+std::optional<bool> ViewerHost::take_find_result() {
+    auto r = find_result_;
+    find_result_.reset();
+    return r;
+}
+
 void ViewerHost::close() {
     state_ = State::Closed;
     pending_load_.reset();
@@ -294,6 +310,10 @@ void ViewerHost::dispatch_renderer_message(std::wstring_view json) {
         if (!err->summary_json.empty()) {
             debug_log::emit_chunked_summary(err->id, err->summary_json);
         }
+        return;
+    }
+    if (auto* fr = std::get_if<FindResultMessage>(&*msg)) {
+        find_result_ = fr->found;
         return;
     }
 }

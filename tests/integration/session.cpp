@@ -185,6 +185,8 @@ void Session::load_dll_() {
         ::GetProcAddress(dll_, "ListLoadNextW"));
     fn_send_cmd_   = reinterpret_cast<Fn_ListSendCommand>(
         ::GetProcAddress(dll_, "ListSendCommand"));
+    fn_search_     = reinterpret_cast<Fn_ListSearchTextW>(
+        ::GetProcAddress(dll_, "ListSearchTextW"));
     fn_close_      = reinterpret_cast<Fn_ListCloseWindow>(
         ::GetProcAddress(dll_, "ListCloseWindow"));
 
@@ -246,6 +248,14 @@ bool Session::load_next(const std::wstring& fixture_name,
 int Session::send_command(int command, int parameter) {
     if (!fn_send_cmd_ || !plugin_hwnd_) return -1;
     return fn_send_cmd_(plugin_hwnd_, command, parameter);
+}
+
+int Session::search_text(const std::wstring& query,
+                         int search_parameter) {
+    if (!fn_search_ || !plugin_hwnd_) return -1;
+    return fn_search_(plugin_hwnd_,
+                      const_cast<wchar_t*>(query.c_str()),
+                      search_parameter);
 }
 
 void Session::close() {

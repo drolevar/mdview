@@ -314,6 +314,59 @@ bool PluginWindow::send_command(int command, int parameter) noexcept {
     }
 }
 
+bool PluginWindow::search_text(std::wstring query,
+                               int lcs_flags) noexcept {
+    try {
+        if (!viewer_ || query.empty()) return false;
+        // Decode TC's lcs_* SearchParameter bitmask HERE (the plugin
+        // layer already depends on the WLX SDK via send_command's
+        // lc_*/lcp_* use) and hand viewer_host plain bools, so
+        // native-core stays SDK-free. lcs_matchcase=2,
+        // lcs_wholewords=4, lcs_backwards=8, lcs_findfirst=1.
+        const bool cs = (lcs_flags & lcs_matchcase)  != 0;
+        const bool ww = (lcs_flags & lcs_wholewords) != 0;
+        const bool bw = (lcs_flags & lcs_backwards)  != 0;
+        const bool ff = (lcs_flags & lcs_findfirst)  != 0;
+        viewer_->begin_find();
+        viewer_->post_find(query, cs, ww, bw, ff);
+
+        // ~500 ms: a per-keystroke bound. A genuinely wedged
+        // renderer is separately recovered by the ProcessFailed
+        // path; here we only avoid freezing TC's UI thread while
+        // waiting for the async findResult. The renderer-message
+        // callback fires reentrantly on this thread as we pump, so
+        // take_find_result() becomes set during the loop.
+        constexpr DWORD kFindTimeoutMs = 500;
+        const ULONGLONG deadline =
+            ::GetTickCount64() + kFindTimeoutMs;
+        while (true) {
+            if (auto r = viewer_->take_find_result(); r.has_value()) {
+                return *r;
+            }
+            const ULONGLONG now = ::GetTickCount64();
+            if (now >= deadline) {
+                debug_log::log(
+                    L"wlx: search timed out; reporting not found");
+                return false;
+            }
+            const DWORD wait_ms =
+                static_cast<DWORD>(deadline - now);
+            const DWORD w = ::MsgWaitForMultipleObjects(
+                0, nullptr, FALSE, wait_ms, QS_ALLINPUT);
+            if (w == WAIT_TIMEOUT) continue;
+            MSG msg;
+            while (::PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+                if (msg.message == WM_QUIT) return false;
+                ::TranslateMessage(&msg);
+                ::DispatchMessageW(&msg);
+            }
+        }
+    } catch (...) {
+        LOG_CAUGHT_EXCEPTION();
+        return false;
+    }
+}
+
 LRESULT CALLBACK PluginWindow::static_window_proc(HWND hwnd, UINT msg,
                                                   WPARAM wparam,
                                                   LPARAM lparam) {

@@ -70,6 +70,18 @@ public:
     void load_document(DocumentRequest request);
     void apply_theme(Theme theme);
     void set_rasterization_scale(float scale) noexcept;
+
+    // S5 search bridge. begin_find clears the latch; post_find sends
+    // the request to the renderer; take_find_result returns and
+    // clears the latched findResult (nullopt until the renderer
+    // answers). The PluginWindow modal pump drives these. Bools, not
+    // lcs_*: viewer_host is native-core and SDK-free (the plugin layer
+    // decodes the TC bitmask).
+    void begin_find();
+    void post_find(std::wstring_view query, bool case_sensitive,
+                   bool whole_word, bool backwards, bool find_first);
+    std::optional<bool> take_find_result();
+
     void close();
 
     void dispatch_renderer_message(std::wstring_view json);
@@ -95,6 +107,7 @@ private:
     int                            doc_id_ = 0;  // monotonic, ++ per load_document
     Theme               current_theme_   = Theme::System;
     std::optional<Theme> pending_theme_;  // delivered before first ready
+    std::optional<bool> find_result_;   // latched FindResultMessage
 
     // ThemeChanged re-issues loadDocument only if the last render has
     // theme-baked output: math/hljs/markdown retint via CSS, only

@@ -365,7 +365,7 @@ HWND __stdcall ListLoadW(HWND ParentWin, WCHAR* FileToLoad, int ShowFlags) {
     }
 }
 
-static std::wstring widen_ansi_path_(const char* s) {
+static std::wstring widen_ansi_(const char* s) {
     if (s == nullptr || *s == '\0') return std::wstring();
     const int n = ::MultiByteToWideChar(CP_ACP, 0, s, -1, nullptr, 0);
     if (n <= 1) return std::wstring();
@@ -382,7 +382,7 @@ static std::wstring widen_ansi_path_(const char* s) {
 // Not extern "C" (listplug.h declares them with C++ linkage, see
 // ListLoadNextW); export names come from wlx_exports.def.
 HWND __stdcall ListLoad(HWND ParentWin, char* FileToLoad, int ShowFlags) {
-    std::wstring w = widen_ansi_path_(FileToLoad);
+    std::wstring w = widen_ansi_(FileToLoad);
     return ListLoadW(ParentWin, w.empty() ? nullptr : w.data(), ShowFlags);
 }
 
@@ -456,7 +456,7 @@ int __stdcall ListLoadNextW(
 
 int __stdcall ListLoadNext(HWND ParentWin, HWND PluginWin,
                            char* FileToLoad, int ShowFlags) {
-    std::wstring w = widen_ansi_path_(FileToLoad);
+    std::wstring w = widen_ansi_(FileToLoad);
     return ListLoadNextW(ParentWin, PluginWin,
                          w.empty() ? nullptr : w.data(), ShowFlags);
 }
@@ -480,6 +480,45 @@ int __stdcall ListSendCommand(HWND list_win, int command, int parameter) {
         LOG_CAUGHT_EXCEPTION();
         return LISTPLUGIN_ERROR;
     }
+}
+
+// TC's Lister find box calls ListSearchText (ANSI) / ListSearchTextW
+// (Unicode). Return value drives TC's native "not found" feedback,
+// so it must be a real result, not fire-and-forget. ListSearchDialog
+// returns LISTPLUGIN_ERROR so TC uses its own built-in input box.
+int __stdcall ListSearchTextW(HWND list_win, WCHAR* search_string,
+                              int search_parameter) {
+    mdview::precache_manager::instance().ensure_started();
+    mdview::debug_log::log(
+        L"wlx: ListSearchTextW q='{}' param=0x{:x}",
+        search_string != nullptr ? search_string : L"(null)",
+        static_cast<uint32_t>(search_parameter));
+    try {
+        auto* pw = mdview::get_window_self_ptr<mdview::PluginWindow>(
+            list_win);
+        if (pw == nullptr || search_string == nullptr) {
+            return LISTPLUGIN_ERROR;
+        }
+        return pw->search_text(std::wstring{search_string},
+                               search_parameter)
+            ? LISTPLUGIN_OK
+            : LISTPLUGIN_ERROR;
+    } catch (...) {
+        LOG_CAUGHT_EXCEPTION();
+        return LISTPLUGIN_ERROR;
+    }
+}
+
+int __stdcall ListSearchText(HWND list_win, char* search_string,
+                             int search_parameter) {
+    std::wstring w = widen_ansi_(search_string);
+    return ListSearchTextW(list_win,
+                           w.empty() ? nullptr : w.data(),
+                           search_parameter);
+}
+
+int __stdcall ListSearchDialog(HWND /*list_win*/, int /*find_next*/) {
+    return LISTPLUGIN_ERROR;  // TC shows its own search box
 }
 
 extern "C" __declspec(dllexport)
