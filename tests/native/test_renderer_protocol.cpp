@@ -2,6 +2,7 @@
 
 #include "common/utf.hpp"
 #include "native/debug_log.hpp"
+#include "native/document_format.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
@@ -322,4 +323,20 @@ TEST_CASE("decode_renderer_message rejects findResult without id",
     auto m = mdview::decode_renderer_message(
         LR"({"type":"findResult","version":1,"found":true})");
     CHECK_FALSE(m.has_value());
+}
+
+TEST_CASE("encode_load_document emits the document format",
+          "[renderer_protocol][format]") {
+    mdview::LoadDocumentMessage m;
+    m.id = 1;
+    m.markdown = L"x";
+    m.format = mdview::DocumentFormat::Html;
+    auto j = nlohmann::json::parse(
+        mdview::utf16_to_utf8(mdview::encode_load_document(m)));
+    CHECK(j["document"]["format"] == "html");
+
+    mdview::LoadDocumentMessage d;          // default
+    auto jd = nlohmann::json::parse(
+        mdview::utf16_to_utf8(mdview::encode_load_document(d)));
+    CHECK(jd["document"]["format"] == "markdown");
 }

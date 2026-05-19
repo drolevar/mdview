@@ -371,6 +371,7 @@ void ViewerHost::post_request_(DocumentRequest req) {
     msg.markdown     = std::move(req.markdown);
     msg.options      = options_;
     msg.theme            = req.theme;
+    msg.format           = req.format;
     msg.summary_requested = req.summary_requested;
     host_->post_to_renderer(encode_load_document(msg));
     state_               = State::Loaded;

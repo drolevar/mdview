@@ -38,6 +38,8 @@ struct DocumentRequest {
     // ViewerHost::load_document fills it from current/pending_theme.
     Theme theme = Theme::System;
 
+    DocumentFormat format = DocumentFormat::Markdown;
+
     // Integration-harness opt-in for the renderer summary on the
     // rendered ack.
     bool  summary_requested = false;

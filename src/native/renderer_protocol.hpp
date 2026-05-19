@@ -1,6 +1,7 @@
 #pragma once
 
 #include "native/theme.hpp"
+#include "native/document_format.hpp"
 
 #include <filesystem>
 #include <optional>
@@ -50,6 +51,7 @@ struct LoadDocumentMessage {
     ViewerOptions         options;
     Theme                 theme            = Theme::System;
     bool                  summary_requested = false;
+    DocumentFormat        format = DocumentFormat::Markdown;
 };
 
 struct FindResultMessage {

@@ -47,6 +47,7 @@ std::wstring encode_load_document(const LoadDocumentMessage& msg) {
     doc["displayName"] = utf16_to_utf8(msg.display_name);
     doc["baseUri"]     = utf16_to_utf8(msg.base_uri);
     doc["markdown"]    = utf16_to_utf8(msg.markdown);
+    doc["format"]      = utf16_to_utf8(std::wstring(to_wire(msg.format)));
     j["document"] = std::move(doc);
 
     j["options"] = options_to_json(msg.options);

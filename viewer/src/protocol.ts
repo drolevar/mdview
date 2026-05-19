@@ -22,11 +22,14 @@ export interface ViewerOptions {
 
 export type ThemeName = 'light' | 'dark' | 'system';
 
+export type DocFormat = 'markdown' | 'html';
+
 export interface LoadDocumentDocument {
     path:        string;
     displayName: string;
     baseUri:     string;
     markdown:    string;
+    format?:     DocFormat;   // absent / unknown => 'markdown' (back-compat)
 }
 
 // Sentinel doc id for a renderError raised when no document is the

@@ -262,7 +262,8 @@ bool PluginWindow::load_next(std::wstring file_to_load,
                                         .filename().wstring();
                 req.markdown     = format_load_error_md(result.error);
                 req.summary_requested = want_summary;
-                // Intentionally no doc_dir / base_uri on error.
+                // Intentionally no doc_dir / base_uri / format on error (the
+                // error body is markdown; the default format renders it).
                 viewer_->load_document(std::move(req));
             }
             return false;
@@ -274,6 +275,7 @@ bool PluginWindow::load_next(std::wstring file_to_load,
                                 .filename().wstring();
         req.markdown     = std::move(result.content);
         req.doc_dir      = std::move(result.doc_dir);
+        req.format       = format_for_path(std::filesystem::path{file_to_load});
         req.summary_requested = want_summary;
 
         if (viewer_) {
