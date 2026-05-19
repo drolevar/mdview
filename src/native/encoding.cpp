@@ -72,9 +72,7 @@ std::wstring decode_utf16_be(std::span<const std::byte> body) {
     return out;
 }
 
-}
-
-std::wstring decode(std::span<const std::byte> bytes) {
+std::wstring decode_raw_(std::span<const std::byte> bytes) {
     // 1. UTF-8 BOM
     if (starts_with(bytes, {0xEF, 0xBB, 0xBF})) {
         auto body = bytes.subspan(3);
@@ -102,6 +100,20 @@ std::wstring decode(std::span<const std::byte> bytes) {
 
     // 5. Fall back to CP_ACP (lossy where codepage differs).
     return mb_to_wide(CP_ACP, 0, bytes);
+}
+
+}
+
+std::wstring decode(std::span<const std::byte> bytes) {
+    std::wstring out = decode_raw_(bytes);
+    // A residual leading U+FEFF (double-BOM, or a UTF-16 body whose
+    // first unit is itself the BOM) is a zero-width no-break space
+    // to the Markdown parser and silently corrupts the first block.
+    // Strip exactly one; a second is real content.
+    if (!out.empty() && out.front() == static_cast<wchar_t>(0xFEFF)) {
+        out.erase(out.begin());
+    }
+    return out;
 }
 
 }

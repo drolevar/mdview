@@ -98,3 +98,42 @@ TEST_CASE("encoding::decode handles BOM-only inputs as empty",
     REQUIRE(encoding::decode(utf16_le_bom_only).empty());
     REQUIRE(encoding::decode(utf16_be_bom_only).empty());
 }
+
+TEST_CASE("encoding::decode strips a single leading U+FEFF left "
+          "after UTF-16 LE decode (double BOM)", "[encoding]") {
+    // FF FE = UTF-16 LE BOM (consumed). Body: FF FE -> U+FEFF, then
+    // 'h','i'. The residual U+FEFF must not survive to the parser.
+    auto in = bytes_from({0xFF, 0xFE, 0xFF, 0xFE,
+                          'h', 0x00, 'i', 0x00});
+    auto s = encoding::decode(in);
+    REQUIRE(s == L"hi");
+}
+
+TEST_CASE("encoding::decode strips a single leading U+FEFF after "
+          "UTF-16 BE decode (double BOM)", "[encoding]") {
+    auto in = bytes_from({0xFE, 0xFF, 0xFE, 0xFF,
+                          0x00, 'h', 0x00, 'i'});
+    auto s = encoding::decode(in);
+    REQUIRE(s == L"hi");
+}
+
+TEST_CASE("encoding::decode strips at most ONE leading U+FEFF",
+          "[encoding]") {
+    // FF FE = LE BOM (consumed). Body: FF FE FF FE FF FE 78 00 =
+    // U+FEFF U+FEFF U+FEFF x. Only the first is a stray BOM; the
+    // remaining two are content and must survive.
+    auto in = bytes_from({0xFF, 0xFE, 0xFF, 0xFE, 0xFF, 0xFE, 0xFF, 0xFE,
+                          'x', 0x00});
+    auto s = encoding::decode(in);
+    REQUIRE(s == L"\uFEFF\uFEFFx");
+}
+
+TEST_CASE("encoding::decode leaves an interior U+FEFF intact",
+          "[encoding]") {
+    // UTF-16 LE BOM consumed; body: 'a', U+FEFF, 'b'. Leading char
+    // is 'a' (not FEFF) so nothing is stripped.
+    auto in = bytes_from({0xFF, 0xFE, 'a', 0x00,
+                          0xFF, 0xFE, 'b', 0x00});
+    auto s = encoding::decode(in);
+    REQUIRE(s == L"a\uFEFFb");
+}
