@@ -2,6 +2,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+
 using namespace mdview::integration;
 
 TEST_CASE("markdown polish: github alerts render as typed callouts",
@@ -37,4 +39,20 @@ TEST_CASE("markdown polish: github-compatible heading slugs",
     // The 5 injected heading permalinks are excluded from the
     // document-link count; this fixture has no body links.
     CHECK(sum->link == 0);
+}
+
+TEST_CASE("markdown polish: doc-relative resource with '#'/space loads",
+          "[integration][markdown_polish][resource]") {
+    Session s;
+    REQUIRE(s.load(
+        L"22_resource_unsafe_name/22_resource_unsafe_name.md"));
+    auto sum = s.wait_for_summary();
+    REQUIRE(sum.has_value());
+    REQUIRE_FALSE(sum->image_requests.empty());
+    // The awkwardly-named doc image must actually decode (reuses the
+    // M15 v6 loaded gate - classification alone is not enough).
+    auto ok = std::any_of(
+        sum->image_requests.begin(), sum->image_requests.end(),
+        [](auto& r){ return r.in_doc_base_uri && r.loaded; });
+    CHECK(ok);
 }

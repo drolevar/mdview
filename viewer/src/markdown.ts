@@ -125,6 +125,49 @@ md.validateLink = (url: string): boolean => {
     return defaultValidate(url);
 };
 
+// A doc-relative path whose filename contains a byte the browser
+// treats as URL structure - '#' (fragment) or '?' (query) - is
+// truncated before our asset-router sees it, so the resource 404s.
+// markdown-it already %20-encodes spaces in a <...> destination but
+// leaves '#'/'?' raw. Encode exactly those structural bytes (and a
+// raw space, for safety); leave everything else - including existing
+// %XX - untouched. This is idempotent (re-running finds no raw
+// '#'/'?'/space) and never touches '/', so absolute/protocol-
+// relative/anchor URLs and already-encoded paths round-trip
+// unchanged. The asset-router percent-decodes + re-applies its
+// path-safety guards, so the encoded path resolves to the file.
+function encodeResourcePath(url: string): string {
+    const t = url.trim();
+    if (/^[a-z][a-z0-9+.-]*:/i.test(t)) return url; // scheme: absolute
+    if (t.startsWith('//') || t.startsWith('#')) return url;
+    return t.replace(/[#?]/g, c => (c === '#' ? '%23' : '%3F'))
+            .replace(/ /g, '%20');
+}
+
+const baseImageRule = md.renderer.rules.image!;
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+    const tok = tokens[idx]!;
+    const ai = tok.attrIndex('src');
+    if (ai >= 0) {
+        const a = tok.attrs![ai]!;
+        a[1] = encodeResourcePath(a[1]);
+    }
+    return baseImageRule(tokens, idx, options, env, self);
+};
+
+const baseLinkOpen = md.renderer.rules.link_open
+    ?? ((tokens, idx, options, _env, self) =>
+        self.renderToken(tokens, idx, options));
+md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+    const tok = tokens[idx]!;
+    const hi = tok.attrIndex('href');
+    if (hi >= 0) {
+        const a = tok.attrs![hi]!;
+        a[1] = encodeResourcePath(a[1]);
+    }
+    return baseLinkOpen(tokens, idx, options, env, self);
+};
+
 let mermaidCounter      = 0;
 let mathInlineCounter   = 0;
 let mathDisplayCounter  = 0;
