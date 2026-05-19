@@ -81,6 +81,11 @@ struct RenderedSummary {
     std::optional<MathSummary> math;
 
     std::vector<ImageRequestRecord> image_requests;
+
+    struct {
+        int note = 0, tip = 0, important = 0, warning = 0, caution = 0;
+    } alerts;
+    std::vector<std::string> heading_ids;
 };
 
 std::optional<RenderedSummary>

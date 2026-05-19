@@ -133,6 +133,24 @@ parse_summary_json(const std::wstring& payload) {
                 s.image_requests.push_back(std::move(r));
             }
         }
+
+        if (j.contains("markdownPolish") && j["markdownPolish"].is_object()) {
+            const auto& mp = j["markdownPolish"];
+            if (mp.contains("alerts") && mp["alerts"].is_object()) {
+                const auto& a = mp["alerts"];
+                s.alerts.note      = a.value("note", 0);
+                s.alerts.tip       = a.value("tip", 0);
+                s.alerts.important = a.value("important", 0);
+                s.alerts.warning   = a.value("warning", 0);
+                s.alerts.caution   = a.value("caution", 0);
+            }
+            if (mp.contains("headingIds") && mp["headingIds"].is_array()) {
+                for (const auto& h : mp["headingIds"]) {
+                    if (h.is_string()) s.heading_ids.push_back(
+                        h.get<std::string>());
+                }
+            }
+        }
         return s;
     } catch (...) {
         return std::nullopt;

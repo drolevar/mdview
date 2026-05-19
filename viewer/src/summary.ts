@@ -1,7 +1,7 @@
 import type { RenderedSummary }   from './protocol.js';
 import type { MermaidPassData }   from './mermaid-chunk.js';
 import type { MathPassData }      from './math-chunk.js';
-import { fenceRecords }           from './markdown.js';
+import { fenceRecords, alertCounts } from './markdown.js';
 
 export function buildSummary(
     container: HTMLElement,
@@ -64,7 +64,7 @@ export function buildSummary(
         || mathPass.chunkLoaded;
 
     return {
-        summarySchema: 6,
+        summarySchema: 7,
         durationMs,
         theme,
         blockCount,
@@ -87,5 +87,9 @@ export function buildSummary(
             errors:           mathPass.errors,
         } : null,
         imageRequests,
+        markdownPolish: {
+            alerts: { ...alertCounts },
+            headingIds: [],
+        },
     };
 }

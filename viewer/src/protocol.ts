@@ -59,7 +59,7 @@ export interface SetThemeMessage {
 }
 
 export interface RenderedSummary {
-    summarySchema: 6;
+    summarySchema: 7;
     durationMs:    number;
     theme:         'light' | 'dark';
     blockCount: {
@@ -133,6 +133,19 @@ export interface RenderedSummary {
         // from one blocked/404'd (classification alone cannot).
         loaded:        boolean;
     }>;
+    // Schema v7 (M17). Additive; pre-v7 readers tolerate absence.
+    markdownPolish: {
+        alerts: {
+            note:      number;
+            tip:       number;
+            important: number;
+            warning:   number;
+            caution:   number;
+        };
+        // Generated heading element ids, document order. Lets the
+        // harness assert GitHub-compatible slug output deterministically.
+        headingIds: string[];
+    };
 }
 
 export function isLoadDocument(m: unknown): m is LoadDocumentMessage {

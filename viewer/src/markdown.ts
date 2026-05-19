@@ -5,6 +5,8 @@ import deflist      from 'markdown-it-deflist';
 import attrs        from 'markdown-it-attrs';
 import anchor       from 'markdown-it-anchor';
 
+import type StateCore        from 'markdown-it/lib/rules_core/state_core.mjs';
+
 import { highlight }         from './highlight.js';
 import { registerMathRules } from './math-rules.js';
 
@@ -29,6 +31,70 @@ md.use(deflist);
 md.use(attrs);
 md.use(anchor, { permalink: false });
 registerMathRules(md);
+
+type AlertType = 'note' | 'tip' | 'important' | 'warning' | 'caution';
+
+// Mutable accumulator (same pattern as fenceRecords): app.ts reads
+// after render to build the schema-v7 summary.
+export const alertCounts: Record<AlertType, number> = {
+    note: 0, tip: 0, important: 0, warning: 0, caution: 0,
+};
+
+const ALERT_RE = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i;
+
+md.core.ruler.push('mdview_github_alerts', (state: StateCore) => {
+    const tokens = state.tokens;
+    for (let i = 0; i < tokens.length; i++) {
+        if (tokens[i]!.type !== 'blockquote_open') continue;
+        // Find this blockquote's first inline token.
+        const inlineIdx = tokens.findIndex(
+            (t, k) => k > i && t.type === 'inline');
+        if (inlineIdx === -1) continue;
+        const inline = tokens[inlineIdx]!;
+        const m = ALERT_RE.exec(inline.content);
+        if (!m) continue;
+        const type = m[1]!.toLowerCase() as AlertType;
+        alertCounts[type]++;
+        // Drop the marker text from the rendered body.
+        inline.content = inline.content.slice(m[0].length);
+        if (inline.children && inline.children.length > 0) {
+            const first = inline.children[0]!;
+            if (first.type === 'text') {
+                first.content = first.content.replace(ALERT_RE, '');
+            }
+        }
+        // Retag the blockquote open/close to a typed container.
+        const open = tokens[i]!;
+        open.type = 'mdview_alert_open';
+        open.tag  = 'div';
+        open.attrSet('class', `mdview-alert mdview-alert-${type}`);
+        // Match the corresponding blockquote_close (nesting aware).
+        // Start at depth 1 for the open we just retagged, and scan
+        // from i+1 so the retagged token isn't re-counted.
+        let depth = 1;
+        for (let k = i + 1; k < tokens.length; k++) {
+            if (tokens[k]!.type === 'blockquote_open')  depth++;
+            if (tokens[k]!.type === 'blockquote_close') {
+                depth--;
+                if (depth === 0) {
+                    tokens[k]!.type = 'mdview_alert_close';
+                    tokens[k]!.tag  = 'div';
+                    break;
+                }
+            }
+        }
+    }
+});
+
+md.renderer.rules.mdview_alert_open = (tokens, idx) => {
+    const cls = tokens[idx]!.attrGet('class') ?? 'mdview-alert';
+    const type = cls.split(' ').find(c => c.startsWith('mdview-alert-'))
+        ?.replace('mdview-alert-', '') ?? 'note';
+    const label = type.charAt(0).toUpperCase() + type.slice(1);
+    return `<div class="${cls}" role="note">`
+        + `<p class="mdview-alert-title">${label}</p>`;
+};
+md.renderer.rules.mdview_alert_close = () => `</div>\n`;
 
 const defaultValidate = md.validateLink.bind(md);
 md.validateLink = (url: string): boolean => {
@@ -102,5 +168,7 @@ export function render(content: string): string {
     mermaidCounter      = 0;
     mathInlineCounter   = 0;
     mathDisplayCounter  = 0;
+    (Object.keys(alertCounts) as AlertType[])
+        .forEach(k => { alertCounts[k] = 0; });
     return md.render(content);
 }

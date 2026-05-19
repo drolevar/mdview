@@ -6,6 +6,12 @@
     --rule:      #e5e5e7;
     --code-bg:   #f5f5f7;
     --code-fg:   #1c1c1e;
+    --error-acc: #d33;
+    --alert-note-acc:      #0969da;
+    --alert-tip-acc:       #1a7f37;
+    --alert-important-acc: #8250df;
+    --alert-warning-acc:   #9a6700;
+    --alert-caution-acc:   #cf222e;
 }
 
 :root[data-theme="dark"] {
@@ -16,6 +22,12 @@
     --rule:      #38383a;
     --code-bg:   #2c2c2e;
     --code-fg:   #f2f2f2;
+    --error-acc: #ff6f6f;
+    --alert-note-acc:      #4493f8;
+    --alert-tip-acc:       #3fb950;
+    --alert-important-acc: #ab7df8;
+    --alert-warning-acc:   #d29922;
+    --alert-caution-acc:   #f85149;
 }
 
 html, body {
@@ -115,23 +127,15 @@ main#document .mdview-mermaid-rendered .mdview-mermaid-source {
 main#document .mdview-mermaid-error {
     margin-top: 0.5em;
     padding: 0.6em 0.8em;
-    border-left: 4px solid #d33;
+    border-left: 4px solid var(--error-acc);
     background: var(--code-bg);
     border-radius: 0 6px 6px 0;
 }
 
-:root[data-theme="dark"] main#document .mdview-mermaid-error {
-    border-left-color: #ff6f6f;
-}
-
 main#document .mdview-mermaid-error-title {
     font-weight: 600;
-    color: #d33;
+    color: var(--error-acc);
     margin-bottom: 0.3em;
-}
-
-:root[data-theme="dark"] main#document .mdview-mermaid-error-title {
-    color: #ff6f6f;
 }
 
 main#document .mdview-mermaid-error-msg {
@@ -140,3 +144,24 @@ main#document .mdview-mermaid-error-msg {
     padding: 0;
     white-space: pre-wrap;
 }
+
+main#document .mdview-alert {
+    border-left: 4px solid var(--alert-note-acc);
+    background: var(--code-bg);
+    padding: 0.4em 1em;
+    margin: 1em 0;
+    border-radius: 0 6px 6px 0;
+}
+main#document .mdview-alert > .mdview-alert-title {
+    font-weight: 600;
+    margin: 0 0 0.3em;
+    color: var(--alert-note-acc);
+}
+main#document .mdview-alert-tip       { border-left-color: var(--alert-tip-acc); }
+main#document .mdview-alert-tip       > .mdview-alert-title { color: var(--alert-tip-acc); }
+main#document .mdview-alert-important { border-left-color: var(--alert-important-acc); }
+main#document .mdview-alert-important > .mdview-alert-title { color: var(--alert-important-acc); }
+main#document .mdview-alert-warning   { border-left-color: var(--alert-warning-acc); }
+main#document .mdview-alert-warning   > .mdview-alert-title { color: var(--alert-warning-acc); }
+main#document .mdview-alert-caution   { border-left-color: var(--alert-caution-acc); }
+main#document .mdview-alert-caution   > .mdview-alert-title { color: var(--alert-caution-acc); }
