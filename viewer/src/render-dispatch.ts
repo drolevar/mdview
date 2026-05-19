@@ -1,4 +1,5 @@
 import { render as renderMarkdown } from './markdown.js';
+import { sanitize }                 from './sanitize.js';
 import type { DocFormat }           from './protocol.js';
 
 type Trust = 'trusted' | 'mustSanitize';
@@ -15,14 +16,15 @@ const MARKDOWN_ENTRY: FormatEntry = { pipeline: renderMarkdown, trust: 'trusted'
 
 const REGISTRY: Partial<Record<DocFormat, FormatEntry>> = {
     markdown: MARKDOWN_ENTRY,
-    // the html entry is wired by the format-pipeline work
+    html:     { pipeline: (t) => t, trust: 'mustSanitize' },
 };
 
 export function renderDocument(format: DocFormat, text: string): string {
     const entry = REGISTRY[format] ?? MARKDOWN_ENTRY;
     const html = entry.pipeline(text);
-    // the central sanitizer is wired when html lands; the trusted path returns as-is
-    return html;
+    // 'mustSanitize' formats pass through the single central
+    // sanitizer; 'trusted' output is safe by construction.
+    return entry.trust === 'mustSanitize' ? sanitize(html) : html;
 }
 
 export function isMarkdownFormat(format: DocFormat): boolean {
