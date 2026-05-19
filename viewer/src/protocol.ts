@@ -133,7 +133,7 @@ export interface RenderedSummary {
         // from one blocked/404'd (classification alone cannot).
         loaded:        boolean;
     }>;
-    // Schema v7 (M17). Additive; pre-v7 readers tolerate absence.
+    // Schema v7. Additive; pre-v7 readers tolerate absence.
     markdownPolish: {
         alerts: {
             note:      number;

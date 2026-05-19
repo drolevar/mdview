@@ -49,8 +49,8 @@ TEST_CASE("markdown polish: doc-relative resource with '#'/space loads",
     auto sum = s.wait_for_summary();
     REQUIRE(sum.has_value());
     REQUIRE_FALSE(sum->image_requests.empty());
-    // The awkwardly-named doc image must actually decode (reuses the
-    // M15 v6 loaded gate - classification alone is not enough).
+    // The awkwardly-named doc image must actually decode: assert the
+    // loaded gate, since request classification alone is not enough.
     auto ok = std::any_of(
         sum->image_requests.begin(), sum->image_requests.end(),
         [](auto& r){ return r.in_doc_base_uri && r.loaded; });

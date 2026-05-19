@@ -72,7 +72,7 @@ public:
     void apply_theme(Theme theme);
     void set_rasterization_scale(float scale) noexcept;
 
-    // S5 search bridge. begin_find clears the latch; post_find sends
+    // Search bridge. begin_find clears the latch; post_find sends
     // the request to the renderer; take_find_result returns and
     // clears the latched findResult (nullopt until the renderer
     // answers). The PluginWindow modal pump drives these. Bools, not
