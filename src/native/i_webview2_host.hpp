@@ -88,6 +88,19 @@ public:
     // call before adopt - implementations stash the latest value and
     // apply once the controller exists.
     virtual void set_color_scheme(Theme theme) noexcept = 0;
+
+    // Test-only: synchronously evaluate a JS expression in the
+    // WebView2 main frame. Returns the ExecuteScript JSON result
+    // (or empty on E_NOTIMPL / timeout) in `out`. Bounded modal
+    // pump bridges the async completion handler to a synchronous
+    // call. Default returns E_NOTIMPL so unit-test mocks
+    // (MockHost, TestHost, NullHost) don't need to override it.
+    virtual HRESULT execute_script_for_test(
+        std::wstring_view /*script*/,
+        int /*timeout_ms*/,
+        std::wstring& /*out*/) noexcept {
+        return E_NOTIMPL;
+    }
 };
 
 }

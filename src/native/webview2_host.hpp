@@ -84,6 +84,11 @@ public:
     void reload() noexcept override;
     void set_color_scheme(Theme theme) noexcept override;
 
+    HRESULT execute_script_for_test(
+        std::wstring_view script,
+        int               timeout_ms,
+        std::wstring&     out) noexcept override;
+
 private:
     enum class Phase { Building, Parked, Adopted };
 

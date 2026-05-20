@@ -205,6 +205,13 @@ void Session::load_dll_() {
     }
     fn_set_log_sink_(&Session::on_log_line_);
 
+    fn_set_shell_open_hook_ =
+        reinterpret_cast<Fn_MdviewTest_SetShellOpenHook>(
+            ::GetProcAddress(dll_, "MdviewTest_SetShellOpenHook"));
+    fn_execute_script_ =
+        reinterpret_cast<Fn_MdviewTest_ExecuteScript>(
+            ::GetProcAddress(dll_, "MdviewTest_ExecuteScript"));
+
     struct ListDefaultParamStruct {
         int   size;
         DWORD verLow;
@@ -256,6 +263,30 @@ int Session::search_text(const std::wstring& query,
     return fn_search_(plugin_hwnd_,
                       const_cast<wchar_t*>(query.c_str()),
                       search_parameter);
+}
+
+void Session::set_shell_open_hook(ShellOpenFn fn) {
+    if (!fn_set_shell_open_hook_) {
+        throw std::runtime_error(
+            "WLX missing MdviewTest_SetShellOpenHook export - "
+            "rebuild with current changes");
+    }
+    fn_set_shell_open_hook_(fn);
+}
+
+std::wstring Session::execute_script(std::wstring_view script,
+                                     int               timeout_ms) {
+    if (!fn_execute_script_ || !plugin_hwnd_) return {};
+    std::wstring script_z(script);
+    LPWSTR result = nullptr;
+    const HRESULT hr = fn_execute_script_(
+        plugin_hwnd_, script_z.c_str(), timeout_ms, &result);
+    std::wstring out;
+    if (SUCCEEDED(hr) && result != nullptr) {
+        out.assign(result);
+    }
+    if (result != nullptr) ::CoTaskMemFree(result);
+    return out;
 }
 
 void Session::close() {

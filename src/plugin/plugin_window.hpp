@@ -59,6 +59,14 @@ public:
     // renderer degrades to "not found" rather than hanging Lister.
     bool search_text(std::wstring query, int lcs_flags) noexcept;
 
+    // Test-only: drives WebView2 ExecuteScript with a bounded modal
+    // pump. Routed from MdviewTest_ExecuteScript so the integration
+    // harness can click anchors and otherwise drive the page without
+    // baking a JS evaluator into production code paths.
+    HRESULT execute_script_for_test(std::wstring_view script,
+                                    int               timeout_ms,
+                                    std::wstring&     out) noexcept;
+
     // Routed from WebView2Host's on_renderer_message_ callback.
     void on_renderer_message(std::wstring_view json);
 

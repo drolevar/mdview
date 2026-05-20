@@ -39,6 +39,19 @@ public:
 
     int search_text(const std::wstring& query, int search_parameter);
 
+    // Install a recording double on the WLX-side detail::
+    // shell_open_hook(). Pass nullptr to restore the production
+    // default (::ShellExecuteW).
+    using ShellOpenFn = HINSTANCE (__stdcall*)(
+        HWND, LPCWSTR, LPCWSTR, LPCWSTR, LPCWSTR, INT);
+    void set_shell_open_hook(ShellOpenFn fn);
+
+    // Synchronously evaluate a JS expression in the WebView2 main
+    // frame. Returns the ExecuteScript JSON result (typically a
+    // quoted string or "null"); empty string on error or timeout.
+    std::wstring execute_script(std::wstring_view script,
+                                int               timeout_ms = 5000);
+
     void close();
 
     std::optional<RenderedSummary>
@@ -83,6 +96,10 @@ private:
     using Fn_ListSearchTextW      = int   (__stdcall*)(HWND, WCHAR*, int);
     using Fn_ListCloseWindow      = void  (__stdcall*)(HWND);
     using Fn_MdviewTest_SetLogSink = void (*)(mdview::debug_log::LogSink) noexcept;
+    using Fn_MdviewTest_SetShellOpenHook =
+        void (*)(ShellOpenFn) noexcept;
+    using Fn_MdviewTest_ExecuteScript =
+        HRESULT (*)(HWND, LPCWSTR, int, LPWSTR*) noexcept;
     Fn_ListSetDefaultParams  fn_set_params_   = nullptr;
     Fn_ListLoadW             fn_load_         = nullptr;
     Fn_ListLoadNextW         fn_load_next_    = nullptr;
@@ -90,6 +107,10 @@ private:
     Fn_ListSearchTextW       fn_search_       = nullptr;
     Fn_ListCloseWindow       fn_close_        = nullptr;
     Fn_MdviewTest_SetLogSink fn_set_log_sink_ = nullptr;
+    Fn_MdviewTest_SetShellOpenHook
+                             fn_set_shell_open_hook_ = nullptr;
+    Fn_MdviewTest_ExecuteScript
+                             fn_execute_script_      = nullptr;
 
 public:
     static bool                hidden;

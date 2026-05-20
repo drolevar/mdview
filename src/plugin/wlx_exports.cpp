@@ -3,6 +3,7 @@
 #include "native/plugin_globals.hpp"
 #include "native/precache_manager.hpp"
 #include "native/theme.hpp"
+#include "native/webview2_externalize.hpp"
 #include "platform/win32_window.hpp"
 #include "plugin/fallback_window.hpp"
 #include "plugin/listclose_defer.hpp"
@@ -14,8 +15,11 @@
 
 #include <windows.h>
 #include <dwmapi.h>
+#include <objbase.h>
+#include <shellapi.h>
 #pragma comment(lib, "dwmapi.lib")
 
+#include <cstring>
 #include <filesystem>
 #include <memory>
 #include <unordered_map>
@@ -524,4 +528,49 @@ int __stdcall ListSearchDialog(HWND /*list_win*/, int /*find_next*/) {
 extern "C" __declspec(dllexport)
 void MdviewTest_SetLogSink(mdview::debug_log::LogSink sink) noexcept {
     mdview::debug_log::set_sink(sink);
+}
+
+// Test-only: forward a recording double from the test process into
+// the WLX-side per-DLL static. mdview_core is linked statically into
+// both the WLX DLL and the test exe, so each has its own copy of
+// detail::shell_open_hook()'s function-static; without this export
+// the recording double installed in the test process never reaches
+// the running WLX. nullptr restores the production default
+// (::ShellExecuteW).
+extern "C" __declspec(dllexport)
+void MdviewTest_SetShellOpenHook(
+        mdview::detail::ShellOpenFn fn) noexcept {
+    mdview::detail::shell_open_hook() = fn ? fn : &::ShellExecuteW;
+}
+
+// Test-only: run a JS expression in the WebView2 main frame via
+// ICoreWebView2::ExecuteScript and block on completion via the same
+// bounded modal pump pattern PluginWindow::search_text uses. Returns
+// the JSON result in a CoTaskMemAlloc'd LPWSTR (caller frees with
+// CoTaskMemFree) on S_OK; non-S_OK leaves *out_result null.
+extern "C" __declspec(dllexport)
+HRESULT MdviewTest_ExecuteScript(HWND   plugin_hwnd,
+                                 LPCWSTR script,
+                                 int    timeout_ms,
+                                 LPWSTR* out_result) noexcept {
+    if (script == nullptr || out_result == nullptr) return E_INVALIDARG;
+    *out_result = nullptr;
+    auto* pw = mdview::get_window_self_ptr<mdview::PluginWindow>(
+        plugin_hwnd);
+    if (pw == nullptr) return E_HANDLE;
+    try {
+        std::wstring result;
+        const HRESULT hr = pw->execute_script_for_test(
+            std::wstring_view{script}, timeout_ms, result);
+        if (FAILED(hr)) return hr;
+
+        const size_t bytes = (result.size() + 1) * sizeof(wchar_t);
+        auto* buf = static_cast<LPWSTR>(::CoTaskMemAlloc(bytes));
+        if (buf == nullptr) return E_OUTOFMEMORY;
+        std::memcpy(buf, result.c_str(), bytes);
+        *out_result = buf;
+        return S_OK;
+    } catch (...) {
+        return E_FAIL;
+    }
 }

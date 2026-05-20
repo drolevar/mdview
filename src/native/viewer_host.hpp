@@ -89,6 +89,15 @@ public:
     void dispatch_renderer_message(std::wstring_view json);
     void dispatch_process_failed(int process_failed_kind);
 
+    // Test-only: forwards to IWebView2Host::execute_script_for_test.
+    // Returns E_NOT_VALID_STATE before the host exists; otherwise the
+    // implementation's HRESULT (E_NOTIMPL for mocks, real result from
+    // WebView2Host). out carries the ExecuteScript JSON result on
+    // success.
+    HRESULT execute_script_for_test(std::wstring_view script,
+                                    int               timeout_ms,
+                                    std::wstring&     out) noexcept;
+
 private:
     enum class State {
         Constructed, EnvPending, ControllerPending, Configuring,

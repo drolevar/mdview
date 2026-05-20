@@ -377,6 +377,13 @@ void ViewerHost::post_request_(DocumentRequest req) {
     last_loaded_doc_dir_ = req.doc_dir;
 }
 
+HRESULT ViewerHost::execute_script_for_test(std::wstring_view script,
+                                            int               timeout_ms,
+                                            std::wstring&     out) noexcept {
+    if (!host_) return E_NOT_VALID_STATE;
+    return host_->execute_script_for_test(script, timeout_ms, out);
+}
+
 void ViewerHost::dispatch_process_failed(int process_failed_kind) {
     if (state_ == State::Closed) return;
     state_ = State::Crashed;

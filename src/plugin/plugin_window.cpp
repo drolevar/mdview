@@ -369,6 +369,14 @@ bool PluginWindow::search_text(std::wstring query,
     }
 }
 
+HRESULT PluginWindow::execute_script_for_test(
+        std::wstring_view script,
+        int               timeout_ms,
+        std::wstring&     out) noexcept {
+    if (!viewer_) return E_NOT_VALID_STATE;
+    return viewer_->execute_script_for_test(script, timeout_ms, out);
+}
+
 LRESULT CALLBACK PluginWindow::static_window_proc(HWND hwnd, UINT msg,
                                                   WPARAM wparam,
                                                   LPARAM lparam) {

@@ -10,4 +10,6 @@ EXPORTS
     ListSearchTextW
     ListSearchDialog
     ListCloseWindow
+    MdviewTest_ExecuteScript
     MdviewTest_SetLogSink
+    MdviewTest_SetShellOpenHook

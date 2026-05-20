@@ -395,6 +395,53 @@ void WebView2Host::reload() noexcept {
     }
 }
 
+HRESULT WebView2Host::execute_script_for_test(
+        std::wstring_view script,
+        int               timeout_ms,
+        std::wstring&     out) noexcept {
+    if (!webview_) return E_NOT_VALID_STATE;
+    try {
+        bool         done       = false;
+        HRESULT      async_hr   = S_OK;
+        std::wstring result;
+
+        auto callback = Microsoft::WRL::Callback<
+            ICoreWebView2ExecuteScriptCompletedHandler>(
+            [&](HRESULT hr, LPCWSTR json) noexcept -> HRESULT {
+                async_hr = hr;
+                if (json) result = json;
+                done     = true;
+                return S_OK;
+            });
+        std::wstring script_z(script);
+        HRESULT hr = webview_->ExecuteScript(
+            script_z.c_str(), callback.Get());
+        if (FAILED(hr)) return hr;
+
+        // Bounded modal pump - same shape PluginWindow::search_text
+        // and precache_manager::acquire use to bridge WLX-synchronous
+        // calls to the async WebView2 reply.
+        const auto deadline = std::chrono::steady_clock::now()
+                            + std::chrono::milliseconds(timeout_ms);
+        MSG msg{};
+        while (!done
+            && std::chrono::steady_clock::now() < deadline) {
+            if (::PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+                ::TranslateMessage(&msg);
+                ::DispatchMessageW(&msg);
+            } else {
+                ::Sleep(1);
+            }
+        }
+        if (!done) return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+        if (FAILED(async_hr)) return async_hr;
+        out = std::move(result);
+        return S_OK;
+    } catch (...) {
+        return wil::ResultFromCaughtException();
+    }
+}
+
 void WebView2Host::set_color_scheme(Theme theme) noexcept {
     pending_color_scheme_ = theme;
     if (controller_) {
