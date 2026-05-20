@@ -16,7 +16,8 @@
 param(
     [string]   $Path = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
     [string[]] $Extensions = @('.cpp','.hpp','.h','.cc','.ts','.mjs',
-                               '.js','.cmake','.ps1','.def','.rc')
+                               '.js','.cmake','.ps1','.def','.rc',
+                               '.css')
 )
 
 $ErrorActionPreference = 'Stop'

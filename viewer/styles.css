@@ -113,7 +113,7 @@ main#document th, main#document td {
     padding: 0.4rem 0.7rem;
 }
 
-/* highlight.js container — defers actual token colors to hljs-*.css.
+/* highlight.js container -- defers actual token colors to hljs-*.css.
    overflow-x lives on the parent <pre>; no need to repeat it here. */
 main#document pre code.hljs {
     display: block;
