@@ -389,13 +389,41 @@ function run(): void {
                 //   wrapAround, wholeWord, searchInFrames, showDialog)
                 // wrapAround=false: find-next past the last match
                 // returns false so TC shows its native "not found".
-                const found = (window as unknown as {
-                    find: (s: string, cs: boolean, bw: boolean,
-                           wrap: boolean, whole: boolean,
-                           frames: boolean, dialog: boolean)
-                        => boolean;
-                }).find(m.query, m.caseSensitive, m.backwards,
-                        false, m.wholeWord, false, false);
+                type FindFn = (s: string, cs: boolean, bw: boolean,
+                    wrap: boolean, whole: boolean,
+                    frames: boolean, dialog: boolean) => boolean;
+                const findIn = (w: Window): boolean => {
+                    const fn = (w as unknown as { find?: FindFn }).find;
+                    if (typeof fn !== 'function') return false;
+                    try {
+                        return fn.call(w, m.query, m.caseSensitive,
+                            m.backwards, false, m.wholeWord,
+                            false, false);
+                    } catch {
+                        return false;
+                    }
+                };
+                let found = findIn(window);
+                if (!found && latestFormat === 'html') {
+                    // The HTML preview iframe is same-origin under
+                    // /doc/ on the single mdview.example origin, so
+                    // the parent SPA can drive its window.find
+                    // directly. Searching the SPA first is harmless
+                    // when its body is just the iframe element;
+                    // falling through here covers every match that
+                    // lives inside the previewed doc.
+                    const iframe = container.querySelector<HTMLIFrameElement>(
+                        'iframe.mdview-html-iframe');
+                    const w = iframe?.contentWindow ?? null;
+                    if (w) {
+                        if (m.findFirst) {
+                            try {
+                                w.getSelection?.()?.removeAllRanges();
+                            } catch { /* transient about:blank */ }
+                        }
+                        found = findIn(w);
+                    }
+                }
                 postFindResult(m.id, found);
                 return;
             }

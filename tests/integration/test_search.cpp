@@ -26,3 +26,23 @@ TEST_CASE("search: present text returns OK, absent returns ERROR",
     CHECK(s.search_text(L"zzqqxx_not_present", 1)
           == LISTPLUGIN_ERROR);
 }
+
+// HTML preview lives in a same-origin /doc/ iframe, so the SPA's
+// find handler can drive its contentWindow.find() directly. Marked
+// [.unstable] for the same reason the markdown find case is - the
+// bounded modal pump bridging the synchronous WLX call to the async
+// renderer reply is timing-sensitive on cold/hidden CI runners.
+TEST_CASE("html: in-document search reaches inside the iframe",
+          "[integration][search][html][.unstable]") {
+    Session s;
+    REQUIRE(s.load(L"27_html_with_text.html"));
+    auto sum = s.wait_for_summary();
+    REQUIRE(sum.has_value());
+    REQUIRE(sum->document_format == "html");
+    REQUIRE(sum->iframe_loaded);
+
+    CHECK(s.search_text(L"findme-html-sentinel", /*lcs_findfirst*/ 1)
+          == LISTPLUGIN_OK);
+    CHECK(s.search_text(L"this-string-is-absent", 1)
+          == LISTPLUGIN_ERROR);
+}
