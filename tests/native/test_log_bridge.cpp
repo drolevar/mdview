@@ -81,3 +81,68 @@ TEST_CASE("log_level_name", "[log]") {
     CHECK(log_level_name(LogLevel::Warn)  == L"warn");
     CHECK(log_level_name(LogLevel::Debug) == L"debug");
 }
+
+TEST_CASE("decode_forward_key_message: vk=49 (VK_1) accepted",
+          "[forward_key]") {
+    auto m = decode_forward_key_message(
+        LR"({"type":"forwardKey","version":1,"vk":49})");
+    REQUIRE(m.has_value());
+    CHECK(m->vk == 49u);
+}
+
+TEST_CASE("decode_forward_key_message: missing version rejected",
+          "[forward_key]") {
+    auto m = decode_forward_key_message(
+        LR"({"type":"forwardKey","vk":49})");
+    CHECK_FALSE(m.has_value());
+}
+
+TEST_CASE("decode_forward_key_message: mismatched version rejected",
+          "[forward_key]") {
+    auto m = decode_forward_key_message(
+        LR"({"type":"forwardKey","version":2,"vk":49})");
+    CHECK_FALSE(m.has_value());
+}
+
+TEST_CASE("decode_forward_key_message: missing vk rejected",
+          "[forward_key]") {
+    auto m = decode_forward_key_message(
+        LR"({"type":"forwardKey","version":1})");
+    CHECK_FALSE(m.has_value());
+}
+
+TEST_CASE("decode_forward_key_message: non-integer vk rejected",
+          "[forward_key]") {
+    auto m = decode_forward_key_message(
+        LR"({"type":"forwardKey","version":1,"vk":"49"})");
+    CHECK_FALSE(m.has_value());
+}
+
+TEST_CASE("decode_forward_key_message: vk out of range rejected",
+          "[forward_key]") {
+    auto m = decode_forward_key_message(
+        LR"({"type":"forwardKey","version":1,"vk":-1})");
+    CHECK_FALSE(m.has_value());
+    auto m2 = decode_forward_key_message(
+        LR"({"type":"forwardKey","version":1,"vk":99999})");
+    CHECK_FALSE(m2.has_value());
+}
+
+TEST_CASE("decode_forward_key_message: wrong type rejected",
+          "[forward_key]") {
+    auto m = decode_forward_key_message(
+        LR"({"type":"loadDocument","version":1,"vk":49})");
+    CHECK_FALSE(m.has_value());
+}
+
+TEST_CASE("decode_forward_key_message: malformed json rejected",
+          "[forward_key]") {
+    auto m = decode_forward_key_message(L"not json");
+    CHECK_FALSE(m.has_value());
+}
+
+TEST_CASE("decode_forward_key_message: empty json rejected",
+          "[forward_key]") {
+    auto m = decode_forward_key_message(L"");
+    CHECK_FALSE(m.has_value());
+}

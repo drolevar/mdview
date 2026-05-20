@@ -376,6 +376,26 @@ function run(): void {
         }
     }
 
+    // Forward plain digit keys 1-8 to native so TC can switch view
+    // modes. Chromium pumps the WebView2 child on its own internal
+    // thread, so neither WebView2's AcceleratorKeyPressed event
+    // (digits aren't accelerator-class) nor a host-process message
+    // hook can see these keydowns. The SPA is the only legitimate
+    // handoff: catch in JS, post a forwardKey message to native,
+    // native PostMessages WM_KEYDOWN up to the Lister.
+    document.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+        const m = /^Digit([1-8])$/.exec(e.code);
+        if (!m) return;
+        e.preventDefault();
+        const vk = 0x30 + parseInt(m[1], 10);   // VK_1..VK_8
+        window.chrome.webview.postMessage({
+            type: 'forwardKey',
+            version: 1,
+            vk,
+        });
+    }, { passive: false });
+
     window.chrome.webview.addEventListener('message',
         (e: MessageEvent) => {
             const m = e.data;

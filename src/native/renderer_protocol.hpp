@@ -97,4 +97,20 @@ decode_log_message(std::wstring_view json) noexcept;
 
 std::wstring_view log_level_name(LogLevel l) noexcept;
 
+// Side-channel renderer key-forward bridge. The SPA catches plain
+// digit keys 1-8 (and any other key TC owns that WebView2 would
+// otherwise swallow) and posts {type:"forwardKey", version:1,
+// vk:NN} so native can PostMessage(WM_KEYDOWN) to TC's Lister. Plain
+// digits aren't accelerator-class and WebView2's AcceleratorKeyPressed
+// never fires for them; a thread-local message hook can't catch them
+// either because Chromium pumps the WebView2 child window on its own
+// internal thread (verified empirically via dbgview - the host
+// process's main-thread GetMessage never sees the digit keydowns).
+struct ForwardKeyMessage {
+    unsigned int vk = 0;
+};
+
+std::optional<ForwardKeyMessage>
+decode_forward_key_message(std::wstring_view json) noexcept;
+
 }

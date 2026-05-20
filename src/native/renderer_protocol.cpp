@@ -204,4 +204,42 @@ std::wstring_view log_level_name(LogLevel l) noexcept {
     return L"unknown";
 }
 
+std::optional<ForwardKeyMessage>
+decode_forward_key_message(std::wstring_view json) noexcept {
+    if (json.empty()) return std::nullopt;
+    // Cheap discriminator before paying for a full UTF-16->UTF-8
+    // copy + JSON parse. WebMessageReceived fires for every
+    // renderer message (ready, rendered with the full summary
+    // JSON, renderError, findResult, log) and this decode runs on
+    // each; the recycle-path perf gate catches a full second parse.
+    if (json.find(L"\"type\":\"forwardKey\"")
+            == std::wstring_view::npos) {
+        return std::nullopt;
+    }
+    try {
+        std::string utf8 = utf16_to_utf8(json);
+        auto j = nlohmann::json::parse(utf8, nullptr,
+                                       /*allow_exceptions=*/false);
+        if (j.is_discarded() || !j.is_object()) return std::nullopt;
+        if (!j.contains("type") || !j["type"].is_string()
+            || j["type"].get<std::string>() != "forwardKey") {
+            return std::nullopt;
+        }
+        if (!j.contains("version") || !j["version"].is_number_integer()
+            || j["version"].get<int>() != 1) {
+            return std::nullopt;
+        }
+        if (!j.contains("vk") || !j["vk"].is_number_integer()) {
+            return std::nullopt;
+        }
+        const int vk = j["vk"].get<int>();
+        if (vk < 0 || vk > 0xFFFF) return std::nullopt;
+        ForwardKeyMessage m;
+        m.vk = static_cast<unsigned int>(vk);
+        return m;
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
 }

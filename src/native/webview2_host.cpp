@@ -520,6 +520,26 @@ void WebView2Host::install_handlers_() {
                         log_level_name(lm->level), lm->text);
                     return S_OK;
                 }
+                // Key-forward side channel: the SPA catches plain
+                // digit keys 1-8 (and any other TC-owned key the
+                // WebView swallows) and posts {type:"forwardKey"}
+                // so we can PostMessage(WM_KEYDOWN) up to the Lister.
+                // Plain digits aren't accelerator-class and Chromium
+                // pumps the WebView2 child on its own internal thread,
+                // so neither AcceleratorKeyPressed nor a thread-local
+                // WH_GETMESSAGE can see them - the SPA is the only
+                // legitimate handoff point.
+                if (auto fk = decode_forward_key_message(body); fk) {
+                    if (phase_ == Phase::Adopted) {
+                        HWND lister = ::GetAncestor(
+                            parent_hwnd_, GA_PARENT);
+                        if (lister) {
+                            ::PostMessageW(lister, WM_KEYDOWN,
+                                static_cast<WPARAM>(fk->vk), 0);
+                        }
+                    }
+                    return S_OK;
+                }
                 if (phase_ == Phase::Building) {
                     // Cheap substring sniff against the fixed protocol.
                     if (body.find(L"\"type\":\"ready\"") !=
