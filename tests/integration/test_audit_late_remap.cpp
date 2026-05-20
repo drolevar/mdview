@@ -37,19 +37,20 @@ TEST_CASE("audit: late-remap produces a working first nav with images",
     CHECK(any_loaded);
 
     // True-child guard: the doc base URI is hard-coded native-side
-    // to kDocBaseUri ("https://mdview-doc.example/", trailing slash;
-    // the whole doc dir maps to the host root). `./logo.png` therefore
-    // resolves under that root, and the path-segment-aware classifier
-    // (summary.ts) must still flag it true - i.e. the trailing-slash
-    // `base` + url.startsWith(base) branch holds end-to-end through the
-    // real renderer/summary pipeline. Every request that resolves under
-    // the doc host must be classified in-base (no false negative).
+    // to kDocBaseUri ("https://mdview.example/doc/", trailing slash;
+    // the whole doc dir maps under the /doc/ path). `./logo.png`
+    // therefore resolves under that root, and the path-segment-aware
+    // classifier (summary.ts) must still flag it true - i.e. the
+    // trailing-slash `base` + url.startsWith(base) branch holds
+    // end-to-end through the real renderer/summary pipeline. Every
+    // request that resolves under /doc/ must be classified in-base
+    // (no false negative).
     //
     // The sibling-prefixed FALSE case (".../docfoo/x" vs base
     // ".../doc") cannot be exercised here: the harness has no API to
     // inject a path-prefixed, slash-less docBaseUri, so it is covered
     // by manual smoke instead.
-    constexpr std::string_view kDocRoot = "https://mdview-doc.example/";
+    constexpr std::string_view kDocRoot = "https://mdview.example/doc/";
     for (const auto& r : sum->image_requests) {
         if (std::string_view{r.url}.substr(0, kDocRoot.size()) == kDocRoot) {
             CHECK(r.in_doc_base_uri);

@@ -107,12 +107,15 @@ export function buildSummary(
             const f = container.querySelector(
                 'iframe.mdview-html-iframe') as HTMLIFrameElement | null;
             if (!f) return null;
-            // app.ts sets dataset.mdviewLoaded='1' only on the
-            // actual load event; absent on error or timeout.
-            // contentWindow / contentDocument can't be used here
-            // because the doc-host iframe is cross-origin to the
-            // SPA and contentWindow returns a truthy WindowProxy
-            // for any in-DOM iframe regardless of load state.
+            // app.ts sets dataset.mdviewLoaded='1' only on the actual
+            // load event; absent on error or timeout. The iframe is
+            // same-origin now (parent SPA + iframe both live at
+            // mdview.example), but the dataset flag is what the
+            // renderer pipeline actually observes - contentDocument
+            // readyState mid-navigation can briefly show 'complete'
+            // for the placeholder about:blank before the real doc
+            // commits, so the load-event flag is the deterministic
+            // signal.
             return f.dataset.mdviewLoaded === '1';
         })(),
     };

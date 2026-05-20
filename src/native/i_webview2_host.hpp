@@ -68,11 +68,10 @@ public:
     // (the precache phase routes its own messages internally).
     virtual void post_to_renderer(std::wstring_view json) = 0;
 
-    // Points the doc host (mdview-doc.example) at the directory
-    // containing the document being loaded. Called once per
-    // load_document; records the dir for the asset-router's
-    // handle_doc_request to serve from. Returns S_OK once the
-    // controller exists.
+    // Points the /doc/ route at the directory containing the
+    // document being loaded. Called once per load_document; records
+    // the dir for the asset-router's handle_doc_request to serve
+    // from. Returns S_OK once the controller exists.
     virtual HRESULT remap_doc_dir(
         const std::filesystem::path& doc_dir) noexcept = 0;
 

@@ -257,7 +257,7 @@ TEST_CASE("ViewerHost assigns monotonic doc ids and remaps doc dirs",
     REQUIRE(mp->last_remap_dir ==
             std::filesystem::path(LR"(C:\dir_b)"));
     // Successful remap fills base_uri in the load message.
-    REQUIRE(mp->posted[0].find(L"https://mdview-doc.example/")
+    REQUIRE(mp->posted[0].find(L"https://mdview.example/doc/")
             != std::wstring::npos);
 }
 
@@ -458,7 +458,7 @@ TEST_CASE("ViewerHost retries remap at drain and posts without reload "
     REQUIRE(mp->remap_count  == 2);
     REQUIRE(mp->reload_count == 1);
     REQUIRE(mp->posted.size() == 1);
-    REQUIRE(mp->posted[0].find(L"https://mdview-doc.example/")
+    REQUIRE(mp->posted[0].find(L"https://mdview.example/doc/")
             != std::wstring::npos);
 }
 

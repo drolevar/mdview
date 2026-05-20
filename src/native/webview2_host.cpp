@@ -22,7 +22,7 @@ namespace mdview {
 
 namespace {
 
-constexpr const wchar_t* kAppNavigateTo = L"https://mdview-app.example/index.html";
+constexpr const wchar_t* kAppNavigateTo = L"https://mdview.example/index.html";
 
 // MDVIEW_VIEWER_DEV_DIR override (hot-edit during development): when
 // set to an existing directory, the app-host falls back to the legacy
@@ -124,7 +124,7 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                                     webview_.try_query<ICoreWebView2_3>()) {
                                 THROW_IF_FAILED(
                                     wv3->SetVirtualHostNameToFolderMapping(
-                                        kAppHostName,
+                                        kHostName,
                                         dev_dir.c_str(),
                                         COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS));
                                 debug_log::log(
@@ -136,31 +136,24 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                                     L"dev-mode app-host mapping skipped");
                             }
                         } else {
-                            const std::wstring app_filter =
-                                std::wstring(L"https://") +
-                                kAppHostName + L"/*";
-                            const std::wstring doc_filter =
-                                std::wstring(L"https://") +
-                                kDocHostName + L"/*";
+                            const std::wstring origin_filter =
+                                std::wstring(kHostOrigin) + L"/*";
                             // Use the WithRequestSourceKinds overload
                             // (WebView2 SDK 1.0.1722.45+). The old
                             // AddWebResourceRequestedFilter is deprecated;
                             // the new variant requires explicit
                             // RequestSourceKinds (we want the default:
                             // document + all subresource fetches).
-                            // Both hosts go through the same handler;
-                            // the doc host serves doc-relative files
-                            // from disk (handle_doc_request).
+                            // One filter, one origin; path-prefix
+                            // routing inside the handler dispatches
+                            // /doc/* to the disk-backed doc handler
+                            // and everything else to the embedded
+                            // asset router.
                             if (auto wv22 =
                                     webview_.try_query<ICoreWebView2_22>()) {
                                 THROW_IF_FAILED(
                                     wv22->AddWebResourceRequestedFilterWithRequestSourceKinds(
-                                        app_filter.c_str(),
-                                        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
-                                        COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL));
-                                THROW_IF_FAILED(
-                                    wv22->AddWebResourceRequestedFilterWithRequestSourceKinds(
-                                        doc_filter.c_str(),
+                                        origin_filter.c_str(),
                                         COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
                                         COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL));
                             } else {
@@ -169,16 +162,11 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                                 // (still functional, just nags in logs).
                                 THROW_IF_FAILED(
                                     webview_->AddWebResourceRequestedFilter(
-                                        app_filter.c_str(),
-                                        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL));
-                                THROW_IF_FAILED(
-                                    webview_->AddWebResourceRequestedFilter(
-                                        doc_filter.c_str(),
+                                        origin_filter.c_str(),
                                         COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL));
                             }
                             const std::wstring doc_prefix =
-                                std::wstring(L"https://") +
-                                kDocHostName + L"/";
+                                std::wstring(kDocBaseUri);
                             auto res_handler = Microsoft::WRL::Callback<
                                 ICoreWebView2WebResourceRequestedEventHandler>(
                                 [env, wp, doc_prefix]
@@ -189,10 +177,10 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                                     if (!a) {
                                         return respond_unavailable(args, env);
                                     }
-                                    // Dispatch by host: doc-relative
-                                    // resources hit the disk-backed doc
-                                    // handler, everything else the
-                                    // embedded asset router.
+                                    // Dispatch by path prefix: /doc/*
+                                    // hits the disk-backed doc handler,
+                                    // everything else the embedded
+                                    // asset router.
                                     bool is_doc = false;
                                     wil::com_ptr<
                                         ICoreWebView2WebResourceRequest> rq;
@@ -224,16 +212,15 @@ void WebView2Host::start_build_(HWND hwnd_message_parent) noexcept {
                                 });
                             debug_log::log(
                                 L"wlx: asset-router filter installed origin={}",
-                                kAppHostName);
+                                kHostName);
                         }
 
-                        // Doc host (kDocHostName) is served by the
+                        // The /doc/* route is served by the same
                         // WebResourceRequested asset-router (see
-                        // asset_router handle_doc_request) - the same
-                        // path that serves the app host. Nothing to
-                        // pre-map; set_current_doc_dir (called from
-                        // remap_doc_dir per load) points it at the
-                        // document's directory.
+                        // asset_router handle_doc_request) - nothing
+                        // to pre-map; set_current_doc_dir (called
+                        // from remap_doc_dir per load) points it at
+                        // the document's directory.
 
                         // Apply controller-local default-bg always.
                         apply_default_bg_to_controller_();

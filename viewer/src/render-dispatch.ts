@@ -15,21 +15,22 @@ const MARKDOWN_ENTRY: FormatEntry = {
     trust:    'rendered',
 };
 
-// HTML preview lives in an iframe at the doc-host origin; the
-// browser handles framesets, sibling navigation, anchors, and
-// resource loading natively. CSP (set per-response by the
-// asset-router on doc-host HTML responses) is the single
+// HTML preview lives in a same-origin iframe under the /doc/
+// path. The browser handles framesets, sibling navigation,
+// anchors, and resource loading natively. CSP (set per-response
+// by the asset-router on doc HTML responses) is the single
 // security boundary - scripts blocked, no external network,
-// forms inert, base-uri pinned. The existing is_internal_uri
-// / externalize_uri navigation hand-off (mdview-app + mdview-doc
-// allow; everything else cancels + ShellExecutes) covers external
-// links via add_FrameNavigationStarting. No sandbox attribute:
-// it would inherit into frameset sub-frames, and the sandboxed
-// navigation flag limits each frame to navigating self +
-// descendants only - which rejects the cross-sibling target=name
-// nav a frameset's TOC relies on (clicking <a target="chapter">
-// in toc.htm to load into the sibling chapter frame). CSP already
-// covers everything sandbox would for an inert doc-preview frame.
+// forms inert, base-uri pinned. The existing is_internal_uri /
+// externalize_uri navigation hand-off (single mdview.example
+// origin allow; everything else cancels + ShellExecutes) covers
+// external links via add_FrameNavigationStarting. No sandbox
+// attribute: it would inherit into frameset sub-frames, and the
+// sandboxed navigation flag limits each frame to navigating
+// self + descendants only - which rejects the cross-sibling
+// target=name nav a frameset's TOC relies on (clicking
+// <a target="chapter"> in toc.htm to load into the sibling
+// chapter frame). CSP already covers everything sandbox would
+// for an inert doc-preview frame.
 const HTML_ENTRY: FormatEntry = {
     pipeline: (_text, baseUri) =>
         `<iframe class="mdview-html-iframe" `

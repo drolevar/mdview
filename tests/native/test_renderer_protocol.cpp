@@ -106,7 +106,7 @@ TEST_CASE("encode_load_document includes id field",
     msg.display_name = L"a.md";
     msg.path         = LR"(C:\a.md)";
     msg.markdown     = L"# hi";
-    msg.base_uri     = L"https://mdview-doc.example/";
+    msg.base_uri     = L"https://mdview.example/doc/";
     auto json_text = mdview::encode_load_document(msg);
     REQUIRE(json_text.find(L"\"id\":12") != std::wstring::npos);
 }

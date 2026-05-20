@@ -27,13 +27,18 @@ namespace {
 
 const std::wstring& app_origin_prefix_() {
     static const std::wstring p =
-        std::wstring(L"https://") + kAppHostName + L"/";
+        std::wstring(kHostOrigin) + L"/";
     return p;
 }
 
+// Doc resources serve under /doc/<rel>. The prefix used for parse
+// matching includes the path discriminator so a malformed /docfoo
+// URL is rejected (parse_doc_request_path can only see a real /doc/
+// match), and so the routed-path returned by the parser keeps a
+// leading '/' just like the app path - the disk-side append in
+// handle_doc_request is unchanged.
 const std::wstring& doc_origin_prefix_() {
-    static const std::wstring p =
-        std::wstring(L"https://") + kDocHostName + L"/";
+    static const std::wstring p = std::wstring(kDocBaseUri);
     return p;
 }
 
@@ -153,38 +158,38 @@ std::wstring build_headers_(std::wstring_view content_type,
     }
     h += L"X-Content-Type-Options: nosniff\r\n";
     if (csp == CspProfile::AppHost) {
-        // SPA origin. script-src stays 'self' for the renderer's own
-        // bundles; frame-src allows embedding the doc host for the
-        // HTML/XHTML preview iframe; style-src needs 'unsafe-inline'
-        // for Mermaid v11 (inline <style> in generated SVGs);
-        // base-uri keeps the doc-host token because app.ts sets
-        // <base href> to mdview-doc URLs for relative image resolution.
+        // SPA response. script-src 'self' admits the renderer's own
+        // bundles; frame-src 'self' admits the HTML/XHTML preview
+        // iframe (same-origin under the /doc/ path prefix); img-src
+        // 'self' covers doc-relative images served by the asset
+        // router; style-src needs 'unsafe-inline' for Mermaid v11
+        // (inline <style> in generated SVGs); base-uri 'self' lets
+        // app.ts set <base href> to /doc/ URLs for relative image
+        // resolution without admitting external bases.
         h += L"Content-Security-Policy: "
              L"default-src 'self'; "
              L"script-src 'self'; "
              L"worker-src 'self'; "
              L"style-src 'self' 'unsafe-inline'; "
-             L"img-src 'self' https://mdview-doc.example data:; "
+             L"img-src 'self' data:; "
              L"font-src 'self'; "
              L"connect-src 'none'; "
              L"object-src 'none'; "
-             L"base-uri 'self' https://mdview-doc.example; "
+             L"base-uri 'self'; "
              L"form-action 'none'; "
-             L"frame-src https://mdview-doc.example; "
+             L"frame-src 'self'; "
              L"frame-ancestors 'none'\r\n";
     } else if (csp == CspProfile::DocHostHtml) {
-        // Previewed HTML/XHTML, served into a sandboxed iframe.
-        // script-src 'none' is the hard guarantee that an arbitrary
-        // local HTML file's <script> can never execute. style-src
-        // allows the page's own inline + linked CSS; img/font are
-        // same-origin (the doc host) plus data: for inline images.
-        // base-uri 'self' prevents a malicious <base> from rerouting
-        // relative URLs out of the doc origin. frame-ancestors lists
-        // every legitimate embedder: the SPA at mdview-app for the
-        // primary preview iframe, AND the doc host itself so that a
-        // frameset's sub-frames (which load sibling .htm into <frame>
-        // children of the frameset doc) are permitted - their direct
-        // ancestor is the frameset doc at mdview-doc, not mdview-app.
+        // Previewed HTML/XHTML served under /doc/ on the same origin
+        // as the SPA. script-src 'none' is the hard guarantee that an
+        // arbitrary local HTML file's <script> can never execute.
+        // style-src admits the page's own inline + linked CSS; img/
+        // font are same-origin plus data: for inline images. base-uri
+        // 'self' prevents a malicious <base> from rerouting relative
+        // URLs out of the origin. frame-ancestors 'self' lets the SPA
+        // iframe a preview doc AND a frameset doc iframe its sibling
+        // chapter frames (their direct ancestor is the frameset doc,
+        // which is itself a 'self' origin response).
         h += L"Content-Security-Policy: "
              L"default-src 'self'; "
              L"script-src 'none'; "
@@ -196,8 +201,7 @@ std::wstring build_headers_(std::wstring_view content_type,
              L"base-uri 'self'; "
              L"form-action 'none'; "
              L"frame-src 'self'; "
-             L"frame-ancestors https://mdview-app.example "
-             L"https://mdview-doc.example\r\n";
+             L"frame-ancestors 'self'\r\n";
     }
     return h;
 }
@@ -368,6 +372,14 @@ parse_app_request_path(std::wstring_view uri) noexcept {
 
     if (path.empty() || path == L"/") {
         path = L"/index.html";
+    }
+
+    // The /doc/ path prefix is owned by parse_doc_request_path; reject
+    // it here so the two URL namespaces stay formally distinct (a
+    // misrouted /doc/x 404s instead of looking up the literal name in
+    // the embedded asset table).
+    if (path.starts_with(L"/doc/") || path == L"/doc") {
+        return std::nullopt;
     }
 
     return path;
@@ -602,10 +614,10 @@ HRESULT handle_doc_request(
     }
 
     // HTML/XHTML previews carry a strict CSP that pins script-src
-    // 'none' and frame-ancestors to the app host - the single
-    // security boundary for arbitrary local HTML rendered into the
-    // sandboxed iframe. Other doc-host responses (images, CSS,
-    // fonts) are subresources of that frame and need no CSP.
+    // 'none' and frame-ancestors to 'self' - the single security
+    // boundary for arbitrary local HTML rendered into the preview
+    // iframe. Other doc responses (images, CSS, fonts) are
+    // subresources of that frame and need no CSP.
     const bool html_preview =
         content_type.starts_with(L"text/html") ||
         content_type.starts_with(L"application/xhtml+xml");

@@ -12,19 +12,21 @@
 
 namespace mdview {
 
-// Set the directory the doc host (kDocHostName) serves from. Called
-// per loadDocument with the document's parent directory. Thread-safe
+// Set the directory the /doc/ route serves from. Called per
+// loadDocument with the document's parent directory. Thread-safe
 // (the WebResourceRequested handler reads it on the WebView2 thread
-// while ListLoadW sets it on the TC thread). The doc host is served
-// by handle_doc_request, not a virtual-host folder mapping - the
-// latter silently fails for cross-origin fetches from the app-host
-// page.
+// while ListLoadW sets it on the TC thread). Doc resources go
+// through handle_doc_request, not a virtual-host folder mapping -
+// the latter silently fails for fetches initiated by the embedded
+// asset router's responses.
 void set_current_doc_dir(std::filesystem::path dir) noexcept;
 
-// Extract the URL path from an mdview-app.example URI, applying
-// normalization and security rules:
+// Extract the URL path from a request targeting the SPA assets,
+// applying normalization and security rules:
 //   - scheme must be https
-//   - host must be kAppHostName (host_names.hpp)
+//   - host must be kHostName (host_names.hpp)
+//   - path must NOT start with /doc/ (that namespace is owned by
+//     parse_doc_request_path)
 //   - query string (after first '?' or '#') stripped
 //   - percent-encoded bytes decoded
 //   - paths containing ".." (any decode) or '\' rejected
@@ -48,12 +50,13 @@ HRESULT handle_app_request(
     ICoreWebView2WebResourceRequestedEventArgs* args,
     ICoreWebView2Environment* env) noexcept;
 
-// Extract the URL path from an mdview-doc.example URI. Mirrors
-// parse_app_request_path's normalization + security rules (strip
-// query/fragment, percent-decode, reject "..", '\', ASCII control
-// bytes, collapse duplicate slashes) with one difference: an
-// empty/"/" path returns std::nullopt - there is no index.html for
-// the doc host. Returns a path starting with '/'.
+// Extract the URL path from a /doc/ request (kDocBaseUri prefix).
+// Mirrors parse_app_request_path's normalization + security rules
+// (strip query/fragment, percent-decode, reject "..", '\', ASCII
+// control bytes, collapse duplicate slashes) with one difference:
+// an empty/"/" path returns std::nullopt - the /doc/ route has no
+// default document. Returns a path starting with '/' representing
+// the file under the current doc dir (the /doc/ prefix is stripped).
 std::optional<std::wstring>
 parse_doc_request_path(std::wstring_view uri) noexcept;
 

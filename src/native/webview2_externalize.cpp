@@ -10,8 +10,7 @@ ShellOpenFn& shell_open_hook() noexcept {
 }
 
 bool is_internal_uri(std::wstring_view uri) noexcept {
-    return uri.starts_with(L"https://mdview-app.example/") ||
-           uri.starts_with(L"https://mdview-doc.example/");
+    return uri.starts_with(L"https://mdview.example/");
 }
 
 void externalize_uri(LPCWSTR uri) noexcept {

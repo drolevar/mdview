@@ -257,9 +257,9 @@ TEST_CASE("parser reads imageRequests.loaded from v6 payload",
             "placeholdersSeen": 0, "foregroundCount": 0, "diagrams": []},
         "math": null,
         "imageRequests": [
-            {"url": "https://mdview-doc.example/ok.png",
+            {"url": "https://mdview.example/doc/ok.png",
              "inDocBaseUri": true,  "loaded": true},
-            {"url": "https://mdview-doc.example/missing.png",
+            {"url": "https://mdview.example/doc/missing.png",
              "inDocBaseUri": true,  "loaded": false}
         ]
     })";
@@ -287,7 +287,7 @@ TEST_CASE("parser defaults imageRequests.loaded false on pre-v6 payload",
             "placeholdersSeen": 0, "foregroundCount": 0, "diagrams": []},
         "math": null,
         "imageRequests": [
-            {"url": "https://mdview-doc.example/a.png",
+            {"url": "https://mdview.example/doc/a.png",
              "inDocBaseUri": true}
         ]
     })";

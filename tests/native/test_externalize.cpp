@@ -41,12 +41,14 @@ struct HookFixture {
 
 }
 
-TEST_CASE("is_internal_uri matches both app and doc origins",
+TEST_CASE("is_internal_uri matches the single mdview origin",
           "[externalize]") {
     using mdview::detail::is_internal_uri;
-    REQUIRE(is_internal_uri(L"https://mdview-app.example/index.html"));
-    REQUIRE(is_internal_uri(L"https://mdview-doc.example/img.png"));
+    REQUIRE(is_internal_uri(L"https://mdview.example/index.html"));
+    REQUIRE(is_internal_uri(L"https://mdview.example/doc/img.png"));
     REQUIRE_FALSE(is_internal_uri(L"https://example.com/"));
+    REQUIRE_FALSE(is_internal_uri(L"https://mdview-app.example/x"));
+    REQUIRE_FALSE(is_internal_uri(L"https://mdview-doc.example/x"));
     REQUIRE_FALSE(is_internal_uri(L"javascript:alert(1)"));
     REQUIRE_FALSE(is_internal_uri(L""));
 }

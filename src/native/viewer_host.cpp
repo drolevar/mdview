@@ -340,10 +340,9 @@ void ViewerHost::post_pending_directly_() {
     // Retry remap_doc_dir if the original attempt in load_document
     // ran before the host's WebView2 was ready (E_UNEXPECTED, leaves
     // base_uri empty). At this point the only navigation so far is
-    // the bootstrap to mdview-app.example/index.html, which doesn't
-    // fetch from the doc host. The renderer's first resource fetches
-    // against mdview-doc.example happen only after we post the
-    // loadDocument message below and the renderer renders its
+    // the bootstrap to /index.html, which doesn't fetch under /doc/.
+    // The renderer's first /doc/ fetches happen only after we post
+    // the loadDocument message below and the renderer renders its
     // markdown - by then the asset-router's doc dir is set. No
     // reload needed.
     if (!req.doc_dir.empty() && req.base_uri.empty()) {
@@ -352,7 +351,7 @@ void ViewerHost::post_pending_directly_() {
             debug_log::log(
                 L"viewer-host: remap (drain) failed hr=0x{:08X}",
                 static_cast<uint32_t>(hr));
-            // Leave base_uri empty; cross-origin resources for this
+            // Leave base_uri empty; doc-relative resources for this
             // doc will 404. The failure has been logged.
         } else {
             req.base_uri = kDocBaseUri;

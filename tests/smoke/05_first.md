@@ -1,4 +1,4 @@
-# mdview Smoke Test 05a — First File
+# mdview Smoke Test 05a - First File
 
 Open this file in TC's Lister, then press the **Down** arrow on the
 panel side (with Quick View locked) so TC arrow-keys to
@@ -14,7 +14,7 @@ Lister:
 [mdview] env ready
 [mdview] viewer-host: controller-pending
 [mdview] viewer-host: navigated
-[mdview] navigation starting: https://mdview-app.local/index.html
+[mdview] navigation starting: https://mdview.example/index.html
 [mdview] viewer-host: renderer ready
 ```
 

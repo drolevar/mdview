@@ -3,7 +3,7 @@
 
 using namespace mdview::integration;
 
-TEST_CASE("html: renders inside the doc-host iframe",
+TEST_CASE("html: renders inside the same-origin /doc/ iframe",
           "[integration][html]") {
     Session s;
     REQUIRE(s.load(L"23_html_basic/23_html_basic.html"));
@@ -12,14 +12,14 @@ TEST_CASE("html: renders inside the doc-host iframe",
     CHECK(sum->summary_schema == 9);
     CHECK(sum->document_format == "html");
     CHECK(sum->iframe_loaded);
-    // The iframe's src must point at the doc-host URL the SPA
-    // composed from baseUri + filename. Substring is enough -
-    // the path encoding details belong to the URL builder.
+    // The iframe's src must point at the /doc/ URL the SPA composed
+    // from baseUri + filename. Substring is enough - the path
+    // encoding details belong to the URL builder.
     CHECK(sum->iframe_url.find("23_html_basic.html")
           != std::string::npos);
 }
 
-TEST_CASE("xhtml: renders inside the doc-host iframe",
+TEST_CASE("xhtml: renders inside the same-origin /doc/ iframe",
           "[integration][html]") {
     Session s;
     REQUIRE(s.load(L"24_xhtml_basic.xhtml"));

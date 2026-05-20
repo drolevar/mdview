@@ -27,9 +27,8 @@ struct DocumentRequest {
     std::wstring          markdown;
 
     // Monotonic id assigned on dispatch. doc_dir is the folder the
-    // asset-router serves mdview-doc.example resources from; base_uri
-    // is https://mdview-doc.example/ once doc_dir is recorded, empty
-    // otherwise.
+    // asset-router serves /doc/* resources from; base_uri is
+    // kDocBaseUri once doc_dir is recorded, empty otherwise.
     int                   doc_id = 0;
     std::filesystem::path doc_dir;
     std::wstring          base_uri;
