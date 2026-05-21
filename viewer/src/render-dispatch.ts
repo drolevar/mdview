@@ -3,7 +3,12 @@ import type { DocFormat }           from './protocol.js';
 
 type Trust = 'native' | 'rendered';
 interface FormatEntry {
-    pipeline: (text: string, baseUri: string) => string;
+    // Mutates `container` directly so DOM-constructing pipelines
+    // (event-attaching tree views, etc.) fit the same shape as
+    // string-emitting ones. Async to absorb lazy-chunk loads
+    // inside the pipeline.
+    pipeline: (text: string, baseUri: string,
+               container: HTMLElement) => Promise<void>;
     trust:    Trust;
 }
 
@@ -11,8 +16,10 @@ interface FormatEntry {
 // inject the rendered HTML into the SPA's container. Safe by
 // construction.
 const MARKDOWN_ENTRY: FormatEntry = {
-    pipeline: (text, _baseUri) => renderMarkdown(text),
-    trust:    'rendered',
+    pipeline: async (text, _baseUri, container) => {
+        container.innerHTML = renderMarkdown(text);
+    },
+    trust: 'rendered',
 };
 
 // HTML preview lives in a same-origin iframe under the /doc/
@@ -32,18 +39,33 @@ const MARKDOWN_ENTRY: FormatEntry = {
 // chapter frame). CSP already covers everything sandbox would
 // for an inert doc-preview frame.
 const HTML_ENTRY: FormatEntry = {
-    pipeline: (_text, baseUri) =>
-        `<iframe class="mdview-html-iframe" `
-        + `src="${escapeAttr(baseUri)}" `
-        + `referrerpolicy="no-referrer" `
-        + `loading="eager">`
-        + `</iframe>`,
+    pipeline: async (_text, baseUri, container) => {
+        container.innerHTML =
+            `<iframe class="mdview-html-iframe" `
+            + `src="${escapeAttr(baseUri)}" `
+            + `referrerpolicy="no-referrer" `
+            + `loading="eager">`
+            + `</iframe>`;
+    },
     trust: 'native',
+};
+
+// LaTeX document preview. Trusted output (rendered by JS we ship),
+// so injected SPA-direct like markdown. The lazy chunk pulls in
+// the forked LaTeX.js bundle on first .tex F3; users who never
+// open .tex pay no parse/instantiate cost.
+const LATEX_ENTRY: FormatEntry = {
+    pipeline: async (text, baseUri, container) => {
+        const mod = await import('./latex-chunk.js');
+        container.innerHTML = await mod.renderLatex(text, baseUri);
+    },
+    trust: 'rendered',
 };
 
 const REGISTRY: Partial<Record<DocFormat, FormatEntry>> = {
     markdown: MARKDOWN_ENTRY,
     html:     HTML_ENTRY,
+    latex:    LATEX_ENTRY,
 };
 
 function escapeAttr(s: string): string {
@@ -52,13 +74,18 @@ function escapeAttr(s: string): string {
             .replace(/</g, '&lt;');
 }
 
-export function renderDocument(format: DocFormat,
-                               text:   string,
-                               baseUri: string): string {
+export async function renderDocument(format:   DocFormat,
+                                     text:     string,
+                                     baseUri:  string,
+                                     container: HTMLElement): Promise<void> {
     const entry = REGISTRY[format] ?? MARKDOWN_ENTRY;
-    return entry.pipeline(text, baseUri);
+    await entry.pipeline(text, baseUri, container);
 }
 
 export function isMarkdownFormat(format: DocFormat): boolean {
     return (REGISTRY[format] ?? MARKDOWN_ENTRY) === MARKDOWN_ENTRY;
+}
+
+export function isLatexFormat(format: DocFormat): boolean {
+    return format === 'latex';
 }

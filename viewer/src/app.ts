@@ -1,6 +1,7 @@
 import { applyInitialTheme, setTheme, getResolvedTheme }
                                               from './theme.js';
-import { renderDocument, isMarkdownFormat }    from './render-dispatch.js';
+import { renderDocument, isMarkdownFormat, isLatexFormat }
+                                              from './render-dispatch.js';
 import {
     isLoadDocument, isSetTheme, isFind,
     postReady, postRendered, postRenderError, postFindResult,
@@ -123,10 +124,10 @@ function run(): void {
                             ? ''
                             : computeDocUrl(baseUriAtStart,
                                             fileNameOf(pathAtStart));
-                        container.innerHTML =
-                            renderDocument(latestFormat,
-                                           latestContent,
-                                           docUrl);
+                        await renderDocument(latestFormat,
+                                             latestContent,
+                                             docUrl,
+                                             container);
                         // Lets styles.css gate full-bleed layout
                         // on the previewed-doc format (HTML iframe
                         // fills the lister window; Markdown keeps
@@ -173,6 +174,13 @@ function run(): void {
                             lastMermaidPass = await runMermaidPass(
                                 getResolvedTheme());
                             lastMathPass = await runMathPass(mathChunkP);
+                        } else if (isLatexFormat(latestFormat)) {
+                            // LaTeX: the chunk rendered math inline
+                            // via its bundled-then-externalized KaTeX
+                            // path; mdview's own mermaid/math passes
+                            // don't run for this format.
+                            lastMermaidPass = EMPTY_MERMAID_PASS;
+                            lastMathPass    = EMPTY_MATH_PASS;
                         } else {
                             // HTML preview: no mermaid/math
                             // placeholders to scan. Await the iframe
