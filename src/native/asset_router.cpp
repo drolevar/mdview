@@ -101,7 +101,13 @@ bool percent_decode_in_place_(std::wstring& s) noexcept {
         std::wstring out;
         out.reserve(s.size());
         for (std::size_t i = 0; i < s.size(); ++i) {
-            if (s[i] == L'%' && i + 2 < s.size()) {
+            if (s[i] == L'%') {
+                // A '%' needs 2 hex chars after it. Reject a
+                // trailing '%' or '%X' the same way '%Zz' /
+                // '%X1' rejects, so the asset router 404s
+                // consistently rather than silently keeping a
+                // literal '%' in the decoded path.
+                if (i + 2 >= s.size()) return false;
                 const int h = hex(s[i + 1]);
                 const int l = hex(s[i + 2]);
                 if (h < 0 || l < 0) return false;

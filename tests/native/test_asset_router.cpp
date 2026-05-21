@@ -87,6 +87,18 @@ TEST_CASE("path: malformed percent escape rejected",
         L"https://mdview.example/x%Zz.js").has_value());
 }
 
+TEST_CASE("path: trailing percent rejected (B23)",
+          "[asset_router]") {
+    CHECK_FALSE(parse_app_request_path(
+        L"https://mdview.example/dist/app%").has_value());
+}
+
+TEST_CASE("path: percent followed by single hex digit rejected (B23)",
+          "[asset_router]") {
+    CHECK_FALSE(parse_app_request_path(
+        L"https://mdview.example/dist/app%2").has_value());
+}
+
 TEST_CASE("path: too-short URI rejected", "[asset_router]") {
     CHECK_FALSE(parse_app_request_path(L"").has_value());
     CHECK_FALSE(parse_app_request_path(L"https://").has_value());
@@ -126,8 +138,8 @@ TEST_CASE("path: percent-decode never throws on malformed escape (B5)",
           "[asset_router]") {
     // Malformed hex in a %-escape: percent_decode_in_place_ must
     // return false (rejection -> nullopt), never throw/terminate.
-    // (The trailing-'%'-at-end edge is a separate pre-existing
-    // boundary quirk, not in B5's no-throw scope.)
+    // (Trailing-'%' at end-of-string is uniformly rejected too;
+    // see the dedicated B23 cases above.)
     std::optional<std::wstring> r;
     CHECK_NOTHROW(r = parse_app_request_path(
         L"https://mdview.example/x%E0%A4%G1"));
