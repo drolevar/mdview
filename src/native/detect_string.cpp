@@ -8,7 +8,8 @@ namespace mdview {
 namespace {
 constexpr const char* kDetectString =
     "EXT=\"MD\" | EXT=\"MARKDOWN\" | EXT=\"MDOWN\" | EXT=\"MKD\""
-    " | EXT=\"HTML\" | EXT=\"HTM\" | EXT=\"XHTML\"";
+    " | EXT=\"HTML\" | EXT=\"HTM\" | EXT=\"XHTML\""
+    " | EXT=\"TEX\"";
 }
 
 const char* detect_string() noexcept {

@@ -335,6 +335,14 @@ TEST_CASE("encode_load_document emits the document format",
         mdview::utf16_to_utf8(mdview::encode_load_document(m)));
     CHECK(j["document"]["format"] == "html");
 
+    mdview::LoadDocumentMessage l;
+    l.id = 2;
+    l.markdown = L"\\section{Hi}";
+    l.format = mdview::DocumentFormat::Latex;
+    auto jl = nlohmann::json::parse(
+        mdview::utf16_to_utf8(mdview::encode_load_document(l)));
+    CHECK(jl["document"]["format"] == "latex");
+
     mdview::LoadDocumentMessage d;          // default
     auto jd = nlohmann::json::parse(
         mdview::utf16_to_utf8(mdview::encode_load_document(d)));

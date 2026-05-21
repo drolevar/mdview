@@ -21,6 +21,13 @@ TEST_CASE("format_for_path classifies the Markdown family", "[document_format]")
     CHECK(format_for_path(L"a.mkd")      == DocumentFormat::Markdown);
 }
 
+TEST_CASE("format_for_path classifies the LaTeX family", "[document_format]") {
+    CHECK(format_for_path(L"paper.tex")          == DocumentFormat::Latex);
+    CHECK(format_for_path(L"PAPER.TEX")          == DocumentFormat::Latex);
+    CHECK(format_for_path(L"thesis.Tex")         == DocumentFormat::Latex);
+    CHECK(format_for_path(L"C:\\x\\NOTE.TEX")    == DocumentFormat::Latex);
+}
+
 TEST_CASE("format_for_path defaults unknown/no-ext to Markdown",
           "[document_format]") {
     CHECK(format_for_path(L"a.txt")  == DocumentFormat::Markdown);
@@ -31,4 +38,5 @@ TEST_CASE("format_for_path defaults unknown/no-ext to Markdown",
 TEST_CASE("to_wire is the stable lowercase wire token", "[document_format]") {
     CHECK(to_wire(DocumentFormat::Markdown) == L"markdown");
     CHECK(to_wire(DocumentFormat::Html)     == L"html");
+    CHECK(to_wire(DocumentFormat::Latex)    == L"latex");
 }
