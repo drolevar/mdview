@@ -1,6 +1,8 @@
 import esbuild from 'esbuild';
 import { mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import postcss from 'postcss';
+import prefixSelector from 'postcss-prefix-selector';
 
 // M11: wipe dist/ before every build. Esbuild emits content-hashed
 // chunk filenames and never cleans the output directory, so any
@@ -62,6 +64,44 @@ await esbuild.build({
     minify:      isProd,
     logLevel:    'info',
 });
+
+// Scope LaTeX.js's article+base CSS to main#document[data-format=
+// "latex"] so its bare element selectors (body, p, h1-h6, ul, ol,
+// table, figure) only apply inside the LaTeX container, never to
+// markdown or the SPA chrome. Done post-esbuild because we write
+// straight into the dist/ tree the cmake prestage copies.
+const latexCssDir   = 'node_modules/latex.js/dist/css';
+const baseCss       = readFileSync(join(latexCssDir, 'base.css'),    'utf8');
+const articleCssRaw = readFileSync(join(latexCssDir, 'article.css'), 'utf8');
+// article.css starts with @import url("base.css"); inline the base
+// rules ourselves so postcss-prefix-selector handles them in the
+// same pass.
+const articleCssNoImport = articleCssRaw
+    .replace(/^\s*@import\s+url\([^)]*\)\s*;?\s*$/m, '');
+// base.css imports ../fonts/cmu.css for Computer Modern Unicode -
+// the canonical LaTeX typeface. Shipping those fonts would add
+// ~3-5 MB to the WLX for an aesthetic gain only; LaTeX previews
+// render in the browser's default serif/sans fallback instead.
+// A future milestone can ship the CMU subset on demand.
+const baseCssNoImport = baseCss
+    .replace(/^\s*@import\s+url\([^)]*cmu\.css[^)]*\)\s*;?\s*$/m, '');
+const combinedLatexCss = baseCssNoImport + '\n' + articleCssNoImport;
+const scopedLatex = await postcss([
+    prefixSelector({
+        prefix: 'main#document[data-format="latex"]',
+        transform(prefix, selector, prefixedSelector) {
+            // Bare body / :root selectors map to the container
+            // itself - LaTeX.js's body-equivalent output lands
+            // inside main#document, so the rule still applies.
+            if (selector === 'body' || selector === ':root') {
+                return prefix;
+            }
+            return prefixedSelector;
+        },
+    }),
+]).process(combinedLatexCss, { from: undefined });
+mkdirSync('dist/styles', { recursive: true });
+writeFileSync('dist/styles/latex-scoped.css', scopedLatex.css);
 
 // M11 fixup: stamp is now written by CMake (touch) at a build-tree
 // path so debug and release builds each have their own. Previously
