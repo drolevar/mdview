@@ -12,6 +12,7 @@ add_executable(mdview_integration_tests
     test_focus.cpp
     test_highlight.cpp
     test_html.cpp
+    test_latex.cpp
     test_lifecycle.cpp
     test_markdown_polish.cpp
     test_math.cpp

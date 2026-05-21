@@ -470,8 +470,15 @@ function run(): void {
 
             latestId      = m.id;
             latestContent = m.document.markdown;
-            latestFormat = m.document.format === 'html'
-                ? 'html' : 'markdown';
+            // Wire-format -> internal format. Unknown values fall
+            // back to markdown so older wire payloads or future
+            // format additions degrade safely.
+            if (m.document.format === 'html'
+             || m.document.format === 'latex') {
+                latestFormat = m.document.format;
+            } else {
+                latestFormat = 'markdown';
+            }
             if (baseEl) {
                 if (m.document.baseUri) {
                     baseEl.href = m.document.baseUri;
