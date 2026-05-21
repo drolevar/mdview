@@ -118,5 +118,8 @@ export function buildSummary(
             // signal.
             return f.dataset.mdviewLoaded === '1';
         })(),
+        // Populated by the LaTeX pipeline in a follow-up task; null
+        // for every other format.
+        latex: null,
     };
 }

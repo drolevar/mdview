@@ -22,7 +22,7 @@ export interface ViewerOptions {
 
 export type ThemeName = 'light' | 'dark' | 'system';
 
-export type DocFormat = 'markdown' | 'html';
+export type DocFormat = 'markdown' | 'html' | 'latex';
 
 export interface LoadDocumentDocument {
     path:        string;
@@ -150,7 +150,7 @@ export interface RenderedSummary {
         headingIds: string[];
     };
     // Additive; older readers tolerate absence.
-    documentFormat: DocFormat;          // 'markdown' | 'html'
+    documentFormat: DocFormat;          // 'markdown' | 'html' | 'latex'
     // Set when documentFormat === 'html'; the iframe's src URL
     // (the previewed doc's doc-host URL). Absent / null for
     // markdown.
@@ -159,6 +159,16 @@ export interface RenderedSummary {
     // load event fired within the await window. Absent / null
     // for markdown.
     iframeLoaded:   boolean | null;
+    // Set when documentFormat === 'latex'; null otherwise. The
+    // parseOk flag is false when the whole-document fallback
+    // fired; errorCount counts per-block error frames.
+    latex:          LatexSummary | null;
+}
+
+export interface LatexSummary {
+    parseOk:    boolean;
+    errorCount: number;
+    blockCount: number;
 }
 
 export function isLoadDocument(m: unknown): m is LoadDocumentMessage {
