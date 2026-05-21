@@ -1,0 +1,30 @@
+\documentclass{article}
+\title{mdview Smoke Test 28 - Basic LaTeX}
+\author{Test}
+\begin{document}
+\maketitle
+
+\section{Introduction}
+This document exercises the baseline LaTeX render path:
+sections, paragraphs, inline math like $x = y + z$, display
+math like
+\[
+    \int_0^1 x^2 \, dx = \frac{1}{3},
+\]
+lists, and a table.
+
+\section{A list}
+\begin{itemize}
+    \item First item.
+    \item Second item.
+    \item Third item.
+\end{itemize}
+
+\section{A table}
+\begin{tabular}{ll}
+    Name  & Value \\
+    Alpha & 1     \\
+    Beta  & 2     \\
+\end{tabular}
+
+\end{document}
