@@ -12,7 +12,7 @@ TEST_CASE("markdown polish: github alerts render as typed callouts",
     REQUIRE(s.load(L"19_github_alerts.md"));
     auto sum = s.wait_for_summary();
     REQUIRE(sum.has_value());
-    CHECK(sum->summary_schema == 9);
+    CHECK(sum->summary_schema == 10);
     CHECK(sum->alerts.note      == 1);
     CHECK(sum->alerts.tip       == 1);
     CHECK(sum->alerts.important == 1);

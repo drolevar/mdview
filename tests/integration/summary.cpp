@@ -160,6 +160,23 @@ parse_summary_json(const std::wstring& payload) {
             it != j.end() && !it->is_null() && it->is_boolean()) {
             s.iframe_loaded = it->get<bool>();
         }
+        if (auto it = j.find("latex");
+            it != j.end() && !it->is_null() && it->is_object()) {
+            RenderedSummary::LatexSummary lx;
+            if (auto a = it->find("parseOk");
+                a != it->end() && a->is_boolean()) {
+                lx.parse_ok = a->get<bool>();
+            }
+            if (auto a = it->find("errorCount");
+                a != it->end() && a->is_number_integer()) {
+                lx.error_count = a->get<int>();
+            }
+            if (auto a = it->find("blockCount");
+                a != it->end() && a->is_number_integer()) {
+                lx.block_count = a->get<int>();
+            }
+            s.latex = lx;
+        }
         return s;
     } catch (...) {
         return std::nullopt;

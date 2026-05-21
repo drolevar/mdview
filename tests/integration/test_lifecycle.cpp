@@ -10,7 +10,7 @@ TEST_CASE("lifecycle: load + close clean shutdown",
     REQUIRE(s.load(L"01_mixed.md"));
     auto summary = s.wait_for_summary();
     REQUIRE(summary.has_value());
-    CHECK(summary->summary_schema == 9);
+    CHECK(summary->summary_schema == 10);
     CHECK(summary->theme.size() > 0);
     s.close();
 }

@@ -1,7 +1,28 @@
-import type { RenderedSummary, DocFormat } from './protocol.js';
+import type { RenderedSummary, LatexSummary, DocFormat } from './protocol.js';
 import type { MermaidPassData }   from './mermaid-chunk.js';
 import type { MathPassData }      from './math-chunk.js';
 import { fenceRecords, alertCounts } from './markdown.js';
+
+function buildLatexSummary(container: HTMLElement): LatexSummary {
+    // parseOk reflects whether the whole-document fallback fired in
+    // latex-chunk.ts. errorCount tallies per-block error frames left
+    // in the rendered DOM (LaTeX.js's own .error markers + our
+    // failed-document marker if it lands).
+    const failed = container.querySelector(':scope > .mdview-latex-failed')
+                       !== null;
+    const errorCount = container.querySelectorAll(
+        '.mdview-latex-failed, .error').length;
+    const blockCount = container.querySelectorAll(
+        ':scope > section, :scope > p, :scope > h1, :scope > h2, '
+        + ':scope > h3, :scope > h4, :scope > h5, :scope > h6, '
+        + ':scope > figure, :scope > table, :scope > ul, :scope > ol, '
+        + ':scope > div, :scope > pre').length;
+    return {
+        parseOk:    !failed,
+        errorCount,
+        blockCount,
+    };
+}
 
 export function buildSummary(
     container: HTMLElement,
@@ -67,7 +88,7 @@ export function buildSummary(
         || mathPass.chunkLoaded;
 
     return {
-        summarySchema: 9,
+        summarySchema: 10,
         durationMs,
         theme,
         blockCount,
@@ -118,8 +139,6 @@ export function buildSummary(
             // signal.
             return f.dataset.mdviewLoaded === '1';
         })(),
-        // Populated by the LaTeX pipeline in a follow-up task; null
-        // for every other format.
-        latex: null,
+        latex: docFormat === 'latex' ? buildLatexSummary(container) : null,
     };
 }

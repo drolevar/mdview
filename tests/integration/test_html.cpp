@@ -9,7 +9,7 @@ TEST_CASE("html: renders inside the same-origin /doc/ iframe",
     REQUIRE(s.load(L"23_html_basic/23_html_basic.html"));
     auto sum = s.wait_for_summary();
     REQUIRE(sum.has_value());
-    CHECK(sum->summary_schema == 9);
+    CHECK(sum->summary_schema == 10);
     CHECK(sum->document_format == "html");
     CHECK(sum->iframe_loaded);
     // The iframe's src must point at the /doc/ URL the SPA composed

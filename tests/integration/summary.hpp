@@ -90,6 +90,15 @@ struct RenderedSummary {
     std::string document_format;          // "" if absent (pre-v9)
     std::string iframe_url;                // "" if null or absent
     bool        iframe_loaded = false;     // false if null or absent
+
+    // Present on v10+ when the rendered doc is LaTeX; nullopt
+    // for every other format.
+    struct LatexSummary {
+        bool parse_ok    = false;
+        int  error_count = 0;
+        int  block_count = 0;
+    };
+    std::optional<LatexSummary> latex;
 };
 
 std::optional<RenderedSummary>

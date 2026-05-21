@@ -62,7 +62,7 @@ export interface SetThemeMessage {
 }
 
 export interface RenderedSummary {
-    summarySchema: 9;
+    summarySchema: 10;
     durationMs:    number;
     theme:         'light' | 'dark';
     blockCount: {
