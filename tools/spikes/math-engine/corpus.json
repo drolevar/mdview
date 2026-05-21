@@ -1,0 +1,43 @@
+{
+    "name": "math-engine-default",
+    "version": 1,
+    "cases": [
+        { "id": "inline-1",     "display": false, "latex": "x = y" },
+        { "id": "inline-2",     "display": false, "latex": "\\frac{1}{2}" },
+        { "id": "inline-3",     "display": false, "latex": "a^2 + b^2 = c^2" },
+        { "id": "inline-4",     "display": false, "latex": "\\sqrt{2}" },
+        { "id": "inline-5",     "display": false, "latex": "\\alpha + \\beta = \\gamma" },
+        { "id": "inline-6",     "display": false, "latex": "\\sum_{i=1}^n i" },
+        { "id": "inline-7",     "display": false, "latex": "f(x) = \\sin(x) + \\cos(x)" },
+        { "id": "inline-8",     "display": false, "latex": "x \\in \\mathbb{R}" },
+        { "id": "inline-9",     "display": false, "latex": "\\vec{v} \\cdot \\vec{w}" },
+        { "id": "inline-10",    "display": false, "latex": "\\binom{n}{k}" },
+
+        { "id": "display-1",    "display": true,  "latex": "\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}" },
+        { "id": "display-2",    "display": true,  "latex": "\\sum_{n=0}^\\infty \\frac{1}{n!} = e" },
+        { "id": "display-3",    "display": true,  "latex": "\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1" },
+        { "id": "display-4",    "display": true,  "latex": "\\prod_{p\\text{ prime}} \\frac{1}{1 - p^{-s}} = \\sum_{n=1}^\\infty \\frac{1}{n^s}" },
+
+        { "id": "matrix-1",     "display": true,  "latex": "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}" },
+        { "id": "matrix-2",     "display": true,  "latex": "\\begin{bmatrix} 1 & 0 \\\\ 0 & 1 \\end{bmatrix}" },
+        { "id": "matrix-3",     "display": true,  "latex": "\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix} = ad - bc" },
+
+        { "id": "align-1",      "display": true,  "latex": "\\begin{aligned} (a+b)^2 &= a^2 + 2ab + b^2 \\\\ (a-b)^2 &= a^2 - 2ab + b^2 \\end{aligned}" },
+        { "id": "cases-1",      "display": true,  "latex": "f(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & x = 0 \\\\ -1 & x < 0 \\end{cases}" },
+
+        { "id": "accents-1",    "display": false, "latex": "\\hat{f}(\\xi) = \\int_{-\\infty}^{\\infty} f(x) e^{-2\\pi i x \\xi}\\,dx" },
+        { "id": "accents-2",    "display": false, "latex": "\\dot{x}, \\ddot{x}, \\tilde{x}, \\bar{x}" },
+        { "id": "fraction-1",   "display": false, "latex": "\\dfrac{a}{b} + \\tfrac{c}{d}" },
+        { "id": "fraction-2",   "display": true,  "latex": "\\cfrac{1}{1 + \\cfrac{1}{1 + \\cfrac{1}{1 + \\cdots}}}" },
+
+        { "id": "physics-1",    "display": false, "latex": "\\langle \\psi | \\hat{H} | \\psi \\rangle" },
+        { "id": "physics-2",    "display": true,  "latex": "\\nabla \\cdot \\vec{E} = \\frac{\\rho}{\\varepsilon_0}" },
+        { "id": "physics-3",    "display": true,  "latex": "i\\hbar\\frac{\\partial}{\\partial t}\\Psi(\\mathbf{r},t) = \\hat{H}\\Psi(\\mathbf{r},t)" },
+
+        { "id": "color-1",      "display": false, "latex": "\\color{red}{x} + \\color{blue}{y}" },
+        { "id": "boldsymbol-1", "display": false, "latex": "\\boldsymbol{\\alpha} + \\boldsymbol{\\beta}" },
+        { "id": "boxed-1",      "display": false, "latex": "\\boxed{E = mc^2}" },
+
+        { "id": "long-1",       "display": true,  "latex": "\\left(\\sum_{i=1}^n a_i b_i\\right)^2 \\leq \\left(\\sum_{i=1}^n a_i^2\\right) \\left(\\sum_{i=1}^n b_i^2\\right)" }
+    ]
+}

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>math-engine spike</title>
+    <style>
+        body {
+            font: 14px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                  Roboto, Helvetica, Arial, sans-serif;
+            color: #222;
+            background: #fafafa;
+            margin: 0;
+            padding: 12px 24px 48px;
+            max-width: 1600px;
+        }
+        h1 { margin-top: 0; }
+        h2 { margin: 1.6em 0 0.4em; }
+        .toolbar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            background: #fff;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .toolbar label { font-weight: 600; }
+        .toolbar input {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 12px;
+            padding: 4px 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            min-width: 240px;
+        }
+        button {
+            padding: 6px 12px;
+            font-weight: 600;
+            background: #2a6fdb;
+            color: #fff;
+            border: 0;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: #1f5cba; }
+        #status {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 12px;
+            color: #555;
+            margin-left: auto;
+        }
+        table {
+            border-collapse: collapse;
+            background: #fff;
+            margin: 12px 0;
+        }
+        th, td {
+            border: 1px solid #e0e0e0;
+            padding: 6px 10px;
+            vertical-align: top;
+        }
+        th { background: #f0f3f7; text-align: left; font-weight: 600; }
+        td.latex, code.latex {
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 12px;
+            color: #444;
+            background: #f6f6f6;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-width: 280px;
+            display: block;
+        }
+        .render-cell {
+            min-width: 220px;
+            max-width: 360px;
+            overflow-x: auto;
+        }
+        .render-cell.display { padding: 4px 0; }
+        .render-cell.render-error {
+            background: #ffe9e9;
+            color: #a00;
+            font-family: ui-monospace, Menlo, Consolas, monospace;
+            font-size: 11px;
+        }
+        table.summary th, table.summary td {
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+        }
+        table.summary th:first-child,
+        table.summary td:first-child { text-align: left; }
+        #summary { margin-bottom: 20px; }
+        details summary {
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>math-engine spike</h1>
+    <p style="max-width: 80ch;">
+        Renders the same LaTeX corpus through every registered
+        engine, then reports bytes transferred + render-time
+        totals. The visual grid below lets you eyeball
+        per-case rendering differences. See
+        <code>README.md</code> for the harness shape and how to
+        add a new engine.
+    </p>
+
+    <div class="toolbar">
+        <label for="corpus-url">Corpus URL</label>
+        <input id="corpus-url" type="text" value="corpus.json">
+        <button id="run-btn">Run</button>
+        <span id="status">idle</span>
+    </div>
+
+    <h2>Summary</h2>
+    <div id="summary"><p><em>Run the harness to populate.</em></p></div>
+
+    <h2>Per-case rendering</h2>
+    <details>
+        <summary>Show table</summary>
+        <table id="cases">
+            <thead id="cases-thead"></thead>
+            <tbody id="cases-tbody"></tbody>
+        </table>
+    </details>
+
+    <script type="module">
+        import { run } from './harness.js';
+        document.getElementById('run-btn')
+            .addEventListener('click', () => {
+                run().catch(err => {
+                    console.error(err);
+                    document.getElementById('status').textContent
+                        = 'ERROR: ' + (err && err.message || err);
+                });
+            });
+        // Auto-run on first load so the page is useful without a
+        // manual click.
+        run().catch(err => {
+            console.error(err);
+            document.getElementById('status').textContent
+                = 'ERROR: ' + (err && err.message || err);
+        });
+    </script>
+</body>
+</html>
