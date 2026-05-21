@@ -47,7 +47,14 @@ await esbuild.build({
     chunkNames:  'chunks/[name]-[hash]',
     loader: {
         '.woff2': 'file',
+        '.woff':  'file',
         '.css':   'css',
+        // LaTeX.js's bundle dynamically requires the placeholder
+        // `.keep` files its build script creates in
+        // dist/documentclasses/ and dist/packages/ to keep those
+        // dirs from being empty. Map to `empty` so esbuild drops
+        // those imports rather than failing the build.
+        '.keep':  'empty',
     },
     assetNames:  'assets/[name]-[hash]',
     plugins:     [stripUnusedFontFormats],
